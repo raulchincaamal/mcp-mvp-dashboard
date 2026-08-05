@@ -1,0 +1,7 @@
+[
+  { "region": "Norte", "usuarios_activos": 1200, "nuevos_registros": 85, "tasa_retencion": 0.92 },
+  { "region": "Sur", "usuarios_activos": 890, "nuevos_registros": 62, "tasa_retencion": 0.88 },
+  { "region": "Centro", "usuarios_activos": 2100, "nuevos_registros": 150, "tasa_retencion": 0.95 },
+  { "region": "Este", "usuarios_activos": 760, "nuevos_registros": 45, "tasa_retencion": 0.85 },
+  { "region": "Oeste", "usuarios_activos": 980, "nuevos_registros": 70, "tasa_retencion": 0.90 }
+]

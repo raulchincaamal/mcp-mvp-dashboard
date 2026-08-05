@@ -1,0 +1,18 @@
+{
+  "name": "mcp-mvp-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MVP: MCP pipeline for dynamic chart generation (GCP mock → UI → Frontend)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "dev:mcp-gcp": "npm run dev --workspace=packages/mcp-gcp-mock",
+    "dev:mcp-ui": "npm run dev --workspace=packages/mcp-ui"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@mcp-mvp/mcp-main",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pipeline orchestrator — HTTP API that connects mcp-gcp-mock and mcp-ui as MCP clients",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "mcp-main": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "fastify": "^5.3.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.0"
+  }
+}

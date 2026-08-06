@@ -3,6 +3,7 @@
     "app_name": "MCP Dashboard",
     "home": "Inicio",
     "dashboard": "Dashboard",
+    "dynamic": "UI Dinámica",
     "profile": "Perfil",
     "settings": "Configuración",
     "logout": "Cerrar sesión"
@@ -17,5 +18,13 @@
     "mode_dashboard": "Dashboard",
     "mode_single": "Chart Individual",
     "no_charts": "No hay charts disponibles"
+  },
+  "dynamic": {
+    "title": "UI Dinámica",
+    "description": "Genera interfaces dinámicas a partir de datos y un intent. El pipeline consulta los componentes disponibles, los datos y produce una UI renderizable.",
+    "intent_label": "¿Qué quieres ver?",
+    "intent_placeholder": "Ej: tabla de ventas por mes, cards de productos, gráfica de usuarios por región",
+    "generate": "Generar UI",
+    "generating": "Generando..."
   }
 }

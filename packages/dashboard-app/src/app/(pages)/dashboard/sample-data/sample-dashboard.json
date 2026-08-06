@@ -1,77 +1,167 @@
 {
-  "title": "Ventas Mensuales 2024",
-  "description": "Dashboard generado por MCP UI con datos de MCP GCP Mock",
+  "title": "Dashboard General - Julio 2026",
+  "description": "Métricas de productos y ventas por región generadas por MCP pipeline",
   "layout": "grid",
   "columns": 2,
   "charts": [
     {
       "type": "bar",
-      "title": "Total Ventas por Mes",
+      "title": "Ingresos por Producto",
       "data": {
-        "labels": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
-        "datasets": [{
-          "label": "Total Ventas ($)",
-          "data": [45000, 52000, 48000, 61000, 55000, 67000, 72000, 69000, 58000, 63000, 78000, 95000],
-          "backgroundColor": "#4F46E5",
-          "borderColor": "#4F46E5",
-          "borderWidth": 2
-        }]
+        "labels": [
+          "Plan Básico",
+          "Plan Pro",
+          "Plan Enterprise",
+          "Add-on Analytics",
+          "Add-on Soporte Premium"
+        ],
+        "datasets": [
+          {
+            "label": "Ingresos ($)",
+            "data": [
+              120000,
+              350000,
+              580000,
+              95000,
+              75000
+            ],
+            "backgroundColor": "#4F46E5",
+            "borderColor": "#4F46E5",
+            "borderWidth": 2
+          }
+        ]
       },
       "options": {
         "responsive": true,
-        "xAxis": { "label": "Mes" },
-        "yAxis": { "label": "Total ($)" }
-      }
-    },
-    {
-      "type": "line",
-      "title": "Transacciones por Mes",
-      "data": {
-        "labels": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
-        "datasets": [{
-          "label": "Num. Transacciones",
-          "data": [320, 385, 350, 420, 390, 450, 510, 480, 400, 430, 550, 680],
-          "backgroundColor": "#7C3AED",
-          "borderColor": "#7C3AED",
-          "borderWidth": 2
-        }]
-      },
-      "options": {
-        "responsive": true,
-        "xAxis": { "label": "Mes" },
-        "yAxis": { "label": "Transacciones" }
-      }
-    },
-    {
-      "type": "pie",
-      "title": "Usuarios Activos por Región",
-      "data": {
-        "labels": ["Norte", "Sur", "Centro", "Este", "Oeste"],
-        "datasets": [{
-          "label": "Usuarios Activos",
-          "data": [1200, 890, 2100, 760, 980],
-          "backgroundColor": ["#4F46E5", "#7C3AED", "#2563EB", "#0891B2", "#059669"],
-          "borderWidth": 2
-        }]
-      },
-      "options": {
-        "responsive": true
+        "xAxis": {
+          "label": "Producto"
+        },
+        "yAxis": {
+          "label": "Ingresos ($)"
+        }
       }
     },
     {
       "type": "doughnut",
-      "title": "Ingresos por Producto",
+      "title": "Distribución de Suscriptores por Producto",
       "data": {
-        "labels": ["Plan Básico", "Plan Pro", "Plan Enterprise", "Add-on Analytics", "Add-on Soporte"],
-        "datasets": [{
-          "label": "Ingresos ($)",
-          "data": [120000, 350000, 580000, 95000, 75000],
-          "backgroundColor": ["#4F46E5", "#7C3AED", "#2563EB", "#0891B2", "#059669"],
-          "borderWidth": 2
-        }]
+        "labels": [
+          "Plan Básico",
+          "Plan Pro",
+          "Plan Enterprise",
+          "Add-on Analytics",
+          "Add-on Soporte Premium"
+        ],
+        "datasets": [
+          {
+            "label": "Suscriptores",
+            "data": [
+              800,
+              1200,
+              450,
+              600,
+              350
+            ],
+            "backgroundColor": [
+              "#4F46E5",
+              "#7C3AED",
+              "#2563EB",
+              "#0891B2",
+              "#059669"
+            ],
+            "borderWidth": 2
+          }
+        ]
       },
       "options": {
         "responsive": true
+      }
+    },
+    {
+      "type": "bar",
+      "title": "Satisfacción del Cliente por Producto",
+      "data": {
+        "labels": [
+          "Plan Básico",
+          "Plan Pro",
+          "Plan Enterprise",
+          "Add-on Analytics",
+          "Add-on Soporte Premium"
+        ],
+        "datasets": [
+          {
+            "label": "Satisfacción (1-5)",
+            "data": [
+              4.2,
+              4.6,
+              4.8,
+              3.9,
+              4.5
+            ],
+            "backgroundColor": "#7C3AED",
+            "borderColor": "#7C3AED",
+            "borderWidth": 2
+          }
+        ]
+      },
+      "options": {
+        "responsive": true,
+        "xAxis": {
+          "label": "Producto"
+        },
+        "yAxis": {
+          "label": "Satisfacción"
+        }
+      }
+    },
+    {
+      "type": "bar",
+      "title": "Ventas por Región - Ordenado de menor a mayor",
+      "data": {
+        "labels": [
+          "Este",
+          "Sur",
+          "Oeste",
+          "Norte",
+          "Centro"
+        ],
+        "datasets": [
+          {
+            "label": "Usuarios Activos",
+            "data": [
+              760,
+              890,
+              980,
+              1200,
+              2100
+            ],
+            "backgroundColor": "#4F46E5",
+            "borderColor": "#4F46E5",
+            "borderWidth": 2
+          },
+          {
+            "label": "Nuevos Registros",
+            "data": [
+              45,
+              62,
+              70,
+              85,
+              150
+            ],
+            "backgroundColor": "#7C3AED",
+            "borderColor": "#7C3AED",
+            "borderWidth": 2
+          }
+        ]
+      },
+      "options": {
+        "responsive": true,
+        "xAxis": {
+          "label": "Región"
+        },
+        "yAxis": {
+          "label": "Usuarios"
+        }
       }
     }
   ]

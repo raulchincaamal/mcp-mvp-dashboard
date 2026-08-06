@@ -28,3 +28,4 @@ export interface DashboardConfig {
   columns?: number;
   charts: ChartConfig[];
 }
+

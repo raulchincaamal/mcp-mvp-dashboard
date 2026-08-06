@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard-app",
     "dev:mcp-gcp": "npm run dev --workspace=packages/mcp-gcp-mock",
     "dev:mcp-ui": "npm run dev --workspace=packages/mcp-ui"
   },

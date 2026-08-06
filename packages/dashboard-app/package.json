@@ -1,0 +1,47 @@
+{
+  "name": "@mcp-mvp/dashboard-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dashboard app that renders Chart.js configs from MCP UI pipeline",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@macropaytd/lib-front-field-feedback": "^0.5.4",
+    "@macropaytd/lib-front-fifo-core": "^1.1.2",
+    "@macropaytd/lib-front-fifo-message-manager": "^0.3.2",
+    "@macropaytd/lib-front-fifo-monitor": "^0.2.2",
+    "@macropaytd/lib-front-fifo-zustand": "^0.2.4",
+    "@macropaytd/lib-front-i18n-module": "^0.2.3",
+    "@macropaytd/lib-front-loading-overlay": "^0.3.1",
+    "@macropaytd/lib-front-mcp-library-context": "^2.0.4",
+    "@macropaytd/lib-front-request": "^2.3.0",
+    "@macropaytd/lib-front-ui-components": "^0.10.1",
+    "@macropaytd/lib-front-utils": "^0.5.0",
+    "@macropaytd/lib-front-zod-validator": "^0.5.3",
+    "@macropaytd/lib-front-zustand-monitor": "^0.3.3",
+    "chart.js": "^4.4.0",
+    "i18next": "^26.3.4",
+    "next": "^16.2.10",
+    "react": "^19.2.4",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^17.0.8",
+    "rxjs": "^7.8.2",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

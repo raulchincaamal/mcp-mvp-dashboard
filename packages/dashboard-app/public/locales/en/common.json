@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "app_name": "MCP Dashboard",
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "home": {
+    "title": "MCP Dashboard MVP",
+    "description": "Charts rendered from MCP UI JSON configs",
+    "go_to_dashboard": "Go to Dashboard"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "mode_dashboard": "Dashboard",
+    "mode_single": "Single Chart",
+    "no_charts": "No charts available"
+  }
+}

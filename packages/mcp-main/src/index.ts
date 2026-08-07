@@ -3,9 +3,6 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { createMcpClients } from './mcp-client.js';
 import { Pipeline } from './pipeline.js';
-import { datasetsRoutes } from './routes/datasets.js';
-import { generateChartRoutes } from './routes/generate-chart.js';
-import { generateDashboardRoutes } from './routes/generate-dashboard.js';
 import { generateUiRoutes } from './routes/generate-ui.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
@@ -38,12 +35,7 @@ async function main() {
     },
   }));
 
-  // API routes
-  await app.register(datasetsRoutes, { prefix: '/api/datasets' });
-  await app.register(generateChartRoutes, { prefix: '/api/generate-chart' });
-  await app.register(generateDashboardRoutes, {
-    prefix: '/api/generate-dashboard',
-  });
+  // Main endpoint: generate UI from intent
   await app.register(generateUiRoutes, { prefix: '/api/generate-ui' });
 
   // Step 4: Start listening
@@ -52,11 +44,6 @@ async function main() {
   console.log(`[mcp-main] HTTP API running at http://localhost:${PORT}`);
   console.log(`[mcp-main] Endpoints:`);
   console.log(`  GET  /health`);
-  console.log(`  GET  /api/datasets`);
-  console.log(`  GET  /api/datasets/:name`);
-  console.log(`  POST /api/datasets/:name/query`);
-  console.log(`  POST /api/generate-chart`);
-  console.log(`  POST /api/generate-dashboard`);
   console.log(`  POST /api/generate-ui`);
 
   // Graceful shutdown

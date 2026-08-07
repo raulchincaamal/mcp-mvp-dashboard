@@ -8,13 +8,10 @@ import DynamicRenderer, { type UIConfig } from './components/DynamicRenderer';
 const MCP_MAIN_URL =
   process.env.NEXT_PUBLIC_MCP_MAIN_URL || 'http://localhost:4000';
 
-const DATASET_OPTIONS = [
-  { value: 'ventas-credito', label: 'Ventas a Crédito' },
-];
+const DATASET = 'ventas-credito';
 
 export default function DynamicPage() {
   const { t } = useT();
-  const [dataset, setDataset] = useState('ventas-credito');
   const [intent, setIntent] = useState('');
   const [uiConfig, setUiConfig] = useState<UIConfig | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +28,7 @@ export default function DynamicPage() {
       const res = await fetch(`${MCP_MAIN_URL}/api/generate-ui`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataset, intent }),
+        body: JSON.stringify({ dataset: DATASET, intent }),
       });
 
       const json = await res.json();
@@ -47,7 +44,7 @@ export default function DynamicPage() {
     } finally {
       setLoading(false);
     }
-  }, [dataset, intent]);
+  }, [intent]);
 
   return (
     <main className="flex flex-col gap-6 p-6">
@@ -59,24 +56,6 @@ export default function DynamicPage() {
       </Text>
 
       <Card className="p-4 space-y-4">
-        <div className="space-y-2">
-          <Text size="sm" weight="medium">
-            Dataset
-          </Text>
-          <div className="flex gap-2 flex-wrap">
-            {DATASET_OPTIONS.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={dataset === opt.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDataset(opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
         <Input
           label={t('dynamic.intent_label')}
           placeholder={t('dynamic.intent_placeholder')}

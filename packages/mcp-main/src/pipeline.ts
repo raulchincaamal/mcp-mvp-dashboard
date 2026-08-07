@@ -1,4 +1,5 @@
 import type { McpClient } from './mcp-client.js';
+import { interpretIntent } from './intent-interpreter.js';
 
 /**
  * Pipeline orchestrator — executes the sequential MCP flow:
@@ -150,39 +151,52 @@ export class Pipeline {
    * Full pipeline: get component catalog + query data → generate dynamic UI config
    *
    * Flow:
-   *   1. library-context → component catalog (what components exist)
-   *   2. mcp-gcp-mock → data records
-   *   3. mcp-ui generate_ui → UIConfig (declarative component tree)
+   *   1. LLM interprets intent → structured query (filters, groupBy, metric, etc.)
+   *   2. library-context → component catalog (what components exist)
+   *   3. mcp-gcp-mock → data records (with inferred filters + limit)
+   *   4. mcp-ui generate_ui → UIConfig (declarative component tree)
    */
   async generateUi(params: GenerateUiParams): Promise<unknown> {
-    // Step 1: Get available components from library-context
+    // Step 1: Interpret intent with LLM (Bedrock Claude Haiku)
+    const parsed = await interpretIntent(params.intent);
+    console.log('[pipeline] Interpreted intent:', JSON.stringify(parsed));
+
+    // Step 2: Get available components from library-context
     const componentCatalog = await this.getComponentCatalog();
 
-    // Step 2: Parse limit from intent if not explicitly provided
-    const inferredLimit =
-      params.limit || extractLimitFromIntent(params.intent) || 100;
-
-    // Step 3: Infer date filters from intent if not explicitly provided
-    const inferredFilters = {
+    // Step 3: Merge explicit params with LLM-inferred params
+    const filters: Record<string, unknown> = {
+      ...parsed.filters,
       ...params.filters,
-      ...(!params.filters?.fecha_venta
-        ? extractDateFiltersFromIntent(params.intent)
-        : {}),
     };
+    const limit = params.limit || parsed.limit || 100;
 
     // Step 4: Get data from MCP GCP Mock
     const queryResult = (await this.queryData(
       params.dataset,
-      Object.keys(inferredFilters).length > 0 ? inferredFilters : undefined,
-      inferredLimit,
+      Object.keys(filters).length > 0 ? filters : undefined,
+      limit,
     )) as {
       records: Record<string, unknown>[];
     };
+
+    // Step 5: Build enhanced intent with parsed metadata for mcp-ui
+    const enhancedIntent = [
+      params.intent,
+      parsed.groupBy ? `[groupBy:${parsed.groupBy}]` : '',
+      parsed.metric ? `[metric:${parsed.metric}]` : '',
+      parsed.metricField ? `[metricField:${parsed.metricField}]` : '',
+      parsed.chartType ? `[chartType:${parsed.chartType}]` : '',
+      parsed.template ? `[template:${parsed.template}]` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
     const uiConfig = await this.uiClient.callTool('generate_ui', {
-      intent: params.intent,
+      intent: enhancedIntent,
       records: queryResult.records,
       componentCatalog,
-      title: params.title,
+      title: params.title || parsed.title,
       layout: params.layout || 'vertical',
       columns: params.columns || 2,
     });
@@ -238,6 +252,47 @@ function parseComponentsFromContext(
     {
       name: 'DashboardLayout',
       description: 'Full page layout with sidebar, header, and content area',
+    },
+    // Composite rich components (rendered by DynamicRenderer)
+    {
+      name: 'StatCard',
+      description:
+        'Metric card with title, large value, subtitle, trend arrow, and icon. Props: title, value, subtitle?, trend?, trendDirection?(up|down|neutral), icon?',
+    },
+    {
+      name: 'KPIGrid',
+      description:
+        'Grid of StatCards for key metrics. Props: items (array of StatCard props)',
+    },
+    {
+      name: 'ProgressBar',
+      description:
+        'Single progress bar with label and percentage. Props: label, value(0-100), color?, showValue?',
+    },
+    {
+      name: 'ProgressGroup',
+      description:
+        'Card containing multiple progress bars. Props: title?, items (array of {label, value, color?})',
+    },
+    {
+      name: 'TransactionList',
+      description:
+        'List of transaction items with title, subtitle, amount, date, status. Props: title?, items (array of {title, subtitle?, amount, date?, status?(positive|negative|neutral)})',
+    },
+    {
+      name: 'MiniChart',
+      description:
+        'Compact sparkline chart inside a card with title and value. Props: title, value, data (number[]), color?',
+    },
+    {
+      name: 'DataSummary',
+      description:
+        'Styled data table with hover effects. Props: title?, columns (array of {key, label}), rows (array of records), highlightFirst?',
+    },
+    {
+      name: 'Chart',
+      description:
+        'Full Chart.js chart in a card. Props: type(bar|line|pie|doughnut|area), title?, data({labels, datasets}), options?',
     },
   ];
 
@@ -373,5 +428,55 @@ function buildMonthFilter(
   return {
     fecha_venta: { gte: startDate, lte: endDate },
   };
+}
+
+/**
+ * Extracts category filter from intent based on known product categories.
+ */
+function extractCategoryFilterFromIntent(
+  intent: string,
+): Record<string, unknown> | null {
+  const categoryMap: Record<string, string> = {
+    moto: 'Motos',
+    motos: 'Motos',
+    celular: 'Celulares',
+    celulares: 'Celulares',
+    teléfono: 'Celulares',
+    telefono: 'Celulares',
+    bicicleta: 'Bicicletas Eléctricas',
+    bicicletas: 'Bicicletas Eléctricas',
+    bici: 'Bicicletas Eléctricas',
+    pantalla: 'Pantallas/TV',
+    pantallas: 'Pantallas/TV',
+    tv: 'Pantallas/TV',
+    televisor: 'Pantallas/TV',
+    audio: 'Audio',
+    bocina: 'Audio',
+    bafle: 'Audio',
+    tablet: 'Tablets',
+    tablets: 'Tablets',
+    tableta: 'Tablets',
+    consola: 'Consolas',
+    consolas: 'Consolas',
+    nintendo: 'Consolas',
+    switch: 'Consolas',
+    climatización: 'Climatización',
+    climatizacion: 'Climatización',
+    aire: 'Climatización',
+    ventilador: 'Climatización',
+    accesorio: 'Accesorios',
+    accesorios: 'Accesorios',
+    hielera: 'Accesorios',
+  };
+
+  const intentLower = intent.toLowerCase();
+
+  for (const [keyword, category] of Object.entries(categoryMap)) {
+    if (intentLower.includes(keyword)) {
+      return { categoria: category };
+    }
+  }
+
+  return null;
 }
 

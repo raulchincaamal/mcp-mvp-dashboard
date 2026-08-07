@@ -13,6 +13,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.5.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.23.0"
   },

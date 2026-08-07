@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '../../data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// After tsup bundles to dist/index.js, data/ is at ../data relative to dist/
+const DATA_DIR = join(__dirname, '../data');
 
 export interface FieldDescription {
   name: string;
@@ -17,7 +19,9 @@ export interface DatasetDescription {
   fields: FieldDescription[];
 }
 
-function inferType(value: unknown): 'string' | 'number' | 'boolean' | 'unknown' {
+function inferType(
+  value: unknown,
+): 'string' | 'number' | 'boolean' | 'unknown' {
   if (typeof value === 'string') return 'string';
   if (typeof value === 'number') return 'number';
   if (typeof value === 'boolean') return 'boolean';
@@ -32,16 +36,19 @@ export function describeDataset(dataset: string): DatasetDescription {
     const raw = readFileSync(filePath, 'utf-8');
     records = JSON.parse(raw);
   } catch {
-    throw new Error(`Dataset "${dataset}" not found. Use list_datasets to see available datasets.`);
+    throw new Error(
+      `Dataset "${dataset}" not found. Use list_datasets to see available datasets.`,
+    );
   }
 
-  const fields: FieldDescription[] = records.length > 0
-    ? Object.entries(records[0]).map(([name, value]) => ({
-        name,
-        type: inferType(value),
-        sample: value,
-      }))
-    : [];
+  const fields: FieldDescription[] =
+    records.length > 0
+      ? Object.entries(records[0]).map(([name, value]) => ({
+          name,
+          type: inferType(value),
+          sample: value,
+        }))
+      : [];
 
   return {
     name: dataset,
@@ -49,3 +56,4 @@ export function describeDataset(dataset: string): DatasetDescription {
     fields,
   };
 }
+

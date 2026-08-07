@@ -2,8 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '../../data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// After tsup bundles to dist/index.js, data/ is at ../data relative to dist/
+const DATA_DIR = join(__dirname, '../data');
 
 export interface DatasetInfo {
   name: string;
@@ -27,3 +29,4 @@ export function listDatasets(): DatasetInfo[] {
     };
   });
 }
+

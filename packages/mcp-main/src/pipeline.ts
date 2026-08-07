@@ -158,16 +158,26 @@ export class Pipeline {
     // Step 1: Get available components from library-context
     const componentCatalog = await this.getComponentCatalog();
 
-    // Step 2: Get data from MCP GCP Mock
+    // Step 2: Parse limit from intent if not explicitly provided
+    const inferredLimit =
+      params.limit || extractLimitFromIntent(params.intent) || 100;
+
+    // Step 3: Infer date filters from intent if not explicitly provided
+    const inferredFilters = {
+      ...params.filters,
+      ...(!params.filters?.fecha_venta
+        ? extractDateFiltersFromIntent(params.intent)
+        : {}),
+    };
+
+    // Step 4: Get data from MCP GCP Mock
     const queryResult = (await this.queryData(
       params.dataset,
-      params.filters,
-      params.limit,
+      Object.keys(inferredFilters).length > 0 ? inferredFilters : undefined,
+      inferredLimit,
     )) as {
       records: Record<string, unknown>[];
     };
-
-    // Step 3: Generate UIConfig via MCP UI using components + data + intent
     const uiConfig = await this.uiClient.callTool('generate_ui', {
       intent: params.intent,
       records: queryResult.records,
@@ -249,5 +259,119 @@ function parseComponentsFromContext(
   }
 
   return knownComponents;
+}
+
+/**
+ * Extracts a numeric limit from a natural language intent.
+ * Matches patterns like "últimas 10", "top 20", "primeros 5", "50 ventas", etc.
+ */
+function extractLimitFromIntent(intent: string): number | null {
+  const patterns = [
+    /(?:últim[oa]s?|ultim[oa]s?)\s+(\d+)/i,
+    /\btop\s+(\d+)/i,
+    /(?:primer[oa]s?)\s+(\d+)/i,
+    /\b(?:las?|los)\s+(\d+)\s+\w+/i,
+    /(\d+)\s+(?:últim[oa]s?|ultim[oa]s?|primer[oa]s?)/i,
+    /(?:muestra|mostrar|ver|dame)\s+(\d+)/i,
+    /(?:limit[ea]?|máximo|maximo|max)\s+(\d+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = intent.match(pattern);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > 0 && num <= 5000) return num;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extracts date range filters from a natural language intent.
+ * Returns a filter object for the "fecha_venta" field if a date/month reference is found.
+ *
+ * Supported patterns:
+ *   - "en Julio", "del mes de Julio", "Julio 2025"
+ *   - "en enero 2024", "de marzo"
+ *   - "este mes", "mes anterior", "mes pasado"
+ */
+function extractDateFiltersFromIntent(
+  intent: string,
+): Record<string, unknown> | null {
+  const MONTHS: Record<string, string> = {
+    enero: '01',
+    febrero: '02',
+    marzo: '03',
+    abril: '04',
+    mayo: '05',
+    junio: '06',
+    julio: '07',
+    agosto: '08',
+    septiembre: '09',
+    octubre: '10',
+    noviembre: '11',
+    diciembre: '12',
+  };
+
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+
+  // Match "mes anterior" / "mes pasado"
+  if (/mes\s+(?:anterior|pasado)/i.test(intent)) {
+    const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    return buildMonthFilter(targetYear, targetMonth);
+  }
+
+  // Match "este mes"
+  if (/este\s+mes/i.test(intent)) {
+    return buildMonthFilter(currentYear, currentMonth);
+  }
+
+  // Match "en [month] [year?]" or "del mes de [month]" or "de [month] [year?]"
+  const monthPattern =
+    /(?:en|del?\s+mes\s+de|de)\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s+(\d{4}))?/i;
+  const monthMatch = intent.match(monthPattern);
+  if (monthMatch) {
+    const monthName = monthMatch[1].toLowerCase();
+    const month = parseInt(MONTHS[monthName], 10);
+    let year = monthMatch[2] ? parseInt(monthMatch[2], 10) : currentYear;
+    // If the month hasn't happened yet this year, assume previous year
+    if (!monthMatch[2] && month > currentMonth) {
+      year = currentYear - 1;
+    }
+    return buildMonthFilter(year, month);
+  }
+
+  // Match standalone month name (e.g. "Julio" capitalized)
+  for (const [name, num] of Object.entries(MONTHS)) {
+    const regex = new RegExp(`\\b${name}\\b(?:\\s+(\\d{4}))?`, 'i');
+    const match = intent.match(regex);
+    if (match) {
+      const month = parseInt(num, 10);
+      let year = match[1] ? parseInt(match[1], 10) : currentYear;
+      // If the month hasn't happened yet this year, assume previous year
+      if (!match[1] && month > currentMonth) {
+        year = currentYear - 1;
+      }
+      return buildMonthFilter(year, month);
+    }
+  }
+
+  return null;
+}
+
+function buildMonthFilter(
+  year: number,
+  month: number,
+): Record<string, unknown> {
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  return {
+    fecha_venta: { gte: startDate, lte: endDate },
+  };
 }
 

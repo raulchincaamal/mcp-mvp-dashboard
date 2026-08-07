@@ -1,7 +1,0 @@
-[
-  { "producto": "Plan Básico", "ingresos": 120000, "suscriptores": 800, "churn_rate": 0.05, "satisfaccion": 4.2 },
-  { "producto": "Plan Pro", "ingresos": 350000, "suscriptores": 1200, "churn_rate": 0.03, "satisfaccion": 4.6 },
-  { "producto": "Plan Enterprise", "ingresos": 580000, "suscriptores": 450, "churn_rate": 0.02, "satisfaccion": 4.8 },
-  { "producto": "Add-on Analytics", "ingresos": 95000, "suscriptores": 600, "churn_rate": 0.08, "satisfaccion": 3.9 },
-  { "producto": "Add-on Soporte Premium", "ingresos": 75000, "suscriptores": 350, "churn_rate": 0.04, "satisfaccion": 4.5 }
-]

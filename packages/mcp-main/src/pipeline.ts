@@ -33,7 +33,7 @@ export class Pipeline {
    * Full pipeline: interpret intent → get components → query data → generate UI
    */
   async generateUi(params: GenerateUiParams): Promise<unknown> {
-    // ─── Check full response cache ───────────────────────────
+    // ─── Check UI cache (by hash) ────────────────────────────
     const requestKey = generateCacheKey('ui', {
       dataset: params.dataset,
       intent: params.intent,
@@ -43,26 +43,12 @@ export class Pipeline {
     const cachedResponse = await cacheGet<unknown>(requestKey);
     if (cachedResponse) return cachedResponse;
 
-    // ─── Step 1: Interpret intent (cached) ───────────────────
-    const intentKey = generateCacheKey('intent', params.intent);
-    let parsed =
-      await cacheGet<Awaited<ReturnType<typeof interpretIntent>>>(intentKey);
-    if (!parsed) {
-      parsed = await interpretIntent(params.intent);
-      await cacheSet(intentKey, parsed, TTL.INTENT);
-    }
+    // ─── Step 1: Interpret intent with LLM ───────────────────
+    const parsed = await interpretIntent(params.intent);
     console.log('[pipeline] Interpreted intent:', JSON.stringify(parsed));
 
-    // ─── Step 2: Get component catalog (cached) ──────────────
-    const catalogKey = generateCacheKey('catalog', 'ui-components');
-    let componentCatalog =
-      await cacheGet<Awaited<ReturnType<typeof this.getComponentCatalog>>>(
-        catalogKey,
-      );
-    if (!componentCatalog) {
-      componentCatalog = await this.getComponentCatalog();
-      await cacheSet(catalogKey, componentCatalog, TTL.CATALOG);
-    }
+    // ─── Step 2: Get component catalog ───────────────────────
+    const componentCatalog = await this.getComponentCatalog();
 
     // ─── Step 3: Merge filters ───────────────────────────────
     const filters: Record<string, unknown> = {
@@ -71,7 +57,7 @@ export class Pipeline {
     };
     const limit = params.limit || parsed.limit || 100;
 
-    // ─── Step 4: Query data (not cached — data can change) ───
+    // ─── Step 4: Query data ──────────────────────────────────
     const queryResult = (await this.queryData(
       params.dataset,
       Object.keys(filters).length > 0 ? filters : undefined,
@@ -101,8 +87,8 @@ export class Pipeline {
       columns: params.columns || 2,
     });
 
-    // ─── Cache the final response ────────────────────────────
-    await cacheSet(requestKey, uiConfig, TTL.UI_CONFIG);
+    // ─── Cache only the final UIConfig ───────────────────────
+    await cacheSet(requestKey, uiConfig, TTL.INTENT);
 
     return uiConfig;
   }

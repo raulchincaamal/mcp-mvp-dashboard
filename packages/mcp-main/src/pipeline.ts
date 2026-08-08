@@ -1,9 +1,15 @@
 import type { McpClient } from './mcp-client.js';
 import { interpretIntent } from './intent-interpreter.js';
+import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
 
 /**
  * Pipeline orchestrator — executes the sequential MCP flow:
  *   LLM (interpret) → library-context (components) → mcp-gcp-mock (data) → mcp-ui (UIConfig)
+ *
+ * Cache layer (ioredis):
+ *   - Intent parsing: cached 1 hour (same text = same structured query)
+ *   - Component catalog: cached 24 hours (changes only on lib updates)
+ *   - Final UIConfig: cached 15 min (same request = same output)
  */
 
 export interface GenerateUiParams {
@@ -25,29 +31,47 @@ export class Pipeline {
 
   /**
    * Full pipeline: interpret intent → get components → query data → generate UI
-   *
-   * Flow:
-   *   1. LLM interprets intent → structured query (filters, groupBy, metric, etc.)
-   *   2. library-context → component catalog (what components exist)
-   *   3. mcp-gcp-mock → data records (with inferred filters + limit)
-   *   4. mcp-ui generate_ui → UIConfig (declarative component tree)
    */
   async generateUi(params: GenerateUiParams): Promise<unknown> {
-    // Step 1: Interpret intent with LLM (Bedrock Claude Haiku)
-    const parsed = await interpretIntent(params.intent);
+    // ─── Check full response cache ───────────────────────────
+    const requestKey = generateCacheKey('ui', {
+      dataset: params.dataset,
+      intent: params.intent,
+      filters: params.filters,
+      limit: params.limit,
+    });
+    const cachedResponse = await cacheGet<unknown>(requestKey);
+    if (cachedResponse) return cachedResponse;
+
+    // ─── Step 1: Interpret intent (cached) ───────────────────
+    const intentKey = generateCacheKey('intent', params.intent);
+    let parsed =
+      await cacheGet<Awaited<ReturnType<typeof interpretIntent>>>(intentKey);
+    if (!parsed) {
+      parsed = await interpretIntent(params.intent);
+      await cacheSet(intentKey, parsed, TTL.INTENT);
+    }
     console.log('[pipeline] Interpreted intent:', JSON.stringify(parsed));
 
-    // Step 2: Get available components from library-context
-    const componentCatalog = await this.getComponentCatalog();
+    // ─── Step 2: Get component catalog (cached) ──────────────
+    const catalogKey = generateCacheKey('catalog', 'ui-components');
+    let componentCatalog =
+      await cacheGet<Awaited<ReturnType<typeof this.getComponentCatalog>>>(
+        catalogKey,
+      );
+    if (!componentCatalog) {
+      componentCatalog = await this.getComponentCatalog();
+      await cacheSet(catalogKey, componentCatalog, TTL.CATALOG);
+    }
 
-    // Step 3: Merge explicit params with LLM-inferred params
+    // ─── Step 3: Merge filters ───────────────────────────────
     const filters: Record<string, unknown> = {
       ...parsed.filters,
       ...params.filters,
     };
     const limit = params.limit || parsed.limit || 100;
 
-    // Step 4: Get data from MCP GCP Mock
+    // ─── Step 4: Query data (not cached — data can change) ───
     const queryResult = (await this.queryData(
       params.dataset,
       Object.keys(filters).length > 0 ? filters : undefined,
@@ -56,7 +80,7 @@ export class Pipeline {
       records: Record<string, unknown>[];
     };
 
-    // Step 5: Build enhanced intent with parsed metadata for mcp-ui
+    // ─── Step 5: Generate UIConfig ───────────────────────────
     const enhancedIntent = [
       params.intent,
       parsed.groupBy ? `[groupBy:${parsed.groupBy}]` : '',
@@ -76,6 +100,9 @@ export class Pipeline {
       layout: params.layout || 'vertical',
       columns: params.columns || 2,
     });
+
+    // ─── Cache the final response ────────────────────────────
+    await cacheSet(requestKey, uiConfig, TTL.UI_CONFIG);
 
     return uiConfig;
   }
@@ -152,7 +179,6 @@ function parseComponentsFromContext(
       name: 'DashboardLayout',
       description: 'Full page layout with sidebar, header, and content area',
     },
-    // Composite rich components (rendered by DynamicRenderer)
     {
       name: 'StatCard',
       description:
@@ -187,7 +213,6 @@ function parseComponentsFromContext(
     },
   ];
 
-  // Extract additional components from the library-context response
   const componentPattern = /\*\*(\w+)\*\*/g;
   let match;
   const extractedNames = new Set(knownComponents.map((c) => c.name));

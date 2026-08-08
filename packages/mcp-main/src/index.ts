@@ -4,20 +4,24 @@ import cors from '@fastify/cors';
 import { createMcpClients } from './mcp-client.js';
 import { Pipeline } from './pipeline.js';
 import { generateUiRoutes } from './routes/generate-ui.js';
+import { initCache, disconnectCache } from './cache.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
 
 async function main() {
   console.log('[mcp-main] Starting pipeline orchestrator...');
 
-  // Step 1: Spawn and connect to MCP servers
+  // Step 1: Initialize cache (best-effort, continues without Redis)
+  initCache();
+
+  // Step 2: Spawn and connect to MCP servers
   const { gcpClient, uiClient, libraryContextClient } =
     await createMcpClients();
 
-  // Step 2: Create pipeline instance
+  // Step 3: Create pipeline instance
   const pipeline = new Pipeline(gcpClient, uiClient, libraryContextClient);
 
-  // Step 3: Setup Fastify
+  // Step 4: Setup Fastify
   const app = Fastify({ logger: false });
 
   await app.register(cors);
@@ -38,7 +42,7 @@ async function main() {
   // Main endpoint: generate UI from intent
   await app.register(generateUiRoutes, { prefix: '/api/generate-ui' });
 
-  // Step 4: Start listening
+  // Step 5: Start listening
   await app.listen({ port: PORT, host: '0.0.0.0' });
 
   console.log(`[mcp-main] HTTP API running at http://localhost:${PORT}`);
@@ -53,6 +57,7 @@ async function main() {
     await gcpClient.disconnect();
     await uiClient.disconnect();
     await libraryContextClient.disconnect();
+    await disconnectCache();
     process.exit(0);
   };
 

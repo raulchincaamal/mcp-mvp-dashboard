@@ -82,7 +82,9 @@ export class Pipeline {
       intent: enhancedIntent,
       records: queryResult.records,
       componentCatalog,
-      title: params.title || parsed.title,
+      ...(params.title || parsed.title
+        ? { title: params.title || parsed.title }
+        : {}),
       layout: params.layout || 'vertical',
       columns: params.columns || 2,
     });

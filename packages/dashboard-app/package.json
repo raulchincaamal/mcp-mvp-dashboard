@@ -23,6 +23,7 @@
     "@macropaytd/lib-front-utils": "^0.5.0",
     "@macropaytd/lib-front-zod-validator": "^0.5.3",
     "@macropaytd/lib-front-zustand-monitor": "^0.3.3",
+    "@mp-front/common": "^0.0.3",
     "chart.js": "^4.4.0",
     "i18next": "^26.3.4",
     "next": "^16.2.10",

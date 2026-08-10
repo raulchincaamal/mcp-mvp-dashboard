@@ -41,7 +41,7 @@ export function initCache(): void {
  */
 export function generateCacheKey(prefix: string, data: unknown): string {
   const raw = JSON.stringify(data);
-  const hash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
+  const hash = createHash('sha256').update(raw).digest('hex');
   const key = `${PREFIX}:${prefix}:${hash}`;
   console.log(`[cache] Key: ${key} | Hash: ${hash}`);
   return key;
@@ -68,6 +68,7 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 
 /**
  * Set a cached value with a TTL.
+ * Uses setEntryPoint directly to store with a plain key (matching simpleGet).
  */
 export async function cacheSet(
   key: string,
@@ -77,13 +78,14 @@ export async function cacheSet(
   if (!redis) return;
 
   try {
-    await redis.set({
-      prefix: key,
-      idData: 'data',
-      body: value,
-      expire: ttlMinutes || TTL.INTENT,
-      encrypted: false,
-    });
+    const ttl = ttlMinutes || TTL.INTENT;
+    const serialized = JSON.stringify(value);
+    (
+      redis as unknown as {
+        setEntryPoint(k: string, v: string, t: number): void;
+      }
+    ).setEntryPoint(key, serialized, ttl);
+    console.log(`[cache] SET: ${key} (TTL: ${ttl}min)`);
   } catch (err) {
     console.warn('[cache] Error setting cache:', (err as Error).message);
   }

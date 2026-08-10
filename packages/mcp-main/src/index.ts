@@ -1,12 +1,21 @@
-import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createMcpClients } from './mcp-client.js';
 import { Pipeline } from './pipeline.js';
-import { initCache, generateCacheKey, disconnectCache } from './cache.js';
 
-const DASHBOARD_BASE_URL = process.env.DASHBOARD_URL || 'http://localhost:3000';
+// Prevent unhandled ioredis errors from crashing the MCP server process
+process.on('uncaughtException', (err) => {
+  console.error('[mcp-main] Uncaught exception (non-fatal):', err.message);
+});
+import {
+  initCache,
+  generateCacheKey,
+  disconnectCache,
+  isCacheConnected,
+} from './cache.js';
+
+const DASHBOARD_BASE_URL = process.env.DASHBOARD_URL;
 
 const server = new McpServer({
   name: 'mcp-main',
@@ -18,7 +27,7 @@ let pipeline: Pipeline | null = null;
 async function ensurePipeline(): Promise<Pipeline> {
   if (pipeline) return pipeline;
 
-  initCache();
+  await initCache();
 
   const { gcpClient, uiClient, libraryContextClient } =
     await createMcpClients();
@@ -75,6 +84,9 @@ server.tool(
 
       const dashboardUrl = `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`;
 
+      // Check if cache is available for diagnostics
+      const cacheStatus = isCacheConnected();
+
       return {
         content: [
           {
@@ -85,6 +97,7 @@ server.tool(
                 key: hash,
                 title:
                   (uiConfig as Record<string, unknown>)?.title || 'Dashboard',
+                cached: cacheStatus,
               },
               null,
               2,

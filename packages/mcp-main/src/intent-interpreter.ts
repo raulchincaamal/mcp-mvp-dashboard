@@ -4,10 +4,9 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 
 const client = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION,
 });
-const MODEL_ID =
-  process.env.BEDROCK_MODEL_ID || 'anthropic.claude-haiku-4-5-20251001-v1:0';
+const MODEL_ID = process.env.BEDROCK_MODEL_ID;
 
 /**
  * Structured query parsed from a natural language intent.

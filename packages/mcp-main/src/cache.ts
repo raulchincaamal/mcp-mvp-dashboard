@@ -1,65 +1,79 @@
-import { RedisCache } from '@mp-front/common/cache-providers';
+import Redis from 'ioredis';
 import { createHash } from 'crypto';
 
-// TTL in minutes (RedisCache.set expects minutes)
 const TTL = {
-  INTENT: 60, // 1 hour — same intent text = same parsed result from LLM
+  INTENT: 60, // 1 hour in minutes
 };
 
 const PREFIX = 'mcp-dashboard';
 
-let redis: RedisCache<unknown> | null = null;
+let redis: Redis | null = null;
 
 /**
- * Initialize Redis connection via @mp-front/common.
- * Falls back gracefully if Redis is unavailable.
+ * Initialize Redis connection using ioredis directly.
+ * Reads REDIS_HOST, REDIS_PORT, REDIS_USER, REDIS_PASS from env.
  */
-export function initCache(): void {
+export async function initCache(): Promise<void> {
+  const host = process.env.REDIS_HOST;
+  const port = Number(process.env.REDIS_PORT) || 6379;
+  const username = process.env.REDIS_USER || undefined;
+  const password = process.env.REDIS_PASS || undefined;
+  const useTls = process.env.REDIS_TLS !== 'false'; // default: TLS enabled
+
+  if (!host) {
+    console.error('[cache] REDIS_HOST not set — running without cache');
+    return;
+  }
+
   try {
-    redis = new RedisCache<unknown>();
-    redis
-      .statusHost()
-      .then(() =>
-        console.log('[cache] Connected to Redis via @mp-front/common'),
-      )
-      .catch((err: Error) => {
-        console.warn(
-          '[cache] Could not connect to Redis — running without cache:',
-          err.message,
-        );
-        redis = null;
-      });
+    const client = new Redis({
+      host,
+      port,
+      username,
+      password,
+      tls: useTls ? {} : undefined,
+      connectTimeout: 5000,
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+    });
+
+    client.on('error', (err) => {
+      console.error('[cache] Redis error:', err.message);
+    });
+
+    await client.connect();
+    redis = client;
+    console.error('[cache] Connected to Redis at', host);
   } catch (err) {
-    console.warn('[cache] Failed to initialize Redis:', (err as Error).message);
+    console.error(
+      '[cache] Could not connect to Redis:',
+      (err as Error).message,
+    );
     redis = null;
   }
 }
 
 /**
  * Generate a deterministic hash for a cache key.
- * Logs the hash for debugging/searching.
  */
 export function generateCacheKey(prefix: string, data: unknown): string {
   const raw = JSON.stringify(data);
   const hash = createHash('sha256').update(raw).digest('hex');
   const key = `${PREFIX}:${prefix}:${hash}`;
-  console.log(`[cache] Key: ${key} | Hash: ${hash}`);
   return key;
 }
 
 /**
- * Get a cached value by key. Returns null on miss or if Redis is unavailable.
+ * Get a cached value by key.
  */
 export async function cacheGet<T>(key: string): Promise<T | null> {
   if (!redis) return null;
 
   try {
-    const result = await redis.simpleGet(key);
+    const result = await redis.get(key);
     if (result) {
-      console.log(`[cache] HIT: ${key}`);
       return JSON.parse(result) as T;
     }
-    console.log(`[cache] MISS: ${key}`);
     return null;
   } catch {
     return null;
@@ -67,8 +81,7 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 }
 
 /**
- * Set a cached value with a TTL.
- * Uses setEntryPoint directly to store with a plain key (matching simpleGet).
+ * Set a cached value with a TTL (in minutes).
  */
 export async function cacheSet(
   key: string,
@@ -80,23 +93,28 @@ export async function cacheSet(
   try {
     const ttl = ttlMinutes || TTL.INTENT;
     const serialized = JSON.stringify(value);
-    (
-      redis as unknown as {
-        setEntryPoint(k: string, v: string, t: number): void;
-      }
-    ).setEntryPoint(key, serialized, ttl);
-    console.log(`[cache] SET: ${key} (TTL: ${ttl}min)`);
+    await redis.set(key, serialized, 'EX', ttl * 60);
+    console.error(`[cache] SET: ${key} (TTL: ${ttl}min)`);
   } catch (err) {
-    console.warn('[cache] Error setting cache:', (err as Error).message);
+    console.error('[cache] Error setting cache:', (err as Error).message);
   }
+}
+
+/**
+ * Returns whether Redis is currently connected.
+ */
+export function isCacheConnected(): boolean {
+  return redis !== null;
 }
 
 /**
  * Gracefully disconnect Redis.
  */
 export async function disconnectCache(): Promise<void> {
-  // @mp-front/common manages its own connection lifecycle
-  console.log('[cache] Cache layer stopped');
+  if (redis) {
+    await redis.quit();
+    redis = null;
+  }
 }
 
 export { TTL };

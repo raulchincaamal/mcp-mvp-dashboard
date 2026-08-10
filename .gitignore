@@ -12,6 +12,8 @@ dist/
 .env
 .env.local
 
+.kiro
+
 # IDE
 .vscode/
 .idea/

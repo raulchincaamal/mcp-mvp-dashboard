@@ -1,72 +1,112 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import { createMcpClients } from './mcp-client.js';
 import { Pipeline } from './pipeline.js';
-import { generateUiRoutes } from './routes/generate-ui.js';
-import { initCache, disconnectCache } from './cache.js';
+import { initCache, generateCacheKey, disconnectCache } from './cache.js';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+const DASHBOARD_BASE_URL = process.env.DASHBOARD_URL || 'http://localhost:3000';
 
-async function main() {
-  console.log('[mcp-main] Starting pipeline orchestrator...');
+const server = new McpServer({
+  name: 'mcp-main',
+  version: '0.1.0',
+});
 
-  // Step 1: Initialize cache (best-effort, continues without Redis)
+let pipeline: Pipeline | null = null;
+
+async function ensurePipeline(): Promise<Pipeline> {
+  if (pipeline) return pipeline;
+
   initCache();
 
-  // Step 2: Spawn and connect to MCP servers
   const { gcpClient, uiClient, libraryContextClient } =
     await createMcpClients();
 
-  // Step 3: Create pipeline instance
-  const pipeline = new Pipeline(gcpClient, uiClient, libraryContextClient);
-
-  // Step 4: Setup Fastify
-  const app = Fastify({ logger: false });
-
-  await app.register(cors);
-
-  // Decorate with pipeline so routes can access it
-  app.decorate('pipeline', pipeline);
-
-  // Health check
-  app.get('/health', async () => ({
-    status: 'ok',
-    services: {
-      'mcp-gcp-mock': gcpClient.isConnected,
-      'mcp-ui': uiClient.isConnected,
-      'library-context': libraryContextClient.isConnected,
-    },
-  }));
-
-  // Main endpoint: generate UI from intent
-  await app.register(generateUiRoutes, { prefix: '/api/generate-ui' });
-
-  // Step 5: Start listening
-  await app.listen({ port: PORT, host: '0.0.0.0' });
-
-  console.log(`[mcp-main] HTTP API running at http://localhost:${PORT}`);
-  console.log(`[mcp-main] Endpoints:`);
-  console.log(`  GET  /health`);
-  console.log(`  POST /api/generate-ui`);
-
-  // Graceful shutdown
-  const shutdown = async () => {
-    console.log('\n[mcp-main] Shutting down...');
-    await app.close();
-    await gcpClient.disconnect();
-    await uiClient.disconnect();
-    await libraryContextClient.disconnect();
-    await disconnectCache();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  pipeline = new Pipeline(gcpClient, uiClient, libraryContextClient);
+  return pipeline;
 }
 
-main().catch((error) => {
-  console.error('[mcp-main] Fatal error:', error);
-  process.exit(1);
-});
+// Tool: generate_dashboard
+server.tool(
+  'generate_dashboard',
+  'Generates a dashboard from a natural language intent. Executes the full pipeline: interprets intent with LLM, queries data from GCP/SAP, generates a UIConfig, caches it in Redis, and returns a shareable dashboard URL.',
+  {
+    intent: z
+      .string()
+      .describe(
+        'Natural language description of the dashboard to generate (e.g. "dashboard ejecutivo de ventas del Q4 2024 agrupado por estado")',
+      ),
+    dataset: z
+      .string()
+      .default('ventas-credito')
+      .describe('Dataset to query (default: ventas-credito)'),
+    filters: z
+      .record(z.unknown())
+      .optional()
+      .describe(
+        'Optional filters to apply to the data query (e.g. { "canal_venta": "tienda_fisica" })',
+      ),
+    limit: z
+      .number()
+      .positive()
+      .optional()
+      .describe('Max number of records to query (default: 100)'),
+  },
+  async ({ intent, dataset, filters, limit }) => {
+    try {
+      const pipe = await ensurePipeline();
+
+      const uiConfig = await pipe.generateUi({
+        intent,
+        dataset,
+        filters,
+        limit,
+      });
+
+      // Compute the cache key to build the URL
+      const cacheKey = generateCacheKey('ui', {
+        dataset,
+        intent,
+        filters,
+        limit,
+      });
+      const hash = cacheKey.split(':').pop() || cacheKey;
+
+      const dashboardUrl = `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                url: dashboardUrl,
+                key: hash,
+                title:
+                  (uiConfig as Record<string, unknown>)?.title || 'Dashboard',
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error generating dashboard: ${(error as Error).message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  },
+);
+
+// Start server
+const transport = new StdioServerTransport();
+await server.connect(transport);
 

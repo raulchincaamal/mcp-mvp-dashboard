@@ -1,24 +1,24 @@
-import { redirect } from 'next/navigation';
 import { RedisCache } from '@mp-front/common/cache-providers';
 import DashboardContainer from './components/Container';
+import DashboardEmpty from './components/DashboardEmpty';
 
 const CACHE_PREFIX = 'mcp-dashboard';
 
 async function getUIConfig(
   key: string,
-): Promise<{ data: unknown; error?: string } | null> {
+): Promise<{ data: unknown; error?: string }> {
   try {
     const redis = new RedisCache<unknown>();
     const fullKey = key.includes(':') ? key : `${CACHE_PREFIX}:ui:${key}`;
     const result = await redis.simpleGet(fullKey);
 
     if (!result) {
-      return { data: null, error: 'UIConfig not found. It may have expired.' };
+      return { data: null, error: 'expired' };
     }
 
     return { data: JSON.parse(result) };
-  } catch (err) {
-    return { data: null, error: (err as Error).message };
+  } catch {
+    return { data: null, error: 'connection' };
   }
 }
 
@@ -31,22 +31,17 @@ export default async function DashboardPage({
 }: DashboardPageProps) {
   const { key } = await searchParams;
 
+  // No key provided — show empty state
   if (!key) {
-    redirect('/');
+    return <DashboardEmpty type="no-key" />;
   }
 
   const result = await getUIConfig(key);
 
-  if (!result || result.error) {
+  // Key not found or expired
+  if (!result.data || result.error) {
     return (
-      <main className="flex flex-col items-center justify-center gap-4 p-6 min-h-[50vh]">
-        <p className="text-lg text-destructive">
-          Error: {result?.error || 'No se pudo cargar el dashboard'}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          La clave proporcionada puede haber expirado o no existe en cache.
-        </p>
-      </main>
+      <DashboardEmpty type={result.error === 'expired' ? 'expired' : 'error'} />
     );
   }
 

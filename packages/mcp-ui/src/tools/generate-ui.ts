@@ -56,13 +56,16 @@ export function generateUi(params: GenerateUiParams): UIConfig {
   const intentLower = intent.toLowerCase();
 
   // Extract metadata hints from enhanced intent (set by pipeline via LLM)
-  const groupByHint = extractHint(intent, 'groupBy');
-  const templateHint = extractHint(intent, 'template') as Template | null;
-  const metricHint = extractHint(intent, 'metric');
-  const chartTypeHint = extractHint(intent, 'chartType');
+  const hints: IntentHints = {
+    groupBy: extractHint(intent, 'groupBy'),
+    template: extractHint(intent, 'template') as Template | null,
+    metric: extractHint(intent, 'metric'),
+    metricField: extractHint(intent, 'metricField'),
+    chartType: extractHint(intent, 'chartType'),
+  };
 
   // Detect template: use LLM hint if available, otherwise detect from text
-  const template = templateHint || detectTemplate(intentLower);
+  const template = hints.template || detectTemplate(intentLower);
 
   switch (template) {
     case 'executive':
@@ -74,6 +77,7 @@ export function generateUi(params: GenerateUiParams): UIConfig {
         intent,
         title,
         columns,
+        hints,
       );
     case 'category':
       return buildCategoryTemplate(
@@ -115,11 +119,20 @@ export function generateUi(params: GenerateUiParams): UIConfig {
         intent,
         title,
         columns,
+        hints,
       );
   }
 }
 
 // ─── Hint Extraction from Enhanced Intent ──────────────────
+
+interface IntentHints {
+  groupBy: string | null;
+  template: Template | null;
+  metric: string | null;
+  metricField: string | null;
+  chartType: string | null;
+}
 
 function extractHint(intent: string, key: string): string | null {
   const regex = new RegExp(`\\[${key}:([^\\]]+)\\]`);
@@ -159,89 +172,524 @@ function buildExecutiveTemplate(
   intent: string,
   title?: string,
   columns?: number,
+  hints?: IntentHints,
 ): UIConfig {
   const components: UIComponentConfig[] = [];
+  const intentLower = intent.toLowerCase();
 
-  // KPI Grid
-  const kpiItems = numericFields.slice(0, 4).map((field) => {
-    const values = records.map((r) => Number(r[field]) || 0);
-    const total = values.reduce((a, b) => a + b, 0);
-    const avg = total / values.length;
-    return {
-      title: formatLabel(field),
-      value: formatNumber(total),
-      subtitle: `Promedio: ${formatNumber(avg)}`,
-      trend: `${records.length} registros`,
-      trendDirection: 'neutral' as const,
-      icon: getIconForField(field),
-    };
-  });
+  // Resolve groupBy: hint > "por X" pattern > best guess
+  const groupByField = resolveGroupByField(
+    hints?.groupBy,
+    intentLower,
+    stringFields,
+  );
 
+  // Resolve metric fields: hint > detected from intent > smart defaults
+  const metricFields = resolveMetricFields(
+    hints?.metricField,
+    intentLower,
+    numericFields,
+  );
+
+  // Resolve aggregation type: hint > detected from intent
+  const metric = hints?.metric || detectMetricType(intentLower);
+
+  // ─── KPI Section: Summary stats for the primary metric ───
+  const kpiItems = buildKpiItems(records, metricFields, numericFields, metric);
   if (kpiItems.length > 0) {
     components.push({ component: 'KPIGrid', props: { items: kpiItems } });
   }
 
-  // Chart (line/bar for first numeric field over string field)
-  if (numericFields.length > 0 && stringFields.length > 0) {
-    const labelField = stringFields[0];
-    const valueField = numericFields[0];
-
-    // Aggregate by label field
-    const aggregated = aggregateByField(records, labelField, [valueField]);
-    const labels = Object.keys(aggregated).slice(0, 12);
-    const data = labels.map((l) => aggregated[l][valueField] || 0);
-
-    components.push({
-      component: 'Chart',
-      props: {
-        type: 'bar',
-        title: `${formatLabel(valueField)} por ${formatLabel(labelField)}`,
-        data: {
-          labels,
-          datasets: [
-            {
-              label: formatLabel(valueField),
-              data,
-              backgroundColor: '#4F46E5',
-              borderColor: '#4F46E5',
-              borderWidth: 2,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          xAxis: { label: formatLabel(labelField) },
-          yAxis: { label: formatLabel(valueField) },
-        },
-      },
-    });
+  // ─── Main Chart: Primary metric grouped by groupByField ──
+  if (groupByField && metricFields.length > 0) {
+    const chartComponent = buildGroupedChart(
+      records,
+      groupByField,
+      metricFields,
+      metric,
+      hints?.chartType || 'bar',
+    );
+    components.push(chartComponent);
   }
 
-  // Transaction list (last 8 records)
-  const transactionItems = records.slice(0, 8).map((r) => ({
-    title: String(r[stringFields[0]] || r[Object.keys(r)[0]] || ''),
-    subtitle: stringFields[1] ? String(r[stringFields[1]] || '') : undefined,
-    amount: numericFields[0]
-      ? `$${formatNumber(Number(r[numericFields[0]]))}`
-      : '',
-    date: r['fecha_venta'] ? String(r['fecha_venta']) : undefined,
-    status: 'neutral' as const,
-  }));
+  // ─── Morosidad/Status section (if relevant) ──────────────
+  if (
+    /morosidad|atraso|vencid|estatus/i.test(intentLower) &&
+    records[0]?.['estatus_credito'] !== undefined
+  ) {
+    const morosidadComponents = buildMorosidadSection(records, intentLower);
+    components.push(...morosidadComponents);
+  }
 
-  if (transactionItems.length > 0) {
-    components.push({
-      component: 'TransactionList',
-      props: { title: 'Últimos Registros', items: transactionItems },
-    });
+  // ─── Plazos distribution (if mentioned) ──────────────────
+  if (
+    /plazo/i.test(intentLower) &&
+    records[0]?.['plazo_semanas'] !== undefined
+  ) {
+    const plazosComponent = buildPlazosChart(records, intentLower);
+    components.push(plazosComponent);
+  }
+
+  // ─── Top N table (if "top" or "tabla" mentioned) ─────────
+  if (/top|mayor|tabla|sucursal/i.test(intentLower)) {
+    const tableComponent = buildTopTable(
+      records,
+      intentLower,
+      numericFields,
+      stringFields,
+    );
+    if (tableComponent) components.push(tableComponent);
   }
 
   return {
     title: title || 'Resumen Ejecutivo',
-    description: `Generado para: "${intent}"`,
+    description: `Generado para: "${stripHints(intent)}"`,
     layout: 'vertical',
     columns: columns || 2,
     components,
   };
+}
+
+// ─── Executive Template Helpers ────────────────────────────
+
+function resolveGroupByField(
+  hint: string | null | undefined,
+  intentLower: string,
+  stringFields: string[],
+): string {
+  // 1. Use hint directly if it matches an available field
+  if (hint && stringFields.includes(hint)) return hint;
+
+  // 2. Detect from intent "por X" or "agrupado por X"
+  const detected = detectGroupField(intentLower, stringFields);
+  if (detected) return detected;
+
+  // 3. Smart defaults for common fields
+  const priority = ['estado', 'categoria', 'sucursal', 'ciudad', 'canal_venta'];
+  for (const p of priority) {
+    if (stringFields.includes(p)) return p;
+  }
+
+  return stringFields[0] || 'id';
+}
+
+function resolveMetricFields(
+  hint: string | null | undefined,
+  intentLower: string,
+  numericFields: string[],
+): string[] {
+  const resolved: string[] = [];
+
+  // 1. Use hint
+  if (hint) {
+    const hintFields = hint.split(',').map((f) => f.trim());
+    hintFields.forEach((f) => {
+      if (numericFields.includes(f)) resolved.push(f);
+    });
+    if (resolved.length > 0) return resolved;
+  }
+
+  // 2. Detect from intent keywords
+  const fieldKeywords: Record<string, RegExp> = {
+    monto_financiado: /financiad|venta/i,
+    monto_total_credito: /total.*cr[eé]dito|cobrad|monto.*total/i,
+    monto_vencido: /vencid|morosidad/i,
+    precio_contado: /precio|contado/i,
+    enganche: /enganche/i,
+    pago_semanal: /pago.*semanal/i,
+    plazo_semanas: /plazo/i,
+  };
+
+  for (const [field, regex] of Object.entries(fieldKeywords)) {
+    if (regex.test(intentLower) && numericFields.includes(field)) {
+      resolved.push(field);
+    }
+  }
+
+  if (resolved.length > 0) return resolved.slice(0, 3);
+
+  // 3. Smart defaults: financial fields first
+  const financialPriority = [
+    'monto_financiado',
+    'monto_total_credito',
+    'precio_contado',
+    'enganche',
+  ];
+  for (const f of financialPriority) {
+    if (numericFields.includes(f)) resolved.push(f);
+    if (resolved.length >= 2) break;
+  }
+
+  return resolved.length > 0 ? resolved : numericFields.slice(0, 2);
+}
+
+function detectMetricType(intentLower: string): string {
+  if (/promedio|media|avg/i.test(intentLower)) return 'avg';
+  if (/cantidad|cuantos|n[uú]mero|count/i.test(intentLower)) return 'count';
+  return 'sum';
+}
+
+function buildKpiItems(
+  records: Record<string, unknown>[],
+  metricFields: string[],
+  numericFields: string[],
+  metric: string,
+): {
+  title: string;
+  value: string;
+  subtitle: string;
+  trend: string;
+  trendDirection: 'up' | 'down' | 'neutral';
+  icon: string;
+}[] {
+  // Use metric fields + add count
+  const fields = [...new Set(metricFields)].slice(0, 3);
+  const items: {
+    title: string;
+    value: string;
+    subtitle: string;
+    trend: string;
+    trendDirection: 'up' | 'down' | 'neutral';
+    icon: string;
+  }[] = [];
+
+  // Total records KPI
+  items.push({
+    title: 'Total Registros',
+    value: formatNumber(records.length),
+    subtitle: `${records.length} operaciones`,
+    trend: '',
+    trendDirection: 'neutral',
+    icon: '📋',
+  });
+
+  // Metric-based KPIs
+  fields.forEach((field) => {
+    const values = records.map((r) => Number(r[field]) || 0);
+    const total = values.reduce((a, b) => a + b, 0);
+    const avg = total / values.length;
+
+    let displayValue: string;
+    let subtitle: string;
+
+    switch (metric) {
+      case 'avg':
+        displayValue = `$${formatNumber(avg)}`;
+        subtitle = `Total: $${formatNumber(total)}`;
+        break;
+      case 'count':
+        displayValue = formatNumber(records.length);
+        subtitle = `Total: $${formatNumber(total)}`;
+        break;
+      default: // sum
+        displayValue = `$${formatNumber(total)}`;
+        subtitle = `Promedio: $${formatNumber(avg)}`;
+    }
+
+    items.push({
+      title: formatLabel(field),
+      value: displayValue,
+      subtitle,
+      trend: `${records.length} registros`,
+      trendDirection: 'neutral',
+      icon: getIconForField(field),
+    });
+  });
+
+  // Add morosidad KPI if monto_vencido exists
+  if (numericFields.includes('monto_vencido')) {
+    const totalVencido = records.reduce(
+      (s, r) => s + (Number(r['monto_vencido']) || 0),
+      0,
+    );
+    const atrasados = records.filter(
+      (r) => r['estatus_credito'] === 'atrasado',
+    ).length;
+    const tasaMorosidad = ((atrasados / records.length) * 100).toFixed(1);
+
+    items.push({
+      title: 'Tasa Morosidad',
+      value: `${tasaMorosidad}%`,
+      subtitle: `$${formatNumber(totalVencido)} vencido`,
+      trend: `${atrasados} créditos atrasados`,
+      trendDirection: Number(tasaMorosidad) > 20 ? 'down' : 'neutral',
+      icon: '⚠️',
+    });
+  }
+
+  return items.slice(0, 5);
+}
+
+function buildGroupedChart(
+  records: Record<string, unknown>[],
+  groupByField: string,
+  metricFields: string[],
+  metric: string,
+  chartType: string,
+): UIComponentConfig {
+  const aggregated = aggregateByField(records, groupByField, metricFields);
+  const countByGroup = countByField(records, groupByField);
+
+  // Sort by first metric descending
+  const sortedKeys = Object.keys(aggregated).sort((a, b) => {
+    const valA = metricFields[0] ? aggregated[a][metricFields[0]] || 0 : 0;
+    const valB = metricFields[0] ? aggregated[b][metricFields[0]] || 0 : 0;
+    return valB - valA;
+  });
+  const labels = sortedKeys.slice(0, 15);
+
+  const colors = [
+    '#4F46E5',
+    '#7C3AED',
+    '#2563EB',
+    '#0891B2',
+    '#059669',
+    '#D97706',
+    '#DC2626',
+    '#6366F1',
+  ];
+
+  const datasets =
+    metric === 'count'
+      ? [
+          {
+            label: 'Cantidad',
+            data: labels.map((l) => countByGroup[l] || 0),
+            backgroundColor: colors[0],
+            borderColor: colors[0],
+            borderWidth: 2,
+          },
+        ]
+      : metricFields.map((field, i) => ({
+          label: formatLabel(field),
+          data: labels.map((l) => {
+            const val = aggregated[l]?.[field] || 0;
+            return metric === 'avg'
+              ? Math.round(val / (countByGroup[l] || 1))
+              : val;
+          }),
+          backgroundColor: colors[i % colors.length],
+          borderColor: colors[i % colors.length],
+          borderWidth: 2,
+        }));
+
+  return {
+    component: 'Chart',
+    props: {
+      type: chartType,
+      title: `${metricFields.map(formatLabel).join(' vs ')} por ${formatLabel(groupByField)}`,
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        xAxis: { label: formatLabel(groupByField) },
+        yAxis: { label: metricFields.map(formatLabel).join(' / ') },
+      },
+    },
+  };
+}
+
+function buildMorosidadSection(
+  records: Record<string, unknown>[],
+  intentLower: string,
+): UIComponentConfig[] {
+  const components: UIComponentConfig[] = [];
+
+  // Morosidad by category
+  const categoryField = 'categoria';
+  if (records[0]?.[categoryField] !== undefined) {
+    const categories = [
+      ...new Set(records.map((r) => String(r[categoryField]))),
+    ];
+    const morosidadData = categories
+      .map((cat) => {
+        const catRecords = records.filter((r) => r[categoryField] === cat);
+        const atrasados = catRecords.filter(
+          (r) => r['estatus_credito'] === 'atrasado',
+        ).length;
+        return {
+          cat,
+          rate:
+            catRecords.length > 0 ? (atrasados / catRecords.length) * 100 : 0,
+          total: catRecords.length,
+        };
+      })
+      .sort((a, b) => b.rate - a.rate);
+
+    // Progress bars for morosidad by category
+    const progressItems = morosidadData.map((d) => ({
+      label: `${d.cat} (${d.rate.toFixed(1)}%)`,
+      value: Math.round(d.rate),
+      color:
+        d.rate > 20
+          ? 'bg-red-500'
+          : d.rate > 10
+            ? 'bg-amber-500'
+            : 'bg-emerald-500',
+    }));
+
+    components.push({
+      component: 'ProgressGroup',
+      props: { title: 'Tasa de Morosidad por Categoría', items: progressItems },
+    });
+  }
+
+  return components;
+}
+
+function buildPlazosChart(
+  records: Record<string, unknown>[],
+  intentLower: string,
+): UIComponentConfig {
+  // Extract specific plazos mentioned or use all
+  const plazoMatch = intentLower.match(
+    /(\d+)(?:\s*,\s*|\s+y\s+|\s+)(\d+)(?:\s*,\s*|\s+y\s+|\s+)(\d+)/,
+  );
+  let targetPlazos: number[] | null = null;
+  if (plazoMatch) {
+    targetPlazos = [
+      Number(plazoMatch[1]),
+      Number(plazoMatch[2]),
+      Number(plazoMatch[3]),
+    ];
+  }
+
+  const plazoCounts: Record<number, { count: number; montoTotal: number }> = {};
+  records.forEach((r) => {
+    const plazo = Number(r['plazo_semanas']);
+    if (!plazo) return;
+    if (targetPlazos && !targetPlazos.includes(plazo)) return;
+    if (!plazoCounts[plazo]) plazoCounts[plazo] = { count: 0, montoTotal: 0 };
+    plazoCounts[plazo].count++;
+    plazoCounts[plazo].montoTotal += Number(r['monto_financiado']) || 0;
+  });
+
+  const sortedPlazos = Object.keys(plazoCounts)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const labels = sortedPlazos.map((p) => `${p} semanas`);
+
+  return {
+    component: 'Chart',
+    props: {
+      type: 'bar',
+      title: 'Distribución por Plazo',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Cantidad de Créditos',
+            data: sortedPlazos.map((p) => plazoCounts[p].count),
+            backgroundColor: '#4F46E5',
+            borderColor: '#4F46E5',
+            borderWidth: 2,
+          },
+          {
+            label: 'Monto Financiado',
+            data: sortedPlazos.map((p) => plazoCounts[p].montoTotal),
+            backgroundColor: '#7C3AED',
+            borderColor: '#7C3AED',
+            borderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        xAxis: { label: 'Plazo' },
+        yAxis: { label: 'Cantidad / Monto' },
+      },
+    },
+  };
+}
+
+function buildTopTable(
+  records: Record<string, unknown>[],
+  intentLower: string,
+  numericFields: string[],
+  stringFields: string[],
+): UIComponentConfig | null {
+  // Detect: "top N sucursales con mayor monto_vencido"
+  const topMatch = intentLower.match(/(?:top|las)\s*(\d+)/);
+  const limit = topMatch ? Number(topMatch[1]) : 10;
+
+  // Detect which field to rank by
+  let rankField = 'monto_vencido';
+  if (/vencid/i.test(intentLower) && numericFields.includes('monto_vencido')) {
+    rankField = 'monto_vencido';
+  } else if (
+    /financiad/i.test(intentLower) &&
+    numericFields.includes('monto_financiado')
+  ) {
+    rankField = 'monto_financiado';
+  } else if (
+    /total.*cr[eé]dito/i.test(intentLower) &&
+    numericFields.includes('monto_total_credito')
+  ) {
+    rankField = 'monto_total_credito';
+  } else if (numericFields.includes('monto_vencido')) {
+    rankField = 'monto_vencido';
+  } else {
+    rankField =
+      numericFields.find((f) => /monto|precio|venta/i.test(f)) ||
+      numericFields[0];
+  }
+
+  // Detect grouping for the table (usually sucursal)
+  let tableGroupField = 'sucursal';
+  if (/sucursal/i.test(intentLower) && stringFields.includes('sucursal')) {
+    tableGroupField = 'sucursal';
+  } else if (/estado/i.test(intentLower) && stringFields.includes('estado')) {
+    tableGroupField = 'estado';
+  } else if (
+    /categor/i.test(intentLower) &&
+    stringFields.includes('categoria')
+  ) {
+    tableGroupField = 'categoria';
+  }
+
+  if (!numericFields.includes(rankField)) return null;
+
+  // Aggregate
+  const grouped: Record<string, { total: number; count: number }> = {};
+  records.forEach((r) => {
+    const key = String(r[tableGroupField] || 'Otro');
+    if (!grouped[key]) grouped[key] = { total: 0, count: 0 };
+    grouped[key].total += Number(r[rankField]) || 0;
+    grouped[key].count++;
+  });
+
+  const sorted = Object.entries(grouped)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, limit);
+
+  const rows = sorted.map(([name, data], i) => ({
+    [tableGroupField]: name,
+    [rankField]: `$${formatNumber(data.total)}`,
+    operaciones: data.count,
+    ranking: i + 1,
+  }));
+
+  const tableColumns = [
+    { key: 'ranking', label: '#' },
+    { key: tableGroupField, label: formatLabel(tableGroupField) },
+    { key: rankField, label: formatLabel(rankField) },
+    { key: 'operaciones', label: 'Operaciones' },
+  ];
+
+  return {
+    component: 'DataSummary',
+    props: {
+      title: `Top ${limit} ${formatLabel(tableGroupField)} por ${formatLabel(rankField)}`,
+      columns: tableColumns,
+      rows,
+    },
+  };
+}
+
+/**
+ * Strips [hint:value] tags from intent for display purposes.
+ */
+function stripHints(intent: string): string {
+  return intent.replace(/\s*\[\w+:[^\]]+\]/g, '').trim();
 }
 
 // ─── Template: Category Analysis ───────────────────────────

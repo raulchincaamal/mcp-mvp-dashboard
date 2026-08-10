@@ -166,7 +166,7 @@ const SUCURSALES = [
   'Outlet',
   'Express',
 ];
-const PLAZOS_SEMANAS = [12, 24, 36, 48, 52, 78];
+const PLAZOS_SEMANAS = [12, 16, 20, 24, 36, 48, 52, 78];
 
 // ─── Generator ─────────────────────────────────────────────
 
@@ -197,10 +197,13 @@ function generateRecord(id) {
   const montoTotal = Math.round(montoFinanciado * (1 + tasaInteres));
   const pagoSemanal = Math.round(montoTotal / plazoSemanas);
 
-  const fechaVenta = faker.date.between({
-    from: '2024-01-01',
-    to: '2025-07-31',
-  });
+  // Weighted date distribution: ensure ~30% of records fall in Q4 2024
+  const dateRange = faker.helpers.weightedArrayElement([
+    { value: { from: '2024-10-01', to: '2024-12-31' }, weight: 30 }, // Q4 2024 — heavy
+    { value: { from: '2024-01-01', to: '2024-09-30' }, weight: 40 }, // Q1-Q3 2024
+    { value: { from: '2025-01-01', to: '2025-07-31' }, weight: 30 }, // 2025
+  ]);
+  const fechaVenta = faker.date.between(dateRange);
   const semanasTranscurridas = Math.floor(
     (new Date('2025-08-01').getTime() - fechaVenta.getTime()) /
       (7 * 24 * 60 * 60 * 1000),
@@ -212,6 +215,12 @@ function generateRecord(id) {
     plazoSemanas,
     semanasTranscurridas,
   );
+
+  // Calculate monto_vencido: overdue amount based on missed payments
+  const semanasEsperadas = Math.min(semanasTranscurridas, plazoSemanas);
+  const semanasAtrasadas = Math.max(0, semanasEsperadas - semanasPagadas);
+  const montoVencido =
+    estatusCredito === 'liquidado' ? 0 : semanasAtrasadas * pagoSemanal;
 
   return {
     id: `VTA-${String(id).padStart(5, '0')}`,
@@ -233,10 +242,12 @@ function generateRecord(id) {
     plazo_semanas: plazoSemanas,
     pago_semanal: pagoSemanal,
     semanas_pagadas: semanasPagadas,
+    semanas_atrasadas: semanasAtrasadas,
+    monto_vencido: montoVencido,
     estatus_credito: estatusCredito,
     canal_venta: faker.helpers.weightedArrayElement([
-      { value: 'tienda_fisica', weight: 70 },
-      { value: 'en_linea', weight: 20 },
+      { value: 'tienda_fisica', weight: 65 },
+      { value: 'en_linea', weight: 25 },
       { value: 'telefono', weight: 10 },
     ]),
     vendedor: faker.person.fullName(),

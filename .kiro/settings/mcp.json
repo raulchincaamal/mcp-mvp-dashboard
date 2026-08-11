@@ -20,8 +20,18 @@
       "command": "node",
       "args": ["packages/mcp-main/dist/index.js"],
       "env": {
-        "DASHBOARD_URL": "http://localhost:3000",
-        "MCP_PROJECT_ROOT": "${workspaceFolder}"
+        "DASHBOARD_URL": "${env:DASHBOARD_URL}",
+        "MCP_PROJECT_ROOT": "${workspaceFolder}",
+        "AWS_ACCESS_KEY_ID": "${env:AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${env:AWS_SECRET_ACCESS_KEY}",
+        "AWS_SESSION_TOKEN": "${env:AWS_SESSION_TOKEN}",
+        "AWS_REGION": "${env:AWS_REGION}",
+        "BEDROCK_MODEL_ID": "${env:BEDROCK_MODEL_ID}",
+        "REDIS_HOST": "${env:REDIS_HOST}",
+        "REDIS_PORT": "${env:REDIS_PORT}",
+        "REDIS_USER": "${env:REDIS_USER}",
+        "REDIS_PASS": "${env:REDIS_PASS}",
+        "TIMEOUT_SESSION_MINUTES": "${env:TIMEOUT_SESSION_MINUTES}"
       },
       "disabled": false
     }

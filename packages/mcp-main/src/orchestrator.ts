@@ -1,9 +1,6 @@
 import {
   BedrockRuntimeClient,
   ConverseCommand,
-  type Message,
-  type Tool,
-  type ToolResultBlock,
 } from '@aws-sdk/client-bedrock-runtime';
 import type { McpClient } from './mcp-client.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
@@ -13,59 +10,7 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 
-// ─── Tool definitions that Bedrock can invoke ────────────────
-
-const BEDROCK_TOOLS: Tool[] = [
-  {
-    toolSpec: {
-      name: 'query_data',
-      description: 'Queries the ventas-credito dataset and returns sales records. Use this to get real data before generating UI.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            dataset: { type: 'string', description: 'Dataset name, always use "ventas-credito"' },
-            filters: { type: 'object', description: 'Optional filters: exact match { campo: valor } or range { campo: { gte, lte } }' },
-            limit: { type: 'number', description: 'Max records to return, default 100' },
-          },
-          required: ['dataset'],
-        },
-      },
-    },
-  },
-  {
-    toolSpec: {
-      name: 'generate_ui',
-      description: 'Generates a UIConfig JSON from data records. Call this after query_data with the records obtained.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            intent: { type: 'string', description: 'What the user wants to see' },
-            records: { type: 'array', description: 'Data records from query_data', items: { type: 'object' } },
-            componentCatalog: { type: 'array', description: 'Available UI components', items: { type: 'object' } },
-            title: { type: 'string' },
-            layout: { type: 'string', enum: ['vertical', 'grid'] },
-          },
-          required: ['intent', 'records', 'componentCatalog'],
-        },
-      },
-    },
-  },
-];
-
-const SYSTEM_PROMPT = `Eres un orquestador de dashboards. DEBES usar las tools disponibles, no respondas con texto.
-
-INSTRUCCIONES:
-- Llama INMEDIATAMENTE a query_data con dataset="ventas-credito"
-- Luego llama a generate_ui con los registros obtenidos
-- NO escribas explicaciones, NO escribas código, SOLO llama las tools
-
-Dataset: "ventas-credito" — campos: id, fecha_venta, cliente, estado, ciudad, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
-Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
-Estatus: al_corriente, atrasado, liquidado, cancelado.`;
-
-// ─── Component catalog (hardcoded, augmented from library-context) ────────────
+// ─── Component catalog ────────────────────────────────────────
 
 const COMPONENT_CATALOG = [
   { name: 'StatCard', description: 'Metric card with title, large value, trend arrow, and icon' },
@@ -75,9 +20,6 @@ const COMPONENT_CATALOG = [
   { name: 'TransactionList', description: 'List of items with title, amount, date, status' },
   { name: 'ProgressGroup', description: 'Card with multiple progress bars' },
   { name: 'MiniChart', description: 'Compact sparkline chart inside a card' },
-  { name: 'Card', description: 'Container card with padding and border' },
-  { name: 'Badge', description: 'Small label/tag with variants' },
-  { name: 'Text', description: 'Typography component' },
 ];
 
 // ─── Orchestrator ─────────────────────────────────────────────
@@ -90,219 +32,253 @@ export interface OrchestrationParams {
 }
 
 export async function orchestrate(params: OrchestrationParams): Promise<unknown> {
-  // Check cache first
+  const dataset = params.dataset ?? 'ventas-credito';
+
   const cacheKey = generateCacheKey('ui', {
-    dataset: params.dataset ?? 'ventas-credito',
+    dataset,
     intent: params.intent,
     filters: params.filters,
     limit: params.limit,
   });
   const cached = await cacheGet<unknown>(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    console.log('[orchestrator] cache hit');
+    return cached;
+  }
 
   const { gcpClient, uiClient } = await import('./mcp-client.js').then((m) =>
     m.createMcpClients(),
   );
 
   try {
-    const result = await runBedrockLoop(params, gcpClient, uiClient);
-    await cacheSet(cacheKey, result, TTL.INTENT);
-    return result;
-  } catch (err) {
-    console.log(`[orchestrator] Bedrock tool-use failed (${(err as Error).message}), using hardcoded pipeline`);
-    const result = await runHardcodedPipeline(params, gcpClient, uiClient);
-    await cacheSet(cacheKey, result, TTL.INTENT);
-    return result;
+    // Step 1: Interpret intent with Bedrock → structured query
+    console.log(`[orchestrator] interpreting intent with model: ${MODEL_ID}`);
+    const parsedIntent = await interpretIntent(params.intent);
+    console.log('[orchestrator] parsed intent:', JSON.stringify(parsedIntent));
+
+    // Step 2: Query real data
+    const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
+    for (const [key, value] of Object.entries(filters)) {
+      if (Array.isArray(value) && value.length >= 8) delete filters[key];
+    }
+    const limit = params.limit ?? parsedIntent.limit ?? 100;
+
+    console.log(`[orchestrator] querying data — filters: ${JSON.stringify(filters)}, limit: ${limit}`);
+    const queryResult = await gcpClient.callTool('query_data', {
+      dataset,
+      ...(Object.keys(filters).length > 0 ? { filters } : {}),
+      limit,
+    }) as { records?: Record<string, unknown>[]; totalRecords?: number };
+
+    const records = queryResult.records ?? (queryResult as unknown as Record<string, unknown>[]);
+    console.log(`[orchestrator] got ${Array.isArray(records) ? records.length : 0} records`);
+
+    // Step 3: Bedrock generates UIConfig from data + intent
+    console.log('[orchestrator] generating UIConfig with Bedrock');
+    const uiConfig = await generateUIConfig(params.intent, parsedIntent, records);
+
+    await cacheSet(cacheKey, uiConfig, TTL.INTENT);
+    return uiConfig;
   } finally {
     await gcpClient.disconnect();
     await uiClient.disconnect();
   }
 }
 
-// ─── Hardcoded pipeline fallback ────────────────────────────
+// ─── Step 1: Interpret intent ─────────────────────────────────
 
-async function runHardcodedPipeline(
-  params: OrchestrationParams,
-  gcpClient: McpClient,
-  uiClient: McpClient,
-): Promise<unknown> {
-  const parsedIntent = await interpretIntentWithBedrock(params.intent);
-  console.log('[orchestrator] fallback parsed intent:', JSON.stringify(parsedIntent));
-
-  const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
-  // Remove array filters that contain all categories (no real filter)
-  for (const [key, value] of Object.entries(filters)) {
-    if (Array.isArray(value) && value.length >= 8) delete filters[key];
-  }
-  const limit = params.limit ?? parsedIntent.limit ?? 100;
-
-  const queryResult = await gcpClient.callTool('query_data', {
-    dataset: params.dataset ?? 'ventas-credito',
-    ...(Object.keys(filters).length > 0 ? { filters } : {}),
-    limit,
-  }) as { records?: Record<string, unknown>[] };
-
-  const records = queryResult.records ?? (queryResult as unknown as Record<string, unknown>[]);
-
-  const enhancedIntent = [
-    params.intent,
-    parsedIntent.groupBy ? `[groupBy:${parsedIntent.groupBy}]` : '',
-    parsedIntent.metric ? `[metric:${parsedIntent.metric}]` : '',
-    parsedIntent.chartType ? `[chartType:${parsedIntent.chartType}]` : '',
-    parsedIntent.template ? `[template:${parsedIntent.template}]` : '',
-  ].filter(Boolean).join(' ');
-
-  return uiClient.callTool('generate_ui', {
-    intent: enhancedIntent,
-    records,
-    componentCatalog: COMPONENT_CATALOG,
-    layout: 'vertical',
-    columns: 2,
-  });
-}
-
-async function interpretIntentWithBedrock(intent: string): Promise<{
+async function interpretIntent(intent: string): Promise<{
   filters: Record<string, unknown>;
   groupBy: string | null;
   metric: string;
+  metricField: string | null;
   chartType: string | null;
   template: string;
   limit: number | null;
+  title: string | null;
 }> {
-  const fallback = { filters: {}, groupBy: null, metric: 'count', chartType: null, template: 'executive', limit: 100 };
+  const fallback = {
+    filters: {}, groupBy: null, metric: 'count', metricField: null,
+    chartType: null, template: 'executive', limit: 100, title: null,
+  };
+
   try {
     const response = await bedrockClient.send(new ConverseCommand({
       modelId: MODEL_ID,
-      system: [{ text: 'Convierte el intent en JSON. Responde SOLO con JSON válido sin markdown ni explicaciones.\n\nEstructura: {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null}\n\nCampos: id,fecha_venta,cliente,estado,ciudad,categoria,producto,precio_contado,monto_total_credito,estatus_credito,canal_venta,vendedor.\nCategorías: Motos,Celulares,Bicicletas Eléctricas,Pantallas/TV,Audio,Tablets,Consolas,Climatización,Accesorios.\nTemplates: executive,category,credit,table,chart.' }],
+      system: [{
+        text: `Convierte el intent del usuario en un JSON estructurado. Responde SOLO con JSON válido, sin markdown, sin explicaciones.
+
+Estructura exacta:
+{"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null,"title":null}
+
+Campos del dataset ventas-credito: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
+Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
+Estatus: al_corriente, atrasado, liquidado, cancelado.
+Canales: tienda_fisica, en_linea, telefono.
+
+Reglas:
+- "por estado/categoría/mes/vendedor" → groupBy
+- categoría específica mencionada → filters.categoria
+- "atrasado/liquidado/al corriente" → filters.estatus_credito
+- "tabla/listado" → template:table
+- "gráfica/chart/tendencia" → template:chart
+- "crédito/estatus/pago" → template:credit
+- "por categoría/análisis" → template:category
+- "resumen/dashboard/kpi/ejecutivo" → template:executive
+- número mencionado (últimas 10, top 20) → limit
+- genera un título descriptivo en español → title`,
+      }],
       messages: [{ role: 'user', content: [{ text: intent }] }],
       inferenceConfig: { maxTokens: 512, temperature: 0 },
     }));
+
     const block = response.output?.message?.content?.[0];
     if (!block || !('text' in block)) return fallback;
     const clean = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
     return { ...fallback, ...JSON.parse(clean) };
-  } catch {
+  } catch (err) {
+    console.log('[orchestrator] intent interpretation failed:', (err as Error).message);
     return fallback;
   }
 }
 
-// ─── Bedrock tool-use loop ────────────────────────────────────
+// ─── Step 3: Generate UIConfig with Bedrock ───────────────────
 
-async function runBedrockLoop(
-  params: OrchestrationParams,
-  gcpClient: McpClient,
-  uiClient: McpClient,
+async function generateUIConfig(
+  intent: string,
+  parsedIntent: Awaited<ReturnType<typeof interpretIntent>>,
+  records: Record<string, unknown>[],
 ): Promise<unknown> {
-  const messages: Message[] = [
+  const sampleRecords = records.slice(0, 20);
+  const totalRecords = records.length;
+
+  // Compute basic aggregations to help Bedrock
+  const aggregations = computeAggregations(records, parsedIntent);
+
+  const systemPrompt = `Eres un generador de dashboards. Recibes datos de ventas y generas un UIConfig JSON que el frontend renderiza.
+
+Componentes disponibles:
+${COMPONENT_CATALOG.map(c => `- ${c.name}: ${c.description}`).join('\n')}
+
+UIConfig schema:
+{
+  "title": "string",
+  "description": "string (opcional)",
+  "layout": "vertical" | "grid",
+  "columns": number (solo si layout=grid),
+  "components": [
     {
-      role: 'user',
-      content: [
-        {
-          text: `Ejecuta las siguientes tools en orden:
-1. Llama query_data con dataset="${params.dataset ?? 'ventas-credito'}"${Object.keys(params.filters ?? {}).length > 0 ? ` y filters=${JSON.stringify(params.filters)}` : ''}${params.limit ? ` y limit=${params.limit}` : ''}
-2. Llama generate_ui con los registros obtenidos e intent="${params.intent}"
+      "component": "NombreComponente",
+      "props": { ... }
+    }
+  ]
+}
 
-NO respondas con texto. Ejecuta las tools ahora.`,
-        },
-      ],
-    },
-  ];
+Props por componente:
+- KPIGrid: { items: [{ title, value, subtitle?, trend?, trendDirection?: "up"|"down"|"neutral", icon? }] }
+- Chart: { type: "bar"|"line"|"pie"|"doughnut", title?, data: { labels: [], datasets: [{ label, data: [], backgroundColor }] } }
+- DataSummary: { title?, columns: [{ key, label }], rows: [...] }
+- TransactionList: { title?, items: [{ title, subtitle?, amount, date?, status?: "positive"|"negative"|"neutral" }] }
+- ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
+- StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
-  console.log(`[orchestrator] starting loop — model: ${MODEL_ID}`);
-  const isNova = MODEL_ID.includes('nova');
-  let uiConfig: unknown = null;
-  let lastStopReason = 'unknown';
-  const MAX_ITERATIONS = 10;
+REGLAS:
+- Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
+- Usa datos reales de las agregaciones y registros proporcionados
+- El template "${parsedIntent.template}" sugiere qué componentes usar
+- Formatea montos en pesos mexicanos (ej: "$1,234")`;
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const isFirstCall = i === 0;
-    const response = await bedrockClient.send(
-      new ConverseCommand({
-        modelId: MODEL_ID,
-        system: [{ text: SYSTEM_PROMPT }],
-        messages,
-        tools: BEDROCK_TOOLS,
-        ...(isNova ? {} : { toolChoice: isFirstCall ? { any: {} } : { auto: {} } }),
-        toolChoice: isFirstCall ? { any: {} } : { auto: {} },
-        inferenceConfig: { maxTokens: 4096, temperature: 0 },
-        additionalModelRequestFields: isNova ? { inferenceConfig: { topK: 1 } } : undefined,
-      }),
-    );
+  const userMessage = `Intent: "${intent}"
+Template sugerido: ${parsedIntent.template}
+GroupBy: ${parsedIntent.groupBy ?? 'ninguno'}
+Métrica: ${parsedIntent.metric}${parsedIntent.metricField ? ` de ${parsedIntent.metricField}` : ''}
+Total registros: ${totalRecords}
 
-    const assistantMessage: Message = {
-      role: 'assistant',
-      content: response.output?.message?.content ?? [],
-    };
-    messages.push(assistantMessage);
+Agregaciones calculadas:
+${JSON.stringify(aggregations, null, 2)}
 
-    console.log(`[orchestrator] iteration ${i} stopReason: ${response.stopReason}`);
-    console.log(`[orchestrator] content:`, JSON.stringify(assistantMessage.content));
-    lastStopReason = response.stopReason ?? 'unknown';
+Muestra de registros (${sampleRecords.length} de ${totalRecords}):
+${JSON.stringify(sampleRecords, null, 2)}
 
-    // Stop if Bedrock is done
-    if (response.stopReason === 'end_turn' || response.stopReason === 'max_tokens') {
-      if (!uiConfig) {
-        const textBlock = assistantMessage.content?.find((b) => 'text' in b);
-        if (textBlock && 'text' in textBlock) {
-          const raw = textBlock.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-          try {
-            const parsed = JSON.parse(raw);
-            // Handle Nova wrapping response in { uiConfig: {...} }
-            uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
-          } catch {
-            console.log('[orchestrator] end_turn text (not JSON):', raw.slice(0, 200));
-          }
-        }
+Genera el UIConfig JSON ahora.`;
+
+  const response = await bedrockClient.send(new ConverseCommand({
+    modelId: MODEL_ID,
+    system: [{ text: systemPrompt }],
+    messages: [{ role: 'user', content: [{ text: userMessage }] }],
+    inferenceConfig: { maxTokens: 4096, temperature: 0 },
+  }));
+
+  const block = response.output?.message?.content?.[0];
+  if (!block || !('text' in block)) throw new Error('Bedrock did not return UIConfig');
+
+  const raw = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+  try {
+    const parsed = JSON.parse(raw);
+    // Handle potential wrapping
+    return (parsed as Record<string, unknown>).uiConfig ?? parsed;
+  } catch {
+    throw new Error(`Bedrock returned invalid JSON: ${raw.slice(0, 200)}`);
+  }
+}
+
+// ─── Aggregation helper ───────────────────────────────────────
+
+function computeAggregations(
+  records: Record<string, unknown>[],
+  parsedIntent: { groupBy: string | null; metric: string; metricField: string | null },
+): Record<string, unknown> {
+  if (records.length === 0) return {};
+
+  const agg: Record<string, unknown> = {
+    totalRecords: records.length,
+  };
+
+  // Group by aggregation
+  if (parsedIntent.groupBy) {
+    const field = parsedIntent.groupBy;
+    const groups: Record<string, number> = {};
+
+    for (const record of records) {
+      const key = String(record[field] ?? 'N/A');
+      if (parsedIntent.metric === 'count') {
+        groups[key] = (groups[key] ?? 0) + 1;
+      } else if (parsedIntent.metricField) {
+        const val = Number(record[parsedIntent.metricField] ?? 0);
+        groups[key] = (groups[key] ?? 0) + val;
       }
-      break;
     }
 
-    // Process tool calls
-    if (response.stopReason === 'tool_use') {
-      const toolResults: ToolResultBlock[] = [];
+    agg.groupBy = {
+      field,
+      metric: parsedIntent.metric,
+      data: Object.entries(groups)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 15)
+        .map(([label, value]) => ({ label, value })),
+    };
+  }
 
-      for (const block of assistantMessage.content ?? []) {
-        if (!('toolUse' in block) || !block.toolUse) continue;
-
-        const { toolUseId, name, input } = block.toolUse;
-        const args = (input ?? {}) as Record<string, unknown>;
-
-        console.log(`[orchestrator] Bedrock calling tool: ${name}`, JSON.stringify(args));
-
-        let toolResult: unknown;
-        try {
-          if (name === 'list_datasets' || name === 'query_data') {
-            toolResult = await gcpClient.callTool(name, args);
-          } else if (name === 'generate_ui') {
-            // Inject component catalog if not provided
-            if (!args.componentCatalog) {
-              args.componentCatalog = COMPONENT_CATALOG;
-            }
-            toolResult = await uiClient.callTool('generate_ui', args);
-            uiConfig = toolResult; // capture last generate_ui result
-          } else {
-            toolResult = { error: `Unknown tool: ${name}` };
-          }
-        } catch (err) {
-          toolResult = { error: (err as Error).message };
-        }
-
-        toolResults.push({
-          toolUseId: toolUseId!,
-          content: [{ text: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult) }],
-        });
-      }
-
-      messages.push({
-        role: 'user',
-        content: toolResults.map((r) => ({ toolResult: r })),
-      });
+  // General KPIs
+  const numericFields = ['precio_contado', 'monto_total_credito', 'pago_semanal'];
+  for (const field of numericFields) {
+    if (records[0]?.[field] !== undefined) {
+      const values = records.map(r => Number(r[field] ?? 0));
+      agg[`total_${field}`] = values.reduce((a, b) => a + b, 0);
+      agg[`avg_${field}`] = Math.round(agg[`total_${field}`] as number / values.length);
     }
   }
 
-    if (!uiConfig) {
-      throw new Error(`Bedrock did not use tools — stopReason: ${lastStopReason}, model: ${MODEL_ID}`);
+  // Status distribution
+  if (records[0]?.estatus_credito !== undefined) {
+    const statusCount: Record<string, number> = {};
+    for (const r of records) {
+      const s = String(r.estatus_credito ?? 'N/A');
+      statusCount[s] = (statusCount[s] ?? 0) + 1;
     }
+    agg.estatus_credito = statusCount;
+  }
 
-  return uiConfig;
+  return agg;
 }

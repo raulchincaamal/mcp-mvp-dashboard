@@ -11,7 +11,7 @@ process.on('uncaughtException', (err) => {
 });
 
 const DASHBOARD_BASE_URL = process.env.DASHBOARD_URL ?? 'http://localhost:3000';
-const IS_MCP_MODE = process.argv.includes('--mcp') || !process.env.PORT;
+const IS_MCP_MODE = process.argv.includes('--mcp');
 
 await initCache();
 

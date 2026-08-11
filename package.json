@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev:mcp-main\" \"npm run dev:dashboard\"",
     "dev:dashboard": "npm run dev --workspace=packages/dashboard-app",
     "dev:mcp-main": "npm run start:http --workspace=packages/mcp-main",
     "dev:mcp-gcp": "npm run dev --workspace=packages/mcp-gcp-mock",
@@ -19,5 +20,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
   }
 }

@@ -75,24 +75,22 @@ const BEDROCK_TOOLS: Tool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `Eres un orquestador de dashboards de ventas a crédito. Tu trabajo es:
-1. Entender lo que el usuario quiere ver (en español)
-2. Usar las tools disponibles para obtener los datos correctos
-3. Generar una configuración de UI (UIConfig) que el frontend pueda renderizar
+const SYSTEM_PROMPT = `Eres un orquestador de dashboards de ventas a crédito.
 
-Flujo esperado:
-- Llama a query_data con los filtros apropiados según el intent del usuario
-- Llama a generate_ui con los registros obtenidos y el intent original
-- Devuelve el UIConfig final
+REGLAS ESTRICTAS:
+1. SIEMPRE debes llamar query_data para obtener datos reales antes de generar la UI
+2. SIEMPRE debes llamar generate_ui con los datos obtenidos
+3. NUNCA inventes datos — usa solo los registros que devuelve query_data
+4. NO respondas con texto explicativo, solo ejecuta las tools
 
-Dataset principal: "ventas-credito" con campos: id, fecha_venta, cliente, estado, ciudad, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor, entre otros.
+Flujo obligatorio:
+1. Llama query_data con dataset="ventas-credito" y los filtros apropiados
+2. Llama generate_ui con los registros obtenidos, el intent y el componentCatalog
+3. El resultado de generate_ui es la respuesta final
 
-Categorías disponibles: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
-Estatus de crédito: al_corriente, atrasado, liquidado, cancelado.
-
-Componentes UI disponibles: StatCard, KPIGrid, Chart (bar/line/pie/doughnut), DataSummary, TransactionList, ProgressGroup, MiniChart.
-
-Responde SOLO con el resultado final del UIConfig, sin explicaciones adicionales.`;
+Dataset: "ventas-credito" — campos: id, fecha_venta, cliente, estado, ciudad, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
+Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
+Estatus: al_corriente, atrasado, liquidado, cancelado.`;
 
 // ─── Component catalog (hardcoded, augmented from library-context) ────────────
 
@@ -137,11 +135,81 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     const result = await runBedrockLoop(params, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
+  } catch {
+    console.log('[orchestrator] Bedrock tool-use failed, using hardcoded pipeline');
+    const result = await runHardcodedPipeline(params, gcpClient, uiClient);
+    await cacheSet(cacheKey, result, TTL.INTENT);
+    return result;
   } finally {
     await gcpClient.disconnect();
     await uiClient.disconnect();
   }
 }
+
+// ─── Hardcoded pipeline fallback ────────────────────────────
+
+async function runHardcodedPipeline(
+  params: OrchestrationParams,
+  gcpClient: McpClient,
+  uiClient: McpClient,
+): Promise<unknown> {
+  const parsedIntent = await interpretIntentWithBedrock(params.intent);
+  console.log('[orchestrator] fallback parsed intent:', JSON.stringify(parsedIntent));
+
+  const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
+  const limit = params.limit ?? parsedIntent.limit ?? 100;
+
+  const queryResult = await gcpClient.callTool('query_data', {
+    dataset: params.dataset ?? 'ventas-credito',
+    ...(Object.keys(filters).length > 0 ? { filters } : {}),
+    limit,
+  }) as { records?: Record<string, unknown>[] };
+
+  const records = queryResult.records ?? (queryResult as unknown as Record<string, unknown>[]);
+
+  const enhancedIntent = [
+    params.intent,
+    parsedIntent.groupBy ? `[groupBy:${parsedIntent.groupBy}]` : '',
+    parsedIntent.metric ? `[metric:${parsedIntent.metric}]` : '',
+    parsedIntent.chartType ? `[chartType:${parsedIntent.chartType}]` : '',
+    parsedIntent.template ? `[template:${parsedIntent.template}]` : '',
+  ].filter(Boolean).join(' ');
+
+  return uiClient.callTool('generate_ui', {
+    intent: enhancedIntent,
+    records,
+    componentCatalog: COMPONENT_CATALOG,
+    layout: 'vertical',
+    columns: 2,
+  });
+}
+
+async function interpretIntentWithBedrock(intent: string): Promise<{
+  filters: Record<string, unknown>;
+  groupBy: string | null;
+  metric: string;
+  chartType: string | null;
+  template: string;
+  limit: number | null;
+}> {
+  const fallback = { filters: {}, groupBy: null, metric: 'count', chartType: null, template: 'executive', limit: 100 };
+  try {
+    const response = await bedrockClient.send(new ConverseCommand({
+      modelId: MODEL_ID,
+      system: [{ text: 'Convierte el intent en JSON. Responde SOLO con JSON válido sin markdown ni explicaciones.\n\nEstructura: {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null}\n\nCampos: id,fecha_venta,cliente,estado,ciudad,categoria,producto,precio_contado,monto_total_credito,estatus_credito,canal_venta,vendedor.\nCategorías: Motos,Celulares,Bicicletas Eléctricas,Pantallas/TV,Audio,Tablets,Consolas,Climatización,Accesorios.\nTemplates: executive,category,credit,table,chart.' }],
+      messages: [{ role: 'user', content: [{ text: intent }] }],
+      inferenceConfig: { maxTokens: 512, temperature: 0 },
+    }));
+    const block = response.output?.message?.content?.[0];
+    if (!block || !('text' in block)) return fallback;
+    const clean = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    return { ...fallback, ...JSON.parse(clean) };
+  } catch {
+    return fallback;
+  }
+}
+
+// ─── Bedrock tool-use loop ────────────────────────────────────
 
 async function runBedrockLoop(
   params: OrchestrationParams,
@@ -167,12 +235,14 @@ async function runBedrockLoop(
   const MAX_ITERATIONS = 10;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const isFirstCall = i === 0;
     const response = await bedrockClient.send(
       new ConverseCommand({
         modelId: MODEL_ID,
         system: [{ text: SYSTEM_PROMPT }],
         messages,
         tools: BEDROCK_TOOLS,
+        toolChoice: isFirstCall ? { any: {} } : { auto: {} },
         inferenceConfig: { maxTokens: 4096, temperature: 0 },
       }),
     );
@@ -183,14 +253,21 @@ async function runBedrockLoop(
     };
     messages.push(assistantMessage);
 
+    console.log(`[orchestrator] iteration ${i} stopReason: ${response.stopReason}`);
+
     // Stop if Bedrock is done
     if (response.stopReason === 'end_turn' || response.stopReason === 'max_tokens') {
-      const textBlock = assistantMessage.content?.find((b) => 'text' in b);
-      if (textBlock && 'text' in textBlock) {
-        try {
-          uiConfig = JSON.parse(textBlock.text!);
-        } catch {
-          uiConfig = textBlock.text;
+      if (!uiConfig) {
+        const textBlock = assistantMessage.content?.find((b) => 'text' in b);
+        if (textBlock && 'text' in textBlock) {
+          const raw = textBlock.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+          try {
+            const parsed = JSON.parse(raw);
+            // Handle Nova wrapping response in { uiConfig: {...} }
+            uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
+          } catch {
+            console.log('[orchestrator] end_turn text (not JSON):', raw.slice(0, 200));
+          }
         }
       }
       break;

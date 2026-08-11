@@ -18,25 +18,15 @@ const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 const BEDROCK_TOOLS: Tool[] = [
   {
     toolSpec: {
-      name: 'list_datasets',
-      description: 'Lists all available datasets with their fields and record counts. Call this first if you are unsure what data is available.',
-      inputSchema: { json: { type: 'object', properties: {}, required: [] } },
-    },
-  },
-  {
-    toolSpec: {
       name: 'query_data',
-      description: 'Queries a dataset and returns records. Supports exact match and range filters.',
+      description: 'Queries the ventas-credito dataset and returns sales records. Use this to get real data before generating UI.',
       inputSchema: {
         json: {
           type: 'object',
           properties: {
-            dataset: { type: 'string', description: 'Dataset name (e.g. "ventas-credito")' },
-            filters: {
-              type: 'object',
-              description: 'Filters: exact match { campo: valor } or range { campo: { gte, lte } }',
-            },
-            limit: { type: 'number', description: 'Max records to return' },
+            dataset: { type: 'string', description: 'Dataset name, always use "ventas-credito"' },
+            filters: { type: 'object', description: 'Optional filters: exact match { campo: valor } or range { campo: { gte, lte } }' },
+            limit: { type: 'number', description: 'Max records to return, default 100' },
           },
           required: ['dataset'],
         },
@@ -46,27 +36,16 @@ const BEDROCK_TOOLS: Tool[] = [
   {
     toolSpec: {
       name: 'generate_ui',
-      description: 'Generates a declarative UIConfig JSON from data records and user intent. The frontend renders this into React components (charts, tables, KPI grids, etc).',
+      description: 'Generates a UIConfig JSON from data records. Call this after query_data with the records obtained.',
       inputSchema: {
         json: {
           type: 'object',
           properties: {
             intent: { type: 'string', description: 'What the user wants to see' },
-            records: { type: 'array', description: 'Data records from query_data' },
-            componentCatalog: {
-              type: 'array',
-              description: 'Available UI components',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                },
-              },
-            },
+            records: { type: 'array', description: 'Data records from query_data', items: { type: 'object' } },
+            componentCatalog: { type: 'array', description: 'Available UI components', items: { type: 'object' } },
             title: { type: 'string' },
             layout: { type: 'string', enum: ['vertical', 'grid'] },
-            columns: { type: 'number' },
           },
           required: ['intent', 'records', 'componentCatalog'],
         },
@@ -219,11 +198,11 @@ async function runBedrockLoop(
       role: 'user',
       content: [
         {
-          text: `Intent del usuario: "${params.intent}"${
-            params.dataset ? `\nDataset: ${params.dataset}` : ''
-          }${params.filters ? `\nFiltros adicionales: ${JSON.stringify(params.filters)}` : ''}${
-            params.limit ? `\nLímite de registros: ${params.limit}` : ''
-          }`,
+          text: `Ejecuta las siguientes tools en orden:
+1. Llama query_data con dataset="${params.dataset ?? 'ventas-credito'}"${Object.keys(params.filters ?? {}).length > 0 ? ` y filters=${JSON.stringify(params.filters)}` : ''}${params.limit ? ` y limit=${params.limit}` : ''}
+2. Llama generate_ui con los registros obtenidos e intent="${params.intent}"
+
+NO respondas con texto. Ejecuta las tools ahora.`,
         },
       ],
     },
@@ -232,6 +211,7 @@ async function runBedrockLoop(
   console.log(`[orchestrator] starting loop — model: ${MODEL_ID}`);
   const isNova = MODEL_ID.includes('nova');
   let uiConfig: unknown = null;
+  let lastStopReason = 'unknown';
   const MAX_ITERATIONS = 10;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -242,9 +222,10 @@ async function runBedrockLoop(
         system: [{ text: SYSTEM_PROMPT }],
         messages,
         tools: BEDROCK_TOOLS,
-        // Nova does not support toolChoice: any — only Claude does
         ...(isNova ? {} : { toolChoice: isFirstCall ? { any: {} } : { auto: {} } }),
+        toolChoice: isFirstCall ? { any: {} } : { auto: {} },
         inferenceConfig: { maxTokens: 4096, temperature: 0 },
+        additionalModelRequestFields: isNova ? { inferenceConfig: { topK: 1 } } : undefined,
       }),
     );
 
@@ -255,6 +236,8 @@ async function runBedrockLoop(
     messages.push(assistantMessage);
 
     console.log(`[orchestrator] iteration ${i} stopReason: ${response.stopReason}`);
+    console.log(`[orchestrator] content:`, JSON.stringify(assistantMessage.content));
+    lastStopReason = response.stopReason ?? 'unknown';
 
     // Stop if Bedrock is done
     if (response.stopReason === 'end_turn' || response.stopReason === 'max_tokens') {
@@ -318,7 +301,7 @@ async function runBedrockLoop(
   }
 
     if (!uiConfig) {
-      throw new Error(`Bedrock did not use tools — stopReason: ${response.stopReason}, model: ${MODEL_ID}`);
+      throw new Error(`Bedrock did not use tools — stopReason: ${lastStopReason}, model: ${MODEL_ID}`);
     }
 
   return uiConfig;

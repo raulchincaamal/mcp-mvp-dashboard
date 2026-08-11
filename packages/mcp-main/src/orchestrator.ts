@@ -75,18 +75,12 @@ const BEDROCK_TOOLS: Tool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `Eres un orquestador de dashboards de ventas a crédito.
+const SYSTEM_PROMPT = `Eres un orquestador de dashboards. DEBES usar las tools disponibles, no respondas con texto.
 
-REGLAS ESTRICTAS:
-1. SIEMPRE debes llamar query_data para obtener datos reales antes de generar la UI
-2. SIEMPRE debes llamar generate_ui con los datos obtenidos
-3. NUNCA inventes datos — usa solo los registros que devuelve query_data
-4. NO respondas con texto explicativo, solo ejecuta las tools
-
-Flujo obligatorio:
-1. Llama query_data con dataset="ventas-credito" y los filtros apropiados
-2. Llama generate_ui con los registros obtenidos, el intent y el componentCatalog
-3. El resultado de generate_ui es la respuesta final
+INSTRUCCIONES:
+- Llama INMEDIATAMENTE a query_data con dataset="ventas-credito"
+- Luego llama a generate_ui con los registros obtenidos
+- NO escribas explicaciones, NO escribas código, SOLO llama las tools
 
 Dataset: "ventas-credito" — campos: id, fecha_venta, cliente, estado, ciudad, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
 Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
@@ -135,8 +129,8 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     const result = await runBedrockLoop(params, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
-  } catch {
-    console.log('[orchestrator] Bedrock tool-use failed, using hardcoded pipeline');
+  } catch (err) {
+    console.log(`[orchestrator] Bedrock tool-use failed (${(err as Error).message}), using hardcoded pipeline`);
     const result = await runHardcodedPipeline(params, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
@@ -157,6 +151,10 @@ async function runHardcodedPipeline(
   console.log('[orchestrator] fallback parsed intent:', JSON.stringify(parsedIntent));
 
   const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
+  // Remove array filters that contain all categories (no real filter)
+  for (const [key, value] of Object.entries(filters)) {
+    if (Array.isArray(value) && value.length >= 8) delete filters[key];
+  }
   const limit = params.limit ?? parsedIntent.limit ?? 100;
 
   const queryResult = await gcpClient.callTool('query_data', {
@@ -231,6 +229,8 @@ async function runBedrockLoop(
     },
   ];
 
+  console.log(`[orchestrator] starting loop — model: ${MODEL_ID}`);
+  const isNova = MODEL_ID.includes('nova');
   let uiConfig: unknown = null;
   const MAX_ITERATIONS = 10;
 
@@ -242,7 +242,8 @@ async function runBedrockLoop(
         system: [{ text: SYSTEM_PROMPT }],
         messages,
         tools: BEDROCK_TOOLS,
-        toolChoice: isFirstCall ? { any: {} } : { auto: {} },
+        // Nova does not support toolChoice: any — only Claude does
+        ...(isNova ? {} : { toolChoice: isFirstCall ? { any: {} } : { auto: {} } }),
         inferenceConfig: { maxTokens: 4096, temperature: 0 },
       }),
     );
@@ -316,9 +317,9 @@ async function runBedrockLoop(
     }
   }
 
-  if (!uiConfig) {
-    throw new Error('[orchestrator] Bedrock did not produce a UIConfig');
-  }
+    if (!uiConfig) {
+      throw new Error(`Bedrock did not use tools — stopReason: ${response.stopReason}, model: ${MODEL_ID}`);
+    }
 
   return uiConfig;
 }

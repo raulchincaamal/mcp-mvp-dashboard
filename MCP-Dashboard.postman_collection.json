@@ -1,0 +1,457 @@
+{
+  "info": {
+    "name": "MCP MVP Dashboard — API",
+    "description": "Collection para testear el pipeline de generación de dashboards.\nBase URL: http://localhost:4000\nAntes de usar: npm run dev:mcp-main",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🟢 Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Verifica que el servidor esté corriendo y el estado de las conexiones MCP."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Generate UI — Templates",
+      "description": "El LLM interpreta el intent y selecciona el template automáticamente.",
+      "item": [
+        {
+          "name": "Executive — Resumen general",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"resumen ejecutivo de ventas\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            },
+            "description": "Template: executive → KPIGrid + Chart + TransactionList"
+          }
+        },
+        {
+          "name": "Executive — Julio 2025",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"resumen ejecutivo de ventas en Julio 2025\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Chart — Motos por estado",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"gráfica de ventas de motos por estado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            },
+            "description": "Template: chart → Bar chart agrupado por estado, filtrado por Motos"
+          }
+        },
+        {
+          "name": "Chart — Tendencia de ventas por mes",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"tendencia de ventas por mes en 2024\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Chart — Monto financiado por categoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"gráfica de monto financiado total por categoría\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Chart — Distribución por canal de venta",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"gráfica de distribución de ventas por canal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Category — Análisis por categoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"análisis por categoría de productos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            },
+            "description": "Template: category → KPIGrid por grupo + Doughnut + Bar"
+          }
+        },
+        {
+          "name": "Credit — Estatus de créditos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"estatus de créditos atrasados\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            },
+            "description": "Template: credit → KPIGrid + ProgressGroup + MiniChart + TransactionList"
+          }
+        },
+        {
+          "name": "Credit — Monto vencido por estado",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"cuánto dinero está vencido por estado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Table — Últimas 20 ventas de celulares",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"tabla de las últimas 20 ventas de celulares\",\n  \"limit\": 20\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            },
+            "description": "Template: table → DataSummary estilizado"
+          }
+        },
+        {
+          "name": "Table — Créditos cancelados",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"listado de créditos cancelados con monto vencido\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 Generate UI — Filtros manuales",
+      "description": "Override manual de filtros además del intent. Útil para Alexa cuando el slot ya está resuelto.",
+      "item": [
+        {
+          "name": "Motos en Jalisco",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"dashboard de ventas de motos\",\n  \"filters\": {\n    \"categoria\": \"Motos\",\n    \"estado\": \"Jalisco\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Ventas en línea — Top 50",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"resumen de ventas en línea\",\n  \"filters\": {\n    \"canal_venta\": \"en_linea\"\n  },\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Créditos atrasados — Nuevo León",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"estatus de créditos atrasados\",\n  \"filters\": {\n    \"estatus_credito\": \"atrasado\",\n    \"estado\": \"Nuevo León\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Rango de fechas — Q1 2025",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"resumen ejecutivo del primer trimestre 2025\",\n  \"filters\": {\n    \"fecha_venta\": {\n      \"gte\": \"2025-01-01\",\n      \"lte\": \"2025-03-31\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Rango de fechas — Julio 2025",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"gráfica de ventas de julio 2025\",\n  \"filters\": {\n    \"fecha_venta\": {\n      \"gte\": \"2025-07-01\",\n      \"lte\": \"2025-07-31\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Bicicletas — Grid layout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"análisis de bicicletas eléctricas por estado\",\n  \"filters\": {\n    \"categoria\": \"Bicicletas Eléctricas\"\n  },\n  \"layout\": \"grid\",\n  \"columns\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Samsung — Ventas por estado",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"gráfica de ventas de Samsung por estado\",\n  \"limit\": 200\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎙️ Alexa — Intents simulados",
+      "description": "Requests que simulan cómo Alexa llamaría al endpoint con el slot de intent resuelto en lenguaje natural.",
+      "item": [
+        {
+          "name": "¿Cómo van las ventas?",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"cómo van las ventas hoy\",\n  \"limit\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Muéstrame las ventas de motos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"muéstrame las ventas de motos\",\n  \"limit\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "¿Cuáles créditos tienen problemas?",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"cuáles créditos tienen problemas de pago\",\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Dame el resumen del mes",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"dame el resumen del mes de julio\",\n  \"limit\": 200\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "¿Cuántas motos vendimos?",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"cuántas motos vendimos este año\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "¿Cuál es el estado con más ventas?",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"cuál es el estado con más ventas\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        },
+        {
+          "name": "Muéstrame los créditos liquidados",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataset\": \"ventas-credito\",\n  \"intent\": \"muéstrame los créditos liquidados del último mes\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/generate-ui",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generate-ui"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

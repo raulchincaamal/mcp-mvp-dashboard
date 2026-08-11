@@ -4,6 +4,7 @@ import {
   type Message,
   type Tool,
   type ToolResultBlock,
+  type ToolChoice,
 } from '@aws-sdk/client-bedrock-runtime';
 import type { McpClient } from './mcp-client.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
@@ -13,80 +14,7 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 
-// ─── Tool definitions that Bedrock can invoke ────────────────
-
-const BEDROCK_TOOLS: Tool[] = [
-  {
-    toolSpec: {
-      name: 'list_datasets',
-      description: 'Lists all available datasets with their fields and record counts. Call this first if you are unsure what data is available.',
-      inputSchema: { json: { type: 'object', properties: {}, required: [] } },
-    },
-  },
-  {
-    toolSpec: {
-      name: 'query_data',
-      description: 'Queries a dataset and returns records. Supports exact match and range filters.',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            dataset: { type: 'string', description: 'Dataset name (e.g. "ventas-credito")' },
-            filters: {
-              type: 'object',
-              description: 'Filters: exact match { campo: valor } or range { campo: { gte, lte } }',
-            },
-            limit: { type: 'number', description: 'Max records to return' },
-          },
-          required: ['dataset'],
-        },
-      },
-    },
-  },
-  {
-    toolSpec: {
-      name: 'generate_ui',
-      description: 'Generates a declarative UIConfig JSON from data records and user intent. The frontend renders this into React components (charts, tables, KPI grids, etc).',
-      inputSchema: {
-        json: {
-          type: 'object',
-          properties: {
-            intent: { type: 'string', description: 'What the user wants to see' },
-            records: { type: 'array', description: 'Data records from query_data' },
-            componentCatalog: {
-              type: 'array',
-              description: 'Available UI components',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                },
-              },
-            },
-            title: { type: 'string' },
-            layout: { type: 'string', enum: ['vertical', 'grid'] },
-            columns: { type: 'number' },
-          },
-          required: ['intent', 'records', 'componentCatalog'],
-        },
-      },
-    },
-  },
-];
-
-const SYSTEM_PROMPT = `Eres un orquestador de dashboards. DEBES usar las tools disponibles, no respondas con texto.
-
-INSTRUCCIONES:
-- Llama INMEDIATAMENTE a query_data con dataset="ventas-credito"
-- Luego llama a generate_ui con los registros obtenidos
-- NO escribas explicaciones, NO escribas código, SOLO llama las tools
-
-Dataset: "ventas-credito" — campos: id, fecha_venta, cliente, estado, ciudad, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
-Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
-Estatus: al_corriente, atrasado, liquidado, cancelado.`;
-
-// ─── Component catalog (hardcoded, augmented from library-context) ────────────
+// ─── Component catalog ────────────────────────────────────────
 
 const COMPONENT_CATALOG = [
   { name: 'StatCard', description: 'Metric card with title, large value, trend arrow, and icon' },
@@ -101,7 +29,109 @@ const COMPONENT_CATALOG = [
   { name: 'Text', description: 'Typography component' },
 ];
 
-// ─── Orchestrator ─────────────────────────────────────────────
+// ─── Tool definitions ─────────────────────────────────────────
+//
+// generate_ui only receives DECISION params — Nova decides what to show and how.
+// Records and componentCatalog are injected by the orchestrator internally.
+
+const BEDROCK_TOOLS: Tool[] = [
+  {
+    toolSpec: {
+      name: 'query_data',
+      description: 'Queries the ventas-credito dataset and returns matching records. Supports exact match and range filters on any field.',
+      inputSchema: {
+        json: {
+          type: 'object',
+          properties: {
+            dataset: { type: 'string', description: 'Always "ventas-credito"' },
+            filters: {
+              type: 'object',
+              description: 'Exact match: { "categoria": "Motos" } or range: { "fecha_venta": { "gte": "2025-01-01", "lte": "2025-03-31" } }',
+            },
+            limit: { type: 'number', description: 'Max records to return (default 100)' },
+          },
+          required: ['dataset'],
+        },
+      },
+    },
+  },
+  {
+    toolSpec: {
+      name: 'generate_ui',
+      description: 'Generates the dashboard UI. Call this after query_data. You decide the visualization parameters — the system handles the data automatically.',
+      inputSchema: {
+        json: {
+          type: 'object',
+          properties: {
+            intent: {
+              type: 'string',
+              description: 'Enriched intent describing what to visualize. Include hints like [groupBy:estado] [metric:count] [chartType:bar] [template:chart]',
+            },
+            template: {
+              type: 'string',
+              enum: ['executive', 'category', 'credit', 'table', 'chart'],
+              description: 'executive=KPIs+chart+list, category=by-group analysis, credit=payment status, table=data table, chart=single chart',
+            },
+            chartType: {
+              type: 'string',
+              enum: ['bar', 'line', 'pie', 'doughnut', 'area'],
+              description: 'Chart type to use',
+            },
+            groupBy: {
+              type: 'string',
+              description: 'Field to group data by (e.g. "estado", "categoria", "canal_venta", "estatus_credito")',
+            },
+            metric: {
+              type: 'string',
+              enum: ['count', 'sum', 'avg', 'max', 'min'],
+              description: 'Aggregation metric',
+            },
+            metricField: {
+              type: 'string',
+              description: 'Numeric field for sum/avg/max/min (e.g. "precio_contado", "monto_total_credito")',
+            },
+            title: {
+              type: 'string',
+              description: 'Dashboard title',
+            },
+            layout: {
+              type: 'string',
+              enum: ['vertical', 'grid'],
+              description: 'Layout type',
+            },
+          },
+          required: ['intent', 'template'],
+        },
+      },
+    },
+  },
+];
+
+const SYSTEM_PROMPT = `Eres un orquestador de dashboards de ventas. Usas tools para generar dashboards dinámicos.
+
+FLUJO OBLIGATORIO:
+1. Llama query_data con los filtros apropiados según el intent del usuario
+2. Llama generate_ui con los parámetros de visualización que TÚ decides
+
+PARA generate_ui, tú decides:
+- template: qué tipo de dashboard (executive, category, credit, table, chart)
+- chartType: qué gráfica (bar, line, pie, doughnut, area)
+- groupBy: por qué campo agrupar (estado, categoria, canal_venta, estatus_credito, etc.)
+- metric: qué medir (count, sum, avg)
+- metricField: qué campo numérico usar para sum/avg
+- title: título descriptivo del dashboard
+- intent: el intent original enriquecido con hints [groupBy:x] [metric:x] [chartType:x] [template:x]
+
+NO incluyas records ni componentCatalog en generate_ui — el sistema los inyecta automáticamente.
+NO respondas con texto. SOLO llama las tools.
+
+Dataset: "ventas-credito"
+Campos: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, color, precio_contado, enganche, monto_financiado, tasa_interes, monto_total_credito, plazo_semanas, pago_semanal, semanas_pagadas, semanas_atrasadas, monto_vencido, estatus_credito, canal_venta, vendedor
+Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios
+Estatus: al_corriente, atrasado, liquidado, cancelado
+Canales: tienda_fisica, en_linea, telefono`;
+
+// ─── Orchestrator entry point ─────────────────────────────────
 
 export interface OrchestrationParams {
   intent: string;
@@ -111,7 +141,6 @@ export interface OrchestrationParams {
 }
 
 export async function orchestrate(params: OrchestrationParams): Promise<unknown> {
-  // Check cache first
   const cacheKey = generateCacheKey('ui', {
     dataset: params.dataset ?? 'ventas-credito',
     intent: params.intent,
@@ -130,7 +159,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
   } catch (err) {
-    console.log(`[orchestrator] Bedrock tool-use failed (${(err as Error).message}), using hardcoded pipeline`);
+    console.log(`[orchestrator] Bedrock loop failed (${(err as Error).message}), using hardcoded pipeline`);
     const result = await runHardcodedPipeline(params, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
@@ -140,7 +169,144 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
   }
 }
 
-// ─── Hardcoded pipeline fallback ────────────────────────────
+// ─── Bedrock tool-use loop ────────────────────────────────────
+
+async function runBedrockLoop(
+  params: OrchestrationParams,
+  gcpClient: McpClient,
+  uiClient: McpClient,
+): Promise<unknown> {
+  const messages: Message[] = [
+    {
+      role: 'user',
+      content: [
+        {
+          text: `Intent del usuario: "${params.intent}"${
+            params.filters ? `\nFiltros adicionales: ${JSON.stringify(params.filters)}` : ''
+          }${params.limit ? `\nLímite de registros: ${params.limit}` : ''}`,
+        },
+      ],
+    },
+  ];
+
+  console.log(`[orchestrator] starting loop — model: ${MODEL_ID}`);
+  const isNova = MODEL_ID.includes('nova');
+  let uiConfig: unknown = null;
+  let lastStopReason: string | undefined;
+  let stashedRecords: unknown[] | null = null;
+  const MAX_ITERATIONS = 10;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const isFirstCall = i === 0;
+
+    // Nova: force query_data first, then force generate_ui once we have records.
+    // Claude: force any tool on first call, then auto.
+    const toolChoice: ToolChoice = isNova
+      ? (isFirstCall ? { tool: { name: 'query_data' } } : { tool: { name: 'generate_ui' } })
+      : (isFirstCall ? { any: {} } : { auto: {} });
+
+    const response = await bedrockClient.send(
+      new ConverseCommand({
+        modelId: MODEL_ID,
+        system: [{ text: SYSTEM_PROMPT }],
+        messages,
+        toolConfig: { tools: BEDROCK_TOOLS, toolChoice },
+        inferenceConfig: { maxTokens: 4096, temperature: 0 },
+      }),
+    );
+    lastStopReason = response.stopReason;
+
+    const assistantMessage: Message = {
+      role: 'assistant',
+      content: response.output?.message?.content ?? [],
+    };
+    messages.push(assistantMessage);
+
+    console.log(`[orchestrator] iteration ${i} stopReason: ${response.stopReason}`);
+
+    if (response.stopReason === 'end_turn' || response.stopReason === 'max_tokens') {
+      break;
+    }
+
+    if (response.stopReason === 'tool_use') {
+      const toolResults: ToolResultBlock[] = [];
+
+      for (const block of assistantMessage.content ?? []) {
+        if (!('toolUse' in block) || !block.toolUse) continue;
+
+        const { toolUseId, name, input } = block.toolUse;
+        const args = (input ?? {}) as Record<string, unknown>;
+
+        console.log(`[orchestrator] tool: ${name}`, JSON.stringify(args));
+
+        let toolResult: unknown;
+        try {
+          if (name === 'query_data') {
+            const raw = await gcpClient.callTool(name, {
+              dataset: params.dataset ?? 'ventas-credito',
+              ...(args.filters ? { filters: args.filters } : {}),
+              limit: args.limit ?? params.limit ?? 100,
+            }) as { records?: unknown[]; totalRecords?: number };
+
+            stashedRecords = raw.records ?? (raw as unknown as unknown[]);
+            // Summary only — full records would overflow Nova's context
+            toolResult = {
+              totalRecords: raw.totalRecords ?? stashedRecords.length,
+              message: `Query successful. ${stashedRecords.length} records ready. Now call generate_ui with your visualization parameters.`,
+            };
+          } else if (name === 'generate_ui') {
+            // Nova decides the visualization — we inject records + catalog
+            const enhancedIntent = [
+              args.intent ?? params.intent,
+              args.groupBy ? `[groupBy:${args.groupBy}]` : '',
+              args.metric ? `[metric:${args.metric}]` : '',
+              args.metricField ? `[metricField:${args.metricField}]` : '',
+              args.chartType ? `[chartType:${args.chartType}]` : '',
+              args.template ? `[template:${args.template}]` : '',
+            ].filter(Boolean).join(' ');
+
+            uiConfig = await uiClient.callTool('generate_ui', {
+              intent: enhancedIntent,
+              records: stashedRecords ?? [],
+              componentCatalog: COMPONENT_CATALOG,
+              ...(args.title ? { title: args.title } : {}),
+              layout: args.layout ?? 'vertical',
+              columns: 2,
+            });
+
+            // Summary back to Bedrock — UIConfig is too large to include
+            toolResult = { success: true, message: 'Dashboard generated successfully.' };
+          } else {
+            toolResult = { error: `Unknown tool: ${name}` };
+          }
+        } catch (err) {
+          toolResult = { error: (err as Error).message };
+        }
+
+        toolResults.push({
+          toolUseId: toolUseId!,
+          content: [{ text: JSON.stringify(toolResult) }],
+        });
+      }
+
+      messages.push({
+        role: 'user',
+        content: toolResults.map((r) => ({ toolResult: r })),
+      });
+
+      // If we just got the UIConfig, we're done — no need for another Bedrock call
+      if (uiConfig) break;
+    }
+  }
+
+  if (!uiConfig) {
+    throw new Error(`No UIConfig produced — stopReason: ${lastStopReason}, model: ${MODEL_ID}`);
+  }
+
+  return uiConfig;
+}
+
+// ─── Hardcoded pipeline fallback ─────────────────────────────
 
 async function runHardcodedPipeline(
   params: OrchestrationParams,
@@ -151,7 +317,6 @@ async function runHardcodedPipeline(
   console.log('[orchestrator] fallback parsed intent:', JSON.stringify(parsedIntent));
 
   const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
-  // Remove array filters that contain all categories (no real filter)
   for (const [key, value] of Object.entries(filters)) {
     if (Array.isArray(value) && value.length >= 8) delete filters[key];
   }
@@ -194,7 +359,7 @@ async function interpretIntentWithBedrock(intent: string): Promise<{
   try {
     const response = await bedrockClient.send(new ConverseCommand({
       modelId: MODEL_ID,
-      system: [{ text: 'Convierte el intent en JSON. Responde SOLO con JSON válido sin markdown ni explicaciones.\n\nEstructura: {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null}\n\nCampos: id,fecha_venta,cliente,estado,ciudad,categoria,producto,precio_contado,monto_total_credito,estatus_credito,canal_venta,vendedor.\nCategorías: Motos,Celulares,Bicicletas Eléctricas,Pantallas/TV,Audio,Tablets,Consolas,Climatización,Accesorios.\nTemplates: executive,category,credit,table,chart.' }],
+      system: [{ text: 'Convierte el intent en JSON. Responde SOLO con JSON válido sin markdown.\n\nEstructura: {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null}\n\nCampos: fecha_venta,estado,ciudad,categoria,producto,color,precio_contado,monto_total_credito,estatus_credito,canal_venta,vendedor.\nCategorías: Motos,Celulares,Bicicletas Eléctricas,Pantallas/TV,Audio,Tablets,Consolas,Climatización,Accesorios.\nTemplates: executive,category,credit,table,chart.' }],
       messages: [{ role: 'user', content: [{ text: intent }] }],
       inferenceConfig: { maxTokens: 512, temperature: 0 },
     }));
@@ -205,121 +370,4 @@ async function interpretIntentWithBedrock(intent: string): Promise<{
   } catch {
     return fallback;
   }
-}
-
-// ─── Bedrock tool-use loop ────────────────────────────────────
-
-async function runBedrockLoop(
-  params: OrchestrationParams,
-  gcpClient: McpClient,
-  uiClient: McpClient,
-): Promise<unknown> {
-  const messages: Message[] = [
-    {
-      role: 'user',
-      content: [
-        {
-          text: `Intent del usuario: "${params.intent}"${
-            params.dataset ? `\nDataset: ${params.dataset}` : ''
-          }${params.filters ? `\nFiltros adicionales: ${JSON.stringify(params.filters)}` : ''}${
-            params.limit ? `\nLímite de registros: ${params.limit}` : ''
-          }`,
-        },
-      ],
-    },
-  ];
-
-  console.log(`[orchestrator] starting loop — model: ${MODEL_ID}`);
-  const isNova = MODEL_ID.includes('nova');
-  let uiConfig: unknown = null;
-  const MAX_ITERATIONS = 10;
-
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const isFirstCall = i === 0;
-    const response = await bedrockClient.send(
-      new ConverseCommand({
-        modelId: MODEL_ID,
-        system: [{ text: SYSTEM_PROMPT }],
-        messages,
-        tools: BEDROCK_TOOLS,
-        // Nova does not support toolChoice: any — only Claude does
-        ...(isNova ? {} : { toolChoice: isFirstCall ? { any: {} } : { auto: {} } }),
-        inferenceConfig: { maxTokens: 4096, temperature: 0 },
-      }),
-    );
-
-    const assistantMessage: Message = {
-      role: 'assistant',
-      content: response.output?.message?.content ?? [],
-    };
-    messages.push(assistantMessage);
-
-    console.log(`[orchestrator] iteration ${i} stopReason: ${response.stopReason}`);
-
-    // Stop if Bedrock is done
-    if (response.stopReason === 'end_turn' || response.stopReason === 'max_tokens') {
-      if (!uiConfig) {
-        const textBlock = assistantMessage.content?.find((b) => 'text' in b);
-        if (textBlock && 'text' in textBlock) {
-          const raw = textBlock.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-          try {
-            const parsed = JSON.parse(raw);
-            // Handle Nova wrapping response in { uiConfig: {...} }
-            uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
-          } catch {
-            console.log('[orchestrator] end_turn text (not JSON):', raw.slice(0, 200));
-          }
-        }
-      }
-      break;
-    }
-
-    // Process tool calls
-    if (response.stopReason === 'tool_use') {
-      const toolResults: ToolResultBlock[] = [];
-
-      for (const block of assistantMessage.content ?? []) {
-        if (!('toolUse' in block) || !block.toolUse) continue;
-
-        const { toolUseId, name, input } = block.toolUse;
-        const args = (input ?? {}) as Record<string, unknown>;
-
-        console.log(`[orchestrator] Bedrock calling tool: ${name}`, JSON.stringify(args));
-
-        let toolResult: unknown;
-        try {
-          if (name === 'list_datasets' || name === 'query_data') {
-            toolResult = await gcpClient.callTool(name, args);
-          } else if (name === 'generate_ui') {
-            // Inject component catalog if not provided
-            if (!args.componentCatalog) {
-              args.componentCatalog = COMPONENT_CATALOG;
-            }
-            toolResult = await uiClient.callTool('generate_ui', args);
-            uiConfig = toolResult; // capture last generate_ui result
-          } else {
-            toolResult = { error: `Unknown tool: ${name}` };
-          }
-        } catch (err) {
-          toolResult = { error: (err as Error).message };
-        }
-
-        toolResults.push({
-          toolUseId: toolUseId!,
-          content: [{ text: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult) }],
-        });
-      }
-
-      messages.push({
-        role: 'user',
-        content: toolResults.map((r) => ({ toolResult: r })),
-      });
-    }
-  }
-
-    if (!uiConfig) {
-      throw new Error(`Bedrock did not use tools — stopReason: ${response.stopReason}, model: ${MODEL_ID}`);
-    }
-
-  return uiConfig;
 }

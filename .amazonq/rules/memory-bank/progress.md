@@ -13,11 +13,10 @@
 
 ## What's Pending / Not Built
 - Phase 2: API Gateway + Event Bus
-- Phase 3: Stateless orchestrator + MCP Server Registry
+- Phase 3: MCP Server Registry
 - Phase 4: Observability + CI/CD
 - Real GCP BigQuery / SAP connector (mcp-gcp-mock is the placeholder)
 - Dynamic component catalog (currently hardcoded with regex augmentation)
-- `/dynamic` page in dashboard-app (route exists but page.tsx not found in src/app/(pages)/)
 
 ## File Locations Quick Reference
 | File | Purpose |
@@ -30,5 +29,7 @@
 | `packages/mcp-gcp-mock/src/index.ts` | MCP Server, `list_datasets` + `query_data` tools |
 | `packages/mcp-ui/src/index.ts` | MCP Server, `generate_ui` tool |
 | `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React renderer |
+| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic page — intent input + API call + render |
+| `packages/dashboard-app/.env.local` | NEXT_PUBLIC_MCP_API_URL=http://localhost:4000 |
 | `packages/mcp-gcp-mock/data/ventas-credito.json` | 5,000 mock sales records |
 | `packages/mcp-gcp-mock/scripts/generate-ventas.mjs` | Data regeneration script |

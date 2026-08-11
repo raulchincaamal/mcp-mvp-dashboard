@@ -6,11 +6,12 @@ Business users need dashboards from sales data without writing queries or code. 
 ## Pipeline Flow
 ```
 User intent (Spanish)
-  → mcp-main: AWS Bedrock Claude Haiku interprets → ParsedIntent
-  → library-context MCP: fetches component catalog
-  → mcp-gcp-mock MCP: queries ventas-credito with inferred filters
-  → mcp-ui MCP: generates UIConfig from records + catalog + intent
-  → dashboard-app: DynamicRenderer maps UIConfig → React components
+  → mcp-main HTTP :4000
+  → orchestrator.ts: Bedrock ConverseCommand with tool definitions
+  → Bedrock decides → calls query_data (mcp-gcp-mock) via tool-use loop
+  → Bedrock decides → calls generate_ui (mcp-ui) with records + intent
+  → UIConfig returned
+  → dashboard-app /dynamic: DynamicRenderer maps UIConfig → React components
 ```
 
 ## Intent → ParsedIntent (Bedrock output)

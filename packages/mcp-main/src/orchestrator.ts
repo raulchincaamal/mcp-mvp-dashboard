@@ -131,6 +131,20 @@ Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tabl
 Estatus: al_corriente, atrasado, liquidado, cancelado
 Canales: tienda_fisica, en_linea, telefono`;
 
+// ─── Credential error detection ─────────────────────────────
+
+function isCredentialError(err: unknown): boolean {
+  const msg = (err as Error)?.message ?? '';
+  return (
+    msg.includes('security token') ||
+    msg.includes('token is expired') ||
+    msg.includes('ExpiredToken') ||
+    msg.includes('InvalidClientTokenId') ||
+    msg.includes('UnrecognizedClientException') ||
+    msg.includes('AccessDeniedException')
+  );
+}
+
 // ─── Orchestrator entry point ─────────────────────────────────
 
 export interface OrchestrationParams {
@@ -159,6 +173,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
   } catch (err) {
+    if (isCredentialError(err)) throw err; // propagate — don't silently fallback
     console.log(`[orchestrator] Bedrock loop failed (${(err as Error).message}), using hardcoded pipeline`);
     const result = await runHardcodedPipeline(params, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
@@ -242,10 +257,20 @@ async function runBedrockLoop(
         let toolResult: unknown;
         try {
           if (name === 'query_data') {
+            const rawFilters = (args.filters ?? {}) as Record<string, unknown>;
+            // Normalize string filter values to match dataset casing
+            const normalizedFilters: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(rawFilters)) {
+              if (typeof v === 'string') {
+                normalizedFilters[k] = v.charAt(0).toUpperCase() + v.slice(1);
+              } else {
+                normalizedFilters[k] = v;
+              }
+            }
             const raw = await gcpClient.callTool(name, {
               dataset: params.dataset ?? 'ventas-credito',
-              ...(args.filters ? { filters: args.filters } : {}),
-              limit: args.limit ?? params.limit ?? 100,
+              ...(Object.keys(normalizedFilters).length > 0 ? { filters: normalizedFilters } : {}),
+              limit: args.limit ?? params.limit ?? 500,
             }) as { records?: unknown[]; totalRecords?: number };
 
             stashedRecords = raw.records ?? (raw as unknown as unknown[]);
@@ -256,8 +281,9 @@ async function runBedrockLoop(
             };
           } else if (name === 'generate_ui') {
             // Nova decides the visualization — we inject records + catalog
+            const baseIntent = (args.intent ?? params.intent as string).replace(/\s*\[\w+:[^\]]+\]/g, '').trim();
             const enhancedIntent = [
-              args.intent ?? params.intent,
+              baseIntent,
               args.groupBy ? `[groupBy:${args.groupBy}]` : '',
               args.metric ? `[metric:${args.metric}]` : '',
               args.metricField ? `[metricField:${args.metricField}]` : '',
@@ -265,7 +291,7 @@ async function runBedrockLoop(
               args.template ? `[template:${args.template}]` : '',
             ].filter(Boolean).join(' ');
 
-            uiConfig = await uiClient.callTool('generate_ui', {
+            let rawUiConfig = await uiClient.callTool('generate_ui', {
               intent: enhancedIntent,
               records: stashedRecords ?? [],
               componentCatalog: COMPONENT_CATALOG,
@@ -273,6 +299,13 @@ async function runBedrockLoop(
               layout: args.layout ?? 'vertical',
               columns: 2,
             });
+
+            // mcp-ui double-stringifies: parse until we get an object with 'components'
+            while (typeof rawUiConfig === 'string') {
+              try { rawUiConfig = JSON.parse(rawUiConfig); } catch { break; }
+            }
+            uiConfig = rawUiConfig;
+            console.log('[orchestrator] uiConfig type:', typeof uiConfig, 'keys:', uiConfig && typeof uiConfig === 'object' ? Object.keys(uiConfig as object) : 'N/A');
 
             // Summary back to Bedrock — UIConfig is too large to include
             toolResult = { success: true, message: 'Dashboard generated successfully.' };
@@ -338,13 +371,18 @@ async function runHardcodedPipeline(
     parsedIntent.template ? `[template:${parsedIntent.template}]` : '',
   ].filter(Boolean).join(' ');
 
-  return uiClient.callTool('generate_ui', {
+  let rawResult = await uiClient.callTool('generate_ui', {
     intent: enhancedIntent,
     records,
     componentCatalog: COMPONENT_CATALOG,
     layout: 'vertical',
     columns: 2,
   });
+
+  while (typeof rawResult === 'string') {
+    try { rawResult = JSON.parse(rawResult); } catch { break; }
+  }
+  return rawResult;
 }
 
 async function interpretIntentWithBedrock(intent: string): Promise<{
@@ -355,19 +393,98 @@ async function interpretIntentWithBedrock(intent: string): Promise<{
   template: string;
   limit: number | null;
 }> {
-  const fallback = { filters: {}, groupBy: null, metric: 'count', chartType: null, template: 'executive', limit: 100 };
-  try {
-    const response = await bedrockClient.send(new ConverseCommand({
-      modelId: MODEL_ID,
-      system: [{ text: 'Convierte el intent en JSON. Responde SOLO con JSON válido sin markdown.\n\nEstructura: {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null}\n\nCampos: fecha_venta,estado,ciudad,categoria,producto,color,precio_contado,monto_total_credito,estatus_credito,canal_venta,vendedor.\nCategorías: Motos,Celulares,Bicicletas Eléctricas,Pantallas/TV,Audio,Tablets,Consolas,Climatización,Accesorios.\nTemplates: executive,category,credit,table,chart.' }],
-      messages: [{ role: 'user', content: [{ text: intent }] }],
-      inferenceConfig: { maxTokens: 512, temperature: 0 },
-    }));
-    const block = response.output?.message?.content?.[0];
-    if (!block || !('text' in block)) return fallback;
-    const clean = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    return { ...fallback, ...JSON.parse(clean) };
-  } catch {
-    return fallback;
+  const fallback = { filters: {}, groupBy: null, metric: 'count', chartType: null, template: 'executive', limit: 500 };
+
+  // ─── Local regex parser (no Bedrock needed) ───────────────
+  const i = intent.toLowerCase();
+  const filters: Record<string, unknown> = {};
+
+  // Categorías
+  const categorias: Record<string, string> = {
+    moto: 'Motos', motos: 'Motos',
+    celular: 'Celulares', celulares: 'Celulares', telefono: 'Celulares', teléfono: 'Celulares',
+    bicicleta: 'Bicicletas Eléctricas', bicicletas: 'Bicicletas Eléctricas',
+    pantalla: 'Pantallas/TV', pantallas: 'Pantallas/TV', tv: 'Pantallas/TV', televisor: 'Pantallas/TV',
+    audio: 'Audio', bocina: 'Audio', bocinas: 'Audio',
+    tablet: 'Tablets', tablets: 'Tablets',
+    consola: 'Consolas', consolas: 'Consolas', nintendo: 'Consolas', playstation: 'Consolas', xbox: 'Consolas',
+    clima: 'Climatización', climatización: 'Climatización', ac: 'Climatización', aire: 'Climatización',
+    accesorio: 'Accesorios', accesorios: 'Accesorios',
+  };
+  for (const [kw, val] of Object.entries(categorias)) {
+    if (i.includes(kw)) { filters['categoria'] = val; break; }
   }
+
+  // Colores
+  const colores = ['rojo', 'azul', 'negro', 'blanco', 'gris', 'verde', 'amarillo', 'morado', 'rosa', 'naranja', 'lila', 'dorado', 'plateado'];
+  for (const color of colores) {
+    if (i.includes(color)) {
+      filters['color'] = color.charAt(0).toUpperCase() + color.slice(1);
+      break;
+    }
+  }
+
+  // Estatus crédito
+  if (i.includes('atrasado') || i.includes('atraso') || i.includes('mora')) filters['estatus_credito'] = 'atrasado';
+  else if (i.includes('liquidado') || i.includes('pagado')) filters['estatus_credito'] = 'liquidado';
+  else if (i.includes('cancelado')) filters['estatus_credito'] = 'cancelado';
+  else if (i.includes('al corriente') || i.includes('corriente')) filters['estatus_credito'] = 'al_corriente';
+
+  // Canal de venta
+  if (i.includes('en línea') || i.includes('en linea') || i.includes('online')) filters['canal_venta'] = 'en_linea';
+  else if (i.includes('tienda') || i.includes('física') || i.includes('fisica')) filters['canal_venta'] = 'tienda_fisica';
+  else if (i.includes('teléfono') || i.includes('telefono')) filters['canal_venta'] = 'telefono';
+
+  // Fecha (mes)
+  const meses: Record<string, string> = {
+    enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
+    julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
+  };
+  for (const [mes, num] of Object.entries(meses)) {
+    if (i.includes(mes)) {
+      const yearMatch = intent.match(/(202\d)/);
+      const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
+      filters['fecha_venta'] = { gte: `${year}-${num}-01`, lte: `${year}-${num}-31` };
+      break;
+    }
+  }
+
+  // Template
+  let template = 'executive';
+  if (/cr[eé]dito|estatus|pago|atraso|liquidado|corriente/i.test(i)) template = 'credit';
+  else if (/categor[ií]a|por\s+categor/i.test(i)) template = 'category';
+  else if (/tabla|listado|registros|detalle|últimas|ultimas/i.test(i)) template = 'table';
+  else if (/gr[aá]fica|chart|tendencia|pastel|pie|dona|doughnut/i.test(i)) template = 'chart';
+  else if (/resumen|ejecutivo|dashboard|general|kpi/i.test(i)) template = 'executive';
+  else if (Object.keys(filters).length > 0) template = 'chart'; // filtered query → chart
+
+  // chartType
+  let chartType: string | null = null;
+  if (/pastel|pie/i.test(i)) chartType = 'pie';
+  else if (/dona|doughnut/i.test(i)) chartType = 'doughnut';
+  else if (/l[ií]nea|line|tendencia/i.test(i)) chartType = 'line';
+  else if (/barra|bar/i.test(i)) chartType = 'bar';
+
+  // groupBy
+  let groupBy: string | null = null;
+  if (/por estado/i.test(i)) groupBy = 'estado';
+  else if (/por categor/i.test(i)) groupBy = 'categoria';
+  else if (/por canal/i.test(i)) groupBy = 'canal_venta';
+  else if (/por ciudad/i.test(i)) groupBy = 'ciudad';
+  else if (/por sucursal/i.test(i)) groupBy = 'sucursal';
+  else if (/por color/i.test(i)) groupBy = 'color';
+  else if (/por vendedor/i.test(i)) groupBy = 'vendedor';
+  else if (/por mes/i.test(i)) groupBy = 'fecha_venta';
+
+  // metric
+  let metric = 'count';
+  if (/promedio|media|avg/i.test(i)) metric = 'avg';
+  else if (/total|suma|sum/i.test(i)) metric = 'sum';
+
+  // limit
+  const limitMatch = intent.match(/(?:últimas?|ultimas?|top|primeras?)\s+(\d+)/i);
+  const limit = limitMatch ? Number(limitMatch[1]) : 500;
+
+  console.log('[orchestrator] local parser result:', JSON.stringify({ filters, template, chartType, groupBy, metric, limit }));
+  return { filters, groupBy, metric, chartType, template, limit };
 }

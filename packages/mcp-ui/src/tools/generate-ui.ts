@@ -41,9 +41,10 @@ export function generateUi(params: GenerateUiParams): UIConfig {
   const { intent, records, title, layout = 'vertical', columns = 2 } = params;
 
   if (!records || records.length === 0) {
+    // Find what values exist for the filtered fields to suggest alternatives
     return {
-      title: title || 'Sin datos',
-      description: `No se encontraron registros para: "${intent}"`,
+      title: title || 'Sin resultados',
+      description: 'No se encontraron registros con los filtros aplicados.',
       layout,
       columns,
       components: [],
@@ -177,73 +178,114 @@ function buildExecutiveTemplate(
   const components: UIComponentConfig[] = [];
   const intentLower = intent.toLowerCase();
 
-  // Resolve groupBy: hint > "por X" pattern > best guess
-  const groupByField = resolveGroupByField(
-    hints?.groupBy,
-    intentLower,
-    stringFields,
-  );
-
-  // Resolve metric fields: hint > detected from intent > smart defaults
-  const metricFields = resolveMetricFields(
-    hints?.metricField,
-    intentLower,
-    numericFields,
-  );
-
-  // Resolve aggregation type: hint > detected from intent
+  const groupByField = resolveGroupByField(hints?.groupBy, intentLower, stringFields);
+  const metricFields = resolveMetricFields(hints?.metricField, intentLower, numericFields);
   const metric = hints?.metric || detectMetricType(intentLower);
 
-  // ─── KPI Section: Summary stats for the primary metric ───
+  // ─── 1. KPIs ─────────────────────────────────────────────
   const kpiItems = buildKpiItems(records, metricFields, numericFields, metric);
   if (kpiItems.length > 0) {
     components.push({ component: 'KPIGrid', props: { items: kpiItems } });
   }
 
-  // ─── Main Chart: Primary metric grouped by groupByField ──
+  // ─── 2. Main chart: metric grouped by primary field ──────
   if (groupByField && metricFields.length > 0) {
-    const chartComponent = buildGroupedChart(
-      records,
-      groupByField,
-      metricFields,
-      metric,
-      hints?.chartType || 'bar',
-    );
-    components.push(chartComponent);
+    components.push(buildGroupedChart(
+      records, groupByField, metricFields, metric, hints?.chartType || 'bar',
+    ));
   }
 
-  // ─── Morosidad/Status section (if relevant) ──────────────
-  if (
-    /morosidad|atraso|vencid|estatus/i.test(intentLower) &&
-    records[0]?.['estatus_credito'] !== undefined
-  ) {
-    const morosidadComponents = buildMorosidadSection(records, intentLower);
-    components.push(...morosidadComponents);
+  // ─── 3. Distribution by category (always for executive) ──
+  if (stringFields.includes('categoria')) {
+    const countByCat = countByField(records, 'categoria');
+    const catLabels = Object.keys(countByCat).sort((a, b) => countByCat[b] - countByCat[a]);
+    const colors = ['#4F46E5','#7C3AED','#2563EB','#0891B2','#059669','#D97706','#DC2626','#6366F1','#8B5CF6'];
+    components.push({
+      component: 'Chart',
+      props: {
+        type: 'doughnut',
+        title: 'Distribución por Categoría',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            label: 'Ventas',
+            data: catLabels.map(l => countByCat[l]),
+            backgroundColor: colors.slice(0, catLabels.length),
+            borderColor: '#ffffff',
+            borderWidth: 2,
+          }],
+        },
+        options: { responsive: true },
+      },
+    });
   }
 
-  // ─── Plazos distribution (if mentioned) ──────────────────
-  if (
-    /plazo/i.test(intentLower) &&
-    records[0]?.['plazo_semanas'] !== undefined
-  ) {
-    const plazosComponent = buildPlazosChart(records, intentLower);
-    components.push(plazosComponent);
+  // ─── 4. Credit status progress bars (always if field exists)
+  if (stringFields.includes('estatus_credito')) {
+    const statusCount = countByField(records, 'estatus_credito');
+    const total = records.length;
+    const statusColors: Record<string, string> = {
+      al_corriente: '#059669', liquidado: '#2563EB',
+      atrasado: '#D97706', cancelado: '#DC2626',
+    };
+    const progressItems = Object.entries(statusCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([status, count]) => ({
+        label: `${formatLabel(status)} (${count})`,
+        value: Math.round((count / total) * 100),
+        color: statusColors[status] || '#4F46E5',
+      }));
+    components.push({
+      component: 'ProgressGroup',
+      props: { title: 'Estatus de Créditos', items: progressItems },
+    });
   }
 
-  // ─── Top N table (if "top" or "tabla" mentioned) ─────────
-  if (/top|mayor|tabla|sucursal/i.test(intentLower)) {
-    const tableComponent = buildTopTable(
-      records,
-      intentLower,
-      numericFields,
-      stringFields,
-    );
-    if (tableComponent) components.push(tableComponent);
+  // ─── 5. Sales by channel (if canal_venta exists) ──────────
+  if (stringFields.includes('canal_venta')) {
+    const countByCh = countByField(records, 'canal_venta');
+    const chLabels = Object.keys(countByCh);
+    const colors = ['#4F46E5', '#0891B2', '#059669'];
+    components.push({
+      component: 'Chart',
+      props: {
+        type: 'bar',
+        title: 'Ventas por Canal',
+        data: {
+          labels: chLabels.map(formatLabel),
+          datasets: [{
+            label: 'Cantidad',
+            data: chLabels.map(l => countByCh[l]),
+            backgroundColor: colors,
+            borderColor: colors,
+            borderWidth: 2,
+          }],
+        },
+        options: { responsive: true, xAxis: { label: 'Canal' }, yAxis: { label: 'Ventas' } },
+      },
+    });
+  }
+
+  // ─── 6. Recent transactions ───────────────────────────────
+  const recent = records.slice(0, 8);
+  if (recent.length > 0 && recent[0]['cliente'] !== undefined) {
+    const txItems = recent.map(r => ({
+      title: String(r['cliente'] || ''),
+      subtitle: String(r['producto'] || r['categoria'] || ''),
+      amount: `$${formatNumber(Number(r['monto_total_credito'] || r['precio_contado']) || 0)}`,
+      date: String(r['fecha_venta'] || ''),
+      status: r['estatus_credito'] === 'atrasado' ? 'negative' as const
+        : r['estatus_credito'] === 'liquidado' ? 'positive' as const
+        : 'neutral' as const,
+    }));
+    components.push({
+      component: 'TransactionList',
+      props: { title: 'Últimas Operaciones', items: txItems },
+    });
   }
 
   return {
     title: title || 'Resumen Ejecutivo',
-    description: `Generado para: "${stripHints(intent)}"`,
     layout: 'vertical',
     columns: columns || 2,
     components,
@@ -713,20 +755,69 @@ function buildCategoryTemplate(
     numericFields[0];
 
   if (!categoryField || !valueField) {
-    return buildExecutiveTemplate(
-      records,
-      [],
-      numericFields,
-      stringFields,
-      intent,
-      title,
-      columns,
-    );
+    return buildExecutiveTemplate(records, [], numericFields, stringFields, intent, title, columns);
   }
 
   // Aggregate by category
   const aggregated = aggregateByField(records, categoryField, [valueField]);
   const categories = Object.keys(aggregated);
+
+  // If only 1 category (filtered data), pivot to a more useful grouping
+  if (categories.length <= 1) {
+    const altField =
+      stringFields.find((f) => f === 'estado') ||
+      stringFields.find((f) => f === 'canal_venta') ||
+      stringFields.find((f) => f === 'color') ||
+      stringFields.find((f) => f !== categoryField);
+
+    if (altField) {
+      const altAgg = aggregateByField(records, altField, [valueField]);
+      const altCount = countByField(records, altField);
+      const altLabels = Object.keys(altAgg).sort((a, b) => (altAgg[b][valueField] || 0) - (altAgg[a][valueField] || 0)).slice(0, 15);
+      const colors = ['#4F46E5','#7C3AED','#2563EB','#0891B2','#059669','#D97706','#DC2626','#6366F1','#8B5CF6','#0EA5E9','#10B981','#F59E0B','#EF4444','#EC4899','#14B8A6'];
+
+      return {
+        title: title || `Ventas por ${formatLabel(altField)}`,
+        layout: 'vertical',
+        columns: columns || 2,
+        components: [
+          {
+            component: 'KPIGrid',
+            props: {
+              items: [
+                { title: 'Total Registros', value: String(records.length), subtitle: `${records.length} ventas`, trend: '', trendDirection: 'neutral' as const, icon: '📋' },
+                { title: formatLabel(valueField), value: `$${formatNumber(Object.values(altAgg).reduce((s, v) => s + (v[valueField] || 0), 0))}`, subtitle: `Promedio: $${formatNumber(Object.values(altAgg).reduce((s, v) => s + (v[valueField] || 0), 0) / records.length)}`, trend: '', trendDirection: 'neutral' as const, icon: '💰' },
+              ],
+            },
+          },
+          {
+            component: 'Chart',
+            props: {
+              type: 'bar',
+              title: `${formatLabel(valueField)} por ${formatLabel(altField)}`,
+              data: {
+                labels: altLabels,
+                datasets: [{ label: formatLabel(valueField), data: altLabels.map(l => altAgg[l][valueField] || 0), backgroundColor: '#4F46E5', borderColor: '#4F46E5', borderWidth: 2 }],
+              },
+              options: { responsive: true, xAxis: { label: formatLabel(altField) }, yAxis: { label: formatLabel(valueField) } },
+            },
+          },
+          {
+            component: 'Chart',
+            props: {
+              type: 'doughnut',
+              title: `Cantidad de Ventas por ${formatLabel(altField)}`,
+              data: {
+                labels: altLabels,
+                datasets: [{ label: 'Ventas', data: altLabels.map(l => altCount[l] || 0), backgroundColor: colors.slice(0, altLabels.length), borderColor: '#ffffff', borderWidth: 2 }],
+              },
+              options: { responsive: true },
+            },
+          },
+        ],
+      };
+    }
+  }
 
   // KPI per category
   const kpiItems = categories.map((cat) => {
@@ -749,15 +840,8 @@ function buildCategoryTemplate(
   const pieLabels = categories;
   const pieData = categories.map((cat) => aggregated[cat][valueField] || 0);
   const colors = [
-    '#4F46E5',
-    '#7C3AED',
-    '#2563EB',
-    '#0891B2',
-    '#059669',
-    '#D97706',
-    '#DC2626',
-    '#6366F1',
-    '#8B5CF6',
+    '#4F46E5','#7C3AED','#2563EB','#0891B2','#059669',
+    '#D97706','#DC2626','#6366F1','#8B5CF6','#0EA5E9',
   ];
 
   components.push({
@@ -767,14 +851,13 @@ function buildCategoryTemplate(
       title: `Distribución por ${formatLabel(categoryField)}`,
       data: {
         labels: pieLabels,
-        datasets: [
-          {
-            label: formatLabel(valueField),
-            data: pieData,
-            backgroundColor: colors.slice(0, pieLabels.length),
-            borderWidth: 2,
-          },
-        ],
+        datasets: [{
+          label: formatLabel(valueField),
+          data: pieData,
+          backgroundColor: colors.slice(0, pieLabels.length),
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        }],
       },
       options: { responsive: true },
     },
@@ -808,7 +891,6 @@ function buildCategoryTemplate(
 
   return {
     title: title || `Análisis por ${formatLabel(categoryField)}`,
-    description: `Generado para: "${intent}"`,
     layout: 'vertical',
     columns: columns || 2,
     components,
@@ -838,50 +920,87 @@ function buildCreditTemplate(
   });
 
   const total = records.length;
+  const isFiltered = Object.keys(statusCounts).length === 1;
 
-  // KPI cards for each status
-  const statusColors: Record<string, string> = {
-    al_corriente: '↑',
-    liquidado: '✓',
-    atrasado: '↓',
-    cancelado: '✗',
-  };
-
-  const kpiItems = Object.entries(statusCounts).map(([status, count]) => ({
-    title: formatLabel(status),
-    value: String(count),
-    subtitle: `$${formatNumber(statusTotals[status] || 0)}`,
-    trend: `${((count / total) * 100).toFixed(1)}%`,
-    trendDirection:
-      status === 'al_corriente' || status === 'liquidado'
-        ? ('up' as const)
-        : status === 'atrasado'
-          ? ('down' as const)
-          : ('neutral' as const),
-    icon: statusColors[status] || '•',
-  }));
+  // If all records share one status (filtered query), show breakdown by category instead
+  const kpiItems = isFiltered
+    ? (() => {
+        const [singleStatus, count] = Object.entries(statusCounts)[0];
+        const monto = statusTotals[singleStatus] || 0;
+        const avgMonto = monto / count;
+        const avgPlazo = records.reduce((s, r) => s + (Number(r['plazo_semanas']) || 0), 0) / count;
+        const avgAtrasadas = records.reduce((s, r) => s + (Number(r['semanas_atrasadas'] ?? r['semanas_pagadas']) || 0), 0) / count;
+        const montoVencido = records.reduce((s, r) => s + (Number(r['monto_vencido']) || 0), 0);
+        return [
+          { title: `Total ${formatLabel(singleStatus)}`, value: String(count), subtitle: `$${formatNumber(monto)} en créditos`, trend: '100% del resultado', trendDirection: singleStatus === 'atrasado' ? 'down' as const : 'up' as const, icon: singleStatus === 'atrasado' ? '⚠️' : '✅' },
+          { title: 'Monto Promedio', value: `$${formatNumber(avgMonto)}`, subtitle: 'por crédito', trend: '', trendDirection: 'neutral' as const, icon: '💰' },
+          { title: 'Plazo Promedio', value: `${avgPlazo.toFixed(0)} sem`, subtitle: 'plazo del crédito', trend: '', trendDirection: 'neutral' as const, icon: '📅' },
+          ...(montoVencido > 0 ? [{ title: 'Monto Vencido Total', value: `$${formatNumber(montoVencido)}`, subtitle: 'cartera vencida', trend: `${avgAtrasadas.toFixed(0)} sem prom atrasadas`, trendDirection: 'down' as const, icon: '🚨' }] : []),
+        ];
+      })()
+    : Object.entries(statusCounts).map(([status, count]) => ({
+        title: formatLabel(status),
+        value: String(count),
+        subtitle: `$${formatNumber(statusTotals[status] || 0)}`,
+        trend: `${((count / total) * 100).toFixed(1)}%`,
+        trendDirection:
+          status === 'al_corriente' || status === 'liquidado' ? 'up' as const
+          : status === 'atrasado' ? 'down' as const : 'neutral' as const,
+        icon: ({ al_corriente: '↑', liquidado: '✓', atrasado: '↓', cancelado: '✗' } as Record<string,string>)[status] || '•',
+      }));
 
   components.push({ component: 'KPIGrid', props: { items: kpiItems } });
 
-  // Progress bars for status percentage
-  const progressItems = Object.entries(statusCounts).map(([status, count]) => {
-    const colors: Record<string, string> = {
-      al_corriente: 'bg-emerald-500',
-      liquidado: 'bg-blue-500',
-      atrasado: 'bg-amber-500',
-      cancelado: 'bg-red-500',
-    };
-    return {
-      label: `${formatLabel(status)} (${count})`,
-      value: Math.round((count / total) * 100),
-      color: colors[status] || 'bg-primary',
-    };
-  });
+  // Progress bars
+  const progressItems = isFiltered
+    ? (() => {
+        // Show breakdown by categoria when filtered to one status
+        const catCount = countByField(records, 'categoria');
+        return Object.entries(catCount)
+          .sort((a, b) => b[1] - a[1])
+          .map(([cat, count]) => ({
+            label: `${cat} (${count})`,
+            value: Math.round((count / total) * 100),
+            color: '#D97706',
+          }));
+      })()
+    : Object.entries(statusCounts).map(([status, count]) => {
+        const colors: Record<string, string> = {
+          al_corriente: '#059669', liquidado: '#2563EB',
+          atrasado: '#D97706', cancelado: '#DC2626',
+        };
+        return {
+          label: `${formatLabel(status)} (${count})`,
+          value: Math.round((count / total) * 100),
+          color: colors[status] || '#4F46E5',
+        };
+      });
 
   components.push({
     component: 'ProgressGroup',
-    props: { title: 'Distribución de Estatus', items: progressItems },
+    props: {
+      title: isFiltered ? 'Distribución por Categoría' : 'Distribución de Estatus',
+      items: progressItems,
+    },
   });
+
+  // Chart: if filtered, show bar by estado; otherwise pie by status
+  if (isFiltered && records[0]?.['estado'] !== undefined) {
+    const countByEstado = countByField(records, 'estado');
+    const estadoLabels = Object.keys(countByEstado).sort((a, b) => countByEstado[b] - countByEstado[a]).slice(0, 12);
+    components.push({
+      component: 'Chart',
+      props: {
+        type: 'bar',
+        title: 'Créditos Atrasados por Estado',
+        data: {
+          labels: estadoLabels,
+          datasets: [{ label: 'Atrasados', data: estadoLabels.map(l => countByEstado[l]), backgroundColor: '#D97706', borderColor: '#D97706', borderWidth: 2 }],
+        },
+        options: { responsive: true, xAxis: { label: 'Estado' }, yAxis: { label: 'Cantidad' } },
+      },
+    });
+  }
 
   // MiniCharts for weekly payments if available
   if (records[0]?.['semanas_pagadas'] !== undefined) {
@@ -940,7 +1059,6 @@ function buildCreditTemplate(
 
   return {
     title: title || 'Seguimiento de Créditos',
-    description: `Generado para: "${intent}"`,
     layout: 'vertical',
     columns: columns || 2,
     components,
@@ -964,7 +1082,7 @@ function buildTableTemplate(
 
   return {
     title: title || 'Listado de Registros',
-    description: `Generado para: "${intent}" (${records.length} registros)`,
+    description: `${records.length} registros`,
     layout: 'vertical',
     columns: 2,
     components: [
@@ -1005,7 +1123,6 @@ function buildCardsTemplate(
 
   return {
     title: title || 'Detalle en Cards',
-    description: `Generado para: "${intent}"`,
     layout: 'grid',
     columns: columns || 2,
     components: [
@@ -1031,6 +1148,14 @@ function buildChartTemplate(
   const chartTypeHint = extractHint(intent, 'chartType');
   const metricHint = extractHint(intent, 'metric');
 
+  // Resolve chartType FIRST — used by isPie below
+  const chartType =
+    chartTypeHint ||
+    (/l[ií]nea|line|tendencia/i.test(intent) ? 'line'
+      : /pie|pastel/i.test(intent) ? 'pie'
+      : /donut|dona|doughnut/i.test(intent) ? 'doughnut'
+      : 'bar');
+
   const labelField =
     (groupByHint && stringFields.includes(groupByHint) ? groupByHint : null) ||
     detectGroupField(intent, stringFields) ||
@@ -1051,45 +1176,40 @@ function buildChartTemplate(
   const countByGroup = countByField(records, labelField);
   const labels = Object.keys(useCount ? countByGroup : aggregated).slice(0, 15);
   const colors = [
-    '#4F46E5',
-    '#7C3AED',
-    '#2563EB',
-    '#0891B2',
-    '#059669',
-    '#D97706',
-    '#DC2626',
-    '#6366F1',
+    '#4F46E5', '#7C3AED', '#2563EB', '#0891B2', '#059669',
+    '#D97706', '#DC2626', '#6366F1', '#8B5CF6', '#0EA5E9',
+    '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#14B8A6',
   ];
 
-  const datasets = useCount
-    ? [
-        {
-          label: 'Cantidad de Ventas',
-          data: labels.map((l) => countByGroup[l] || 0),
-          backgroundColor: '#4F46E5',
-          borderColor: '#4F46E5',
-          borderWidth: 2,
-        },
-      ]
-    : valueFields.map((vf, i) => ({
-        label: formatLabel(vf),
-        data: labels.map((l) => aggregated[l][vf] || 0),
-        backgroundColor: colors[i % colors.length],
-        borderColor: colors[i % colors.length],
-        borderWidth: 2,
-      }));
+  const isPie = chartType === 'pie' || chartType === 'doughnut';
 
-  const chartType =
-    chartTypeHint ||
-    (/l[ií]nea|line|tendencia/i.test(intent)
-      ? 'line'
-      : /pie|pastel|donut|dona/i.test(intent)
-        ? 'doughnut'
-        : 'bar');
+  const datasets = useCount
+    ? [{
+        label: 'Cantidad de Ventas',
+        data: labels.map((l) => countByGroup[l] || 0),
+        backgroundColor: isPie ? colors.slice(0, labels.length) : '#4F46E5',
+        borderColor: isPie ? '#ffffff' : '#4F46E5',
+        borderWidth: isPie ? 2 : 2,
+      }]
+    : isPie
+      // For pie/doughnut: collapse to single dataset with one value per label
+      ? [{
+          label: formatLabel(valueFields[0] || 'Valor'),
+          data: labels.map((l) => aggregated[l][valueFields[0]] || 0),
+          backgroundColor: colors.slice(0, labels.length),
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        }]
+      : valueFields.map((vf, i) => ({
+          label: formatLabel(vf),
+          data: labels.map((l) => aggregated[l][vf] || 0),
+          backgroundColor: colors[i % colors.length],
+          borderColor: colors[i % colors.length],
+          borderWidth: 2,
+        }));
 
   return {
     title: title || `Gráfica: ${valueFields.map(formatLabel).join(', ')}`,
-    description: `Generado para: "${intent}"`,
     layout: 'vertical',
     columns: 2,
     components: [

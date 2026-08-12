@@ -340,7 +340,7 @@ function renderChart(props: Record<string, unknown>) {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      title: { display: !!title, text: title || '', font: { size: 14 } },
+      title: { display: false },
       legend: { position: 'bottom' as const },
     },
     scales:
@@ -349,17 +349,13 @@ function renderChart(props: Record<string, unknown>) {
             x: {
               title: {
                 display: !!(options?.xAxis as Record<string, unknown>)?.label,
-                text:
-                  ((options?.xAxis as Record<string, unknown>)
-                    ?.label as string) || '',
+                text: ((options?.xAxis as Record<string, unknown>)?.label as string) || '',
               },
             },
             y: {
               title: {
                 display: !!(options?.yAxis as Record<string, unknown>)?.label,
-                text:
-                  ((options?.yAxis as Record<string, unknown>)
-                    ?.label as string) || '',
+                text: ((options?.yAxis as Record<string, unknown>)?.label as string) || '',
               },
             },
           }
@@ -375,21 +371,19 @@ function renderChart(props: Record<string, unknown>) {
     })),
   };
 
+  const isPieType = type === 'pie' || type === 'doughnut';
+  const chartHeight = isPieType ? 320 : 280;
+
   return (
     <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
-      <div style={{ position: 'relative', height: 280, width: '100%' }}>
-        {type === 'bar' && (
-          <Bar data={chartData as never} options={chartOptions} />
-        )}
-        {(type === 'line' || type === 'area') && (
-          <Line data={chartData as never} options={chartOptions} />
-        )}
-        {type === 'pie' && (
-          <Pie data={chartData as never} options={chartOptions} />
-        )}
-        {type === 'doughnut' && (
-          <Doughnut data={chartData as never} options={chartOptions} />
-        )}
+      {title && (
+        <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>{title}</p>
+      )}
+      <div style={{ position: 'relative', height: chartHeight, width: '100%', ...(isPieType ? { maxWidth: 360, margin: '0 auto' } : {}) }}>
+        {type === 'bar' && <Bar data={chartData as never} options={chartOptions} />}
+        {(type === 'line' || type === 'area') && <Line data={chartData as never} options={chartOptions} />}
+        {type === 'pie' && <Pie data={chartData as never} options={chartOptions} />}
+        {type === 'doughnut' && <Doughnut data={chartData as never} options={chartOptions} />}
       </div>
     </div>
   );
@@ -459,6 +453,24 @@ export default function DynamicRenderer({ config, animated = false }: DynamicRen
     return (
       <div style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
         No UI config available to render.
+      </div>
+    );
+  }
+
+  // Empty components — show no-results state
+  if (config.components.length === 0) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        gap: '0.75rem', padding: '3rem 1rem', textAlign: 'center',
+      }}>
+        <span style={{ fontSize: '2rem' }}>🔍</span>
+        <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.95rem' }}>
+          {config.title !== 'Sin resultados' ? config.title : 'Sin resultados'}
+        </p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', maxWidth: 380 }}>
+          {config.description || 'No se encontraron registros con los filtros aplicados. Intenta con otros criterios.'}
+        </p>
       </div>
     );
   }

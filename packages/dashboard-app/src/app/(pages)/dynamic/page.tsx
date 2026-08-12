@@ -26,6 +26,7 @@ export default function DynamicPage() {
   const [loadingMsg, setLoadingMsg] = useState(0);
   const [uiConfig, setUiConfig] = useState<UIConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [credExpired, setCredExpired] = useState(false);
   const [resultKey, setResultKey] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const loadingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,6 +48,7 @@ export default function DynamicPage() {
     if (!intent.trim()) return;
     setLoading(true);
     setError(null);
+    setCredExpired(false);
     setUiConfig(null);
     try {
       const res = await fetch(`${API_URL}/api/generate-ui`, {
@@ -55,6 +57,10 @@ export default function DynamicPage() {
         body: JSON.stringify({ intent: intent.trim(), dataset: 'ventas-credito' }),
       });
       const json = await res.json();
+      if (res.status === 401 || json.code === 'AWS_CREDENTIALS_EXPIRED') {
+        setCredExpired(true);
+        return;
+      }
       if (!res.ok || !json.success) throw new Error(json.error ?? 'Error generando el dashboard');
       setResultKey((k) => k + 1);
       setUiConfig(json.data as UIConfig);
@@ -269,27 +275,90 @@ export default function DynamicPage() {
           </div>
         )}
 
+        {/* Credentials expired */}
+        {credExpired && !loading && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: '1rem', paddingTop: '4rem', textAlign: 'center',
+            animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both',
+          }}>
+            <div style={{
+              width: 56, height: 56,
+              background: 'rgba(255,159,10,0.1)',
+              borderRadius: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.6rem',
+            }}>🔑</div>
+            <div>
+              <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>Credenciales AWS expiradas</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginTop: '0.35rem', maxWidth: 420 }}>
+                El token de sesión de AWS SSO ha expirado. Actualiza las variables en
+              </p>
+              <code style={{
+                display: 'inline-block', marginTop: '0.5rem',
+                background: 'var(--surface)', border: '1px solid var(--border-color)',
+                borderRadius: 6, padding: '0.25rem 0.6rem',
+                fontSize: '0.8rem', color: 'var(--primary)', fontFamily: 'monospace',
+              }}>packages/mcp-main/.env</code>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                y reinicia el servidor con <code style={{ color: 'var(--primary)', fontFamily: 'monospace' }}>npm run dev:mcp-main</code>
+              </p>
+            </div>
+            <button
+              onClick={() => { setCredExpired(false); setIntent(''); }}
+              style={{
+                marginTop: '0.5rem',
+                background: 'var(--surface)', border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)', padding: '0.45rem 1rem',
+                fontSize: '0.82rem', color: 'var(--text-tertiary)', cursor: 'pointer',
+                fontFamily: 'inherit', fontWeight: 500,
+                transition: 'all var(--t-fast) var(--ease-out-expo)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {/* Error state */}
         {error && !loading && (
           <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: '0.875rem',
-            background: 'rgba(255,69,58,0.07)',
-            border: '1.5px solid rgba(255,69,58,0.25)',
-            borderRadius: 'var(--radius)',
-            padding: '1rem 1.25rem',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: '1rem', paddingTop: '4rem', textAlign: 'center',
             animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both',
-            maxWidth: 600,
           }}>
-            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+            <div style={{
+              width: 56, height: 56,
+              background: 'rgba(255,69,58,0.08)',
+              borderRadius: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.6rem',
+            }}>⚠️</div>
             <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--danger)' }}>Error al generar el dashboard</p>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', marginTop: '0.2rem' }}>{error}</p>
+              <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--danger)' }}>Error al generar el dashboard</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginTop: '0.35rem', maxWidth: 420 }}>{error}</p>
             </div>
+            <button
+              onClick={() => { setError(null); inputRef.current?.focus(); }}
+              style={{
+                background: 'var(--surface)', border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)', padding: '0.45rem 1rem',
+                fontSize: '0.82rem', color: 'var(--text-tertiary)', cursor: 'pointer',
+                fontFamily: 'inherit', fontWeight: 500,
+                transition: 'all var(--t-fast) var(--ease-out-expo)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            >
+              Reintentar
+            </button>
           </div>
         )}
 
         {/* Empty state */}
-        {!loading && !error && !uiConfig && (
+        {!loading && !error && !uiConfig && !credExpired && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             gap: '1.25rem', paddingTop: '5rem', textAlign: 'center',

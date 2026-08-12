@@ -365,7 +365,7 @@ async function runBedrockLoop(
               message: `Query successful. ${stashedRecords.length} records ready. Now call generate_ui with your visualization parameters.`,
             };
           } else if (name === 'generate_ui') {
-            const baseIntent = (args.intent ?? params.intent as string).replace(/\s*\[\w+:[^\]]+\]/g, '').trim();
+            const baseIntent = String(args.intent ?? params.intent ?? '').replace(/\s*\[\w+:[^\]]+\]/g, '').trim();
 
             // Override template when filters imply a specific one
             let template = args.template as string;

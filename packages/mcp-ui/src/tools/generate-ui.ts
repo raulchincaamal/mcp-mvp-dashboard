@@ -481,14 +481,9 @@ function buildGroupedChart(
   const labels = sortedKeys.slice(0, 15);
 
   const colors = [
-    '#4F46E5',
-    '#7C3AED',
-    '#2563EB',
-    '#0891B2',
-    '#059669',
-    '#D97706',
-    '#DC2626',
-    '#6366F1',
+    '#4F46E5', '#0891B2', '#059669', '#D97706', '#DC2626',
+    '#7C3AED', '#6366F1', '#0EA5E9', '#10B981', '#F59E0B',
+    '#EF4444', '#EC4899', '#14B8A6', '#8B5CF6', '#F97316',
   ];
 
   const datasets =
@@ -508,9 +503,8 @@ function buildGroupedChart(
               ? Math.round(val / (countByGroup[l] || 1))
               : val;
           }),
-          // Single dataset → one color per bar; multiple datasets → one color per dataset
-          backgroundColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i % colors.length],
-          borderColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i % colors.length],
+          backgroundColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i * 4 % colors.length],
+          borderColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i * 4 % colors.length],
           borderWidth: 2,
         }));
 

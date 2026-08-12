@@ -1,33 +1,34 @@
 # Active Context — MCP MVP Dashboard
 
 ## Current State
-Phase 1 (MVP local) — pipeline end-to-end validated and working.
+Phase 1 (MVP local) — pipeline end-to-end validated and working, including conversational NLP fallback.
 
 ## Active Architecture: Bedrock Tool-Use Orchestrator
 `mcp-main` runs as a **Fastify HTTP server** (port 4000). The primary entry point is `orchestrate()` in `orchestrator.ts`, which runs a **Bedrock tool-use loop**:
 
 1. Bedrock receives the user intent + tool definitions (`query_data`, `generate_ui`)
-2. Bedrock calls `query_data` → `mcp-gcp-mock` returns records (summary only sent back to Bedrock)
-3. Bedrock calls `generate_ui` → orchestrator injects full records + `COMPONENT_CATALOG` → `mcp-ui` returns UIConfig
+2. Bedrock calls `query_data` → orchestrator normalizes filters (casing, accents) → `mcp-gcp-mock` returns records
+3. Bedrock calls `generate_ui` → orchestrator injects full records + `COMPONENT_CATALOG` + overrides template when needed → `mcp-ui` returns UIConfig (double-parsed from string)
 4. UIConfig cached in Redis (TTL.INTENT = 60 min) and returned
 
-**Fallback**: if Bedrock loop fails → `runHardcodedPipeline()` (same as old `Pipeline.generateUi()` logic, inline in orchestrator.ts)
-
-`pipeline.ts` and `Pipeline` class still exist but are **not used** by the current HTTP routes.
+**Fallback**: if Bedrock loop fails (expired credentials throw 401, other errors → `runHardcodedPipeline()`)
+- `runHardcodedPipeline()` uses local regex parser `interpretIntentWithBedrock()` — no Bedrock call needed
+- Parser handles: categorías, 32 estados de México (with accent normalization), colores, estatus, canal, fechas relativas ("este mes", "año pasado"), lenguaje conversacional
 
 ## Key Source Files
 | File | Responsibility |
 |---|---|
 | `packages/mcp-main/src/index.ts` | Fastify server + MCP stdio server (`--mcp` flag); routes call `orchestrate()` |
-| `packages/mcp-main/src/orchestrator.ts` | **Primary**: `orchestrate()` → Bedrock tool-use loop → `runBedrockLoop()` + `runHardcodedPipeline()` fallback |
+| `packages/mcp-main/src/orchestrator.ts` | **Primary**: `orchestrate()` → Bedrock loop + local parser fallback + filter normalization + template override |
 | `packages/mcp-main/src/pipeline.ts` | `Pipeline.generateUi()` — sequential pipeline class (unused by current routes) |
-| `packages/mcp-main/src/intent-interpreter.ts` | `interpretIntent()` — Bedrock ConverseCommand (used by pipeline.ts fallback path) |
+| `packages/mcp-main/src/intent-interpreter.ts` | `interpretIntent()` — unused (replaced by local parser in orchestrator) |
 | `packages/mcp-main/src/mcp-client.ts` | `McpClient` class, `createMcpClients()` |
-| `packages/mcp-main/src/cache.ts` | Redis helpers: `cacheGet`, `cacheSet`, `generateCacheKey`, `initCache`, `isCacheConnected`, TTL |
+| `packages/mcp-main/src/cache.ts` | Redis helpers |
 | `packages/mcp-gcp-mock/src/index.ts` | MCP Server: `list_datasets`, `query_data` tools |
-| `packages/mcp-ui/src/index.ts` | MCP Server: `generate_ui` tool |
-| `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React renderer |
-| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic page — intent input + API call |
+| `packages/mcp-ui/src/tools/generate-ui.ts` | All template logic: executive, category, credit, table, cards, chart |
+| `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React renderer with staggered animations |
+| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic page — intent input + loading states + error handling |
+| `packages/dashboard-app/src/shared/components/Navbar.tsx` | Top navbar with theme switcher (replaces Sidebar) |
 
 ## HTTP Endpoints (mcp-main)
 | Method | Route | Description |
@@ -35,28 +36,17 @@ Phase 1 (MVP local) — pipeline end-to-end validated and working.
 | GET | `/health` | Health check + cache status |
 | POST | `/api/generate-ui` | Full pipeline: intent → UIConfig via `orchestrate()` |
 
-## MCP Mode (--mcp flag)
-When started with `--mcp`, `index.ts` exposes a `generate_dashboard` MCP tool (stdio) that calls `orchestrate()` and returns a shareable dashboard URL (`DASHBOARD_URL/dashboard?key=<hash>`).
-
-## Bedrock Configuration
-- Model: `us.anthropic.claude-haiku-4-5-20251001-v1:0`
-- Region: `us-east-1`
-- Credentials: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN for SSO)
-- Tool-use loop: max 10 iterations; Nova model forces `query_data` first then `generate_ui`; Claude uses `any` then `auto`
-- Fallback on loop failure: `runHardcodedPipeline()` → `interpretIntentWithBedrock()` + direct MCP calls
+## Orchestrator Smart Behaviors
+- **Filter normalization**: capitalizes proper nouns, maps known estado/estatus/canal values to exact dataset strings including accents
+- **Template override**: when all records share one `estatus_credito`, forces `[template:credit]` regardless of what Bedrock decides
+- **Double-parse**: `mcp-ui` returns JSON.stringify'd config; orchestrator loops `JSON.parse` until object
+- **Hint deduplication**: strips existing `[hint:x]` from intent before adding new ones
 
 ## Known Watch Points
-- `uncaughtException` handler suppresses ioredis errors to prevent process crash
+- `uncaughtException` handler suppresses ioredis errors
 - Redis TLS enabled by default (`REDIS_TLS !== 'false'`)
-- `COMPONENT_CATALOG` is hardcoded in `orchestrator.ts` (10 components)
-- MCP servers must be built (`npm run build`) before they can be spawned as child processes
-- AWS SSO credentials expire — update `.env` on expiry
-- Records are NOT sent back to Bedrock after `query_data` (only a summary) to avoid context overflow
-
-## Roadmap
-| Phase | Status | Description |
-|---|---|---|
-| Phase 1 | **Current** | MVP local — pipeline end-to-end |
-| Phase 2 | Next | API Gateway + Event Bus, multi-channel |
-| Phase 3 | Future | Stateless orchestrator + MCP Server Registry |
-| Phase 4 | Future | Observability + CI/CD for UI artifacts |
+- `COMPONENT_CATALOG` hardcoded in `orchestrator.ts` (10 components)
+- MCP servers must be built (`npm run build`) before spawning
+- AWS SSO credentials expire → 401 response with clear message to user
+- Records NOT sent back to Bedrock after `query_data` (summary only)
+- `dev:mcp-main` uses `node dist/index.js` — must rebuild before restarting

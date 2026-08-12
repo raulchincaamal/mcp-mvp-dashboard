@@ -462,15 +462,40 @@ export default function DynamicRenderer({ config, animated = false }: DynamicRen
     return (
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: '0.75rem', padding: '3rem 1rem', textAlign: 'center',
+        justifyContent: 'center', gap: '1.25rem',
+        padding: '4rem 2rem', textAlign: 'center',
+        animation: 'fadeSlideUp 0.4s var(--ease-out-expo) both',
       }}>
-        <span style={{ fontSize: '2rem' }}>🔍</span>
-        <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.95rem' }}>
-          {config.title !== 'Sin resultados' ? config.title : 'Sin resultados'}
-        </p>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', maxWidth: 380 }}>
-          {config.description || 'No se encontraron registros con los filtros aplicados. Intenta con otros criterios.'}
-        </p>
+        <div style={{
+          width: 64, height: 64,
+          background: 'var(--surface)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 18,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.75rem',
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          🔍
+        </div>
+        <div>
+          <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.2px' }}>
+            Sin resultados
+          </p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.4rem', maxWidth: 360, lineHeight: 1.5 }}>
+            {config.description || 'No se encontraron registros con los filtros aplicados.'}
+          </p>
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+          background: 'var(--surface)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '0.6rem 1rem',
+          fontSize: '0.8rem', color: 'var(--text-tertiary)',
+        }}>
+          <span style={{ color: 'var(--primary)' }}>💡</span>
+          Intenta con otros términos o sin filtros tan específicos
+        </div>
       </div>
     );
   }

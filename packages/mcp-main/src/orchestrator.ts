@@ -109,6 +109,8 @@ const BEDROCK_TOOLS: Tool[] = [
 
 const SYSTEM_PROMPT = `Eres un orquestador de dashboards de ventas. Usas tools para generar dashboards dinámicos.
 
+FECHA ACTUAL: ${new Date().toISOString().split('T')[0]} (usa esta fecha para interpretar "este mes", "hoy", "este año", etc.)
+
 FLUJO OBLIGATORIO:
 1. Llama query_data con los filtros apropiados según el intent del usuario
 2. Llama generate_ui con los parámetros de visualización que TÚ decides
@@ -145,6 +147,42 @@ function isCredentialError(err: unknown): boolean {
   );
 }
 
+// ─── Date normalization ──────────────────────────────────
+// Replaces relative date expressions with concrete date ranges
+// so Nova never has to infer the current date.
+
+function normalizeDateExpressions(intent: string): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+  const lastMonthYear = now.getMonth() === 0 ? year - 1 : year;
+  const lastMonthStr = String(lastMonth).padStart(2, '0');
+
+  const meses: Record<string, string> = {
+    enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
+    julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
+  };
+
+  let normalized = intent
+    .replace(/este\s+mes/gi, `el mes ${year}-${month} (del ${year}-${month}-01 al ${year}-${month}-31)`)
+    .replace(/mes\s+actual/gi, `el mes ${year}-${month} (del ${year}-${month}-01 al ${year}-${month}-31)`)
+    .replace(/mes\s+pasado/gi, `el mes ${lastMonthYear}-${lastMonthStr} (del ${lastMonthYear}-${lastMonthStr}-01 al ${lastMonthYear}-${lastMonthStr}-31)`)
+    .replace(/este\s+a[nñ]o/gi, `el año ${year} (del ${year}-01-01 al ${year}-12-31)`)
+    .replace(/a[nñ]o\s+pasado/gi, `el año ${year - 1} (del ${year - 1}-01-01 al ${year - 1}-12-31)`)
+    .replace(/hoy/gi, now.toISOString().split('T')[0]);
+
+  // Named months without year → use current year
+  for (const [mes, num] of Object.entries(meses)) {
+    const re = new RegExp(`\\b(en\\s+)?${mes}\\b`, 'gi');
+    if (re.test(normalized) && !normalized.match(/\d{4}-\d{2}/)) {
+      normalized = normalized.replace(re, `${mes} ${year} (del ${year}-${num}-01 al ${year}-${num}-31)`);
+    }
+  }
+
+  return normalized;
+}
+
 // ─── Orchestrator entry point ─────────────────────────────────
 
 export interface OrchestrationParams {
@@ -155,9 +193,12 @@ export interface OrchestrationParams {
 }
 
 export async function orchestrate(params: OrchestrationParams): Promise<unknown> {
+  const normalizedIntent = normalizeDateExpressions(params.intent);
+  const normalizedParams = { ...params, intent: normalizedIntent };
+
   const cacheKey = generateCacheKey('ui', {
     dataset: params.dataset ?? 'ventas-credito',
-    intent: params.intent,
+    intent: normalizedIntent,
     filters: params.filters,
     limit: params.limit,
   });
@@ -169,13 +210,13 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
   );
 
   try {
-    const result = await runBedrockLoop(params, gcpClient, uiClient);
+    const result = await runBedrockLoop(normalizedParams, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
   } catch (err) {
-    if (isCredentialError(err)) throw err; // propagate — don't silently fallback
+    if (isCredentialError(err)) throw err;
     console.log(`[orchestrator] Bedrock loop failed (${(err as Error).message}), using hardcoded pipeline`);
-    const result = await runHardcodedPipeline(params, gcpClient, uiClient);
+    const result = await runHardcodedPipeline(normalizedParams, gcpClient, uiClient);
     await cacheSet(cacheKey, result, TTL.INTENT);
     return result;
   } finally {
@@ -196,7 +237,7 @@ async function runBedrockLoop(
       role: 'user',
       content: [
         {
-          text: `Intent del usuario: "${params.intent}"${
+          text: `Fecha actual: ${new Date().toISOString().split('T')[0]}\nIntent del usuario: "${params.intent}"${
             params.filters ? `\nFiltros adicionales: ${JSON.stringify(params.filters)}` : ''
           }${params.limit ? `\nLímite de registros: ${params.limit}` : ''}`,
         },
@@ -292,9 +333,21 @@ async function runBedrockLoop(
                 if (knownMap && knownMap[lower]) {
                   normalizedFilters[k] = knownMap[lower];
                 } else {
-                  // Default: capitalize first letter of each word for proper nouns
                   normalizedFilters[k] = v.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 }
+              } else if (k === 'fecha_venta' && typeof v === 'object' && v !== null) {
+                // Fix Nova's date hallucination: clamp future dates to dataset range (2024-2025)
+                const range = v as Record<string, string>;
+                const now = new Date();
+                const currentYearStr = String(now.getFullYear());
+                const fix = (d: string) => d ? d.replace(/^20(2[6-9]|[3-9]\d)/, currentYearStr) : d;
+                normalizedFilters[k] = {
+                  ...(range.gte ? { gte: fix(range.gte) } : {}),
+                  ...(range.lte ? { lte: fix(range.lte) } : {}),
+                  ...(range.gt  ? { gt:  fix(range.gt)  } : {}),
+                  ...(range.lt  ? { lt:  fix(range.lt)  } : {}),
+                };
+                console.log(`[orchestrator] date fix: ${JSON.stringify(v)} → ${JSON.stringify(normalizedFilters[k])}`);
               } else {
                 normalizedFilters[k] = v;
               }
@@ -319,8 +372,17 @@ async function runBedrockLoop(
             if (stashedRecords && stashedRecords.length > 0) {
               const sample = stashedRecords[0] as Record<string, unknown>;
               const uniqueStatuses = new Set((stashedRecords as Record<string, unknown>[]).map(r => r['estatus_credito']));
+              // Force credit template when all records share same estatus_credito
               if (uniqueStatuses.size === 1 && sample['estatus_credito'] !== undefined) {
                 template = 'credit';
+              }
+              // Force executive when query has no filters and returns many records
+              const hasNoFilters = Object.keys((args as Record<string,unknown>)).every(k => !['filters'].includes(k));
+              const intentLower = (baseIntent).toLowerCase();
+              const isGeneralQuery = /ventas|resumen|este mes|este a.o|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i.test(intentLower)
+                && !/gr.fica|chart|pastel|pie|dona|barra|tabla|listado/i.test(intentLower);
+              if (isGeneralQuery && stashedRecords.length > 50 && template === 'chart') {
+                template = 'executive';
               }
             }
             const enhancedIntent = [

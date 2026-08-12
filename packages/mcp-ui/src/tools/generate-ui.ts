@@ -1169,7 +1169,11 @@ function buildChartTemplate(
 
   const aggregated = aggregateByField(records, labelField, valueFields);
   const countByGroup = countByField(records, labelField);
-  const labels = Object.keys(useCount ? countByGroup : aggregated).slice(0, 15);
+  const labels = Object.keys(useCount ? countByGroup : aggregated)
+    .sort((a, b) => useCount
+      ? (countByGroup[b] - countByGroup[a])
+      : ((aggregated[b][valueFields[0]] || 0) - (aggregated[a][valueFields[0]] || 0)))
+    .slice(0, 15);
   const colors = [
     '#4F46E5', '#7C3AED', '#2563EB', '#0891B2', '#059669',
     '#D97706', '#DC2626', '#6366F1', '#8B5CF6', '#0EA5E9',
@@ -1182,12 +1186,11 @@ function buildChartTemplate(
     ? [{
         label: 'Cantidad de Ventas',
         data: labels.map((l) => countByGroup[l] || 0),
-        backgroundColor: isPie ? colors.slice(0, labels.length) : '#4F46E5',
-        borderColor: isPie ? '#ffffff' : '#4F46E5',
-        borderWidth: isPie ? 2 : 2,
+        backgroundColor: isPie ? colors.slice(0, labels.length) : colors.slice(0, labels.length),
+        borderColor: isPie ? '#ffffff' : colors.slice(0, labels.length),
+        borderWidth: 2,
       }]
     : isPie
-      // For pie/doughnut: collapse to single dataset with one value per label
       ? [{
           label: formatLabel(valueFields[0] || 'Valor'),
           data: labels.map((l) => aggregated[l][valueFields[0]] || 0),
@@ -1198,26 +1201,35 @@ function buildChartTemplate(
       : valueFields.map((vf, i) => ({
           label: formatLabel(vf),
           data: labels.map((l) => aggregated[l][vf] || 0),
-          backgroundColor: colors[i % colors.length],
-          borderColor: colors[i % colors.length],
+          backgroundColor: valueFields.length === 1 ? colors.slice(0, labels.length) : colors[i * 4 % colors.length],
+          borderColor: valueFields.length === 1 ? colors.slice(0, labels.length) : colors[i * 4 % colors.length],
           borderWidth: 2,
         }));
 
+  const totalRecords = records.length;
+  const totalValue = useCount ? totalRecords : records.reduce((s, r) => s + (Number(r[valueFields[0]]) || 0), 0);
+  const kpiItems = [
+    { title: 'Total Registros', value: formatNumber(totalRecords), subtitle: `${totalRecords} operaciones`, trend: '', trendDirection: 'neutral' as const, icon: '📋' },
+    ...(!useCount && valueFields[0] ? [{ title: formatLabel(valueFields[0]), value: `$${formatNumber(totalValue)}`, subtitle: `Promedio: $${formatNumber(totalValue / totalRecords)}`, trend: '', trendDirection: 'neutral' as const, icon: '💰' }] : []),
+    { title: formatLabel(labelField), value: String(labels.length), subtitle: 'grupos distintos', trend: '', trendDirection: 'neutral' as const, icon: '📊' },
+  ];
+
   return {
-    title: title || `Gráfica: ${valueFields.map(formatLabel).join(', ')}`,
+    title: title || `Gráfica: ${useCount ? 'Ventas' : valueFields.map(formatLabel).join(', ')}`,
     layout: 'vertical',
     columns: 2,
     components: [
+      { component: 'KPIGrid', props: { items: kpiItems } },
       {
         component: 'Chart',
         props: {
           type: chartType,
-          title: `${valueFields.map(formatLabel).join(', ')} por ${formatLabel(labelField)}`,
+          title: `${useCount ? 'Cantidad de Ventas' : valueFields.map(formatLabel).join(', ')} por ${formatLabel(labelField)}`,
           data: { labels, datasets },
           options: {
             responsive: true,
             xAxis: { label: formatLabel(labelField) },
-            yAxis: { label: valueFields.map(formatLabel).join(', ') },
+            yAxis: { label: useCount ? 'Ventas' : valueFields.map(formatLabel).join(', ') },
           },
         },
       },

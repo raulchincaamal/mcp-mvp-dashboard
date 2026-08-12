@@ -442,7 +442,7 @@ export default function DynamicPage() {
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
               >
-                ← Nuevo dashboard
+                ‹ Nuevo dashboard
               </button>
             </div>
 

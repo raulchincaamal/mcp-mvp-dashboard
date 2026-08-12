@@ -13,7 +13,7 @@ dist/
 .env.local
 
 # MCP config (may contain credentials)
-.amazonq/mcp.json
+.amazonq/
 
 .kiro
 

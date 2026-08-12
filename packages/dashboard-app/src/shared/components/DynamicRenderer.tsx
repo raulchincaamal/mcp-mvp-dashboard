@@ -81,42 +81,27 @@ function renderStatCard(props: Record<string, unknown>) {
   const value = props.value as string;
   const subtitle = props.subtitle as string | undefined;
   const trend = props.trend as string | undefined;
-  const trendDirection = props.trendDirection as
-    | 'up'
-    | 'down'
-    | 'neutral'
-    | undefined;
-
-  const trendColor =
-    trendDirection === 'up'
-      ? 'text-emerald-600'
-      : trendDirection === 'down'
-        ? 'text-red-500'
-        : 'text-muted-foreground';
-
-  const trendIcon =
-    trendDirection === 'up' ? '↑' : trendDirection === 'down' ? '↓' : '';
+  const trendDirection = props.trendDirection as 'up' | 'down' | 'neutral' | undefined;
+  const trendColor = trendDirection === 'up' ? '#30d158' : trendDirection === 'down' ? 'var(--danger)' : 'var(--text-tertiary)';
+  const trendIcon = trendDirection === 'up' ? '↑' : trendDirection === 'down' ? '↓' : '';
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+    <div style={{
+      background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)',
+      border: '1px solid var(--border-color)', borderRadius: 'var(--radius)',
+      padding: '1.5rem', boxShadow: 'var(--shadow-sm)',
+      animation: 'cardEnter 0.5s var(--ease-out-expo) both',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text-tertiary)' }}>{title}</p>
         {typeof props.icon === 'string' && props.icon && (
-          <span className="text-muted-foreground text-lg">{props.icon}</span>
+          <span style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{props.icon}</span>
         )}
       </div>
-      <div className="mt-2">
-        <p className="text-3xl font-bold tracking-tight">{value}</p>
-      </div>
-      <div className="mt-1 flex items-center gap-2">
-        {trend && (
-          <span className={`text-sm font-medium ${trendColor}`}>
-            {trendIcon} {trend}
-          </span>
-        )}
-        {subtitle && (
-          <span className="text-sm text-muted-foreground">{subtitle}</span>
-        )}
+      <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', marginTop: '0.5rem', color: 'var(--text)' }}>{value}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+        {trend && <span style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}>{trendIcon} {trend}</span>}
+        {subtitle && <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>{subtitle}</span>}
       </div>
     </div>
   );
@@ -138,11 +123,9 @@ function renderKPIGrid(props: Record<string, unknown>) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
       {items.map((item, i) => (
-        <div key={i}>
-          {renderStatCard(item as unknown as Record<string, unknown>)}
-        </div>
+        <div key={i}>{renderStatCard(item as unknown as Record<string, unknown>)}</div>
       ))}
     </div>
   );
@@ -158,18 +141,13 @@ function renderProgressBar(props: Record<string, unknown>) {
   const showValue = props.showValue !== false;
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-medium">{label}</span>
-        {showValue && (
-          <span className="text-sm text-muted-foreground">{value}%</span>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</span>
+        {showValue && <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>{value}%</span>}
       </div>
-      <div className="h-2.5 w-full rounded-full bg-secondary">
-        <div
-          className={`h-full rounded-full transition-all ${color}`}
-          style={{ width: `${value}%` }}
-        />
+      <div style={{ height: 8, width: '100%', borderRadius: 99, background: 'var(--surface-3)' }}>
+        <div style={{ height: '100%', borderRadius: 99, width: `${value}%`, background: color.startsWith('#') || color.startsWith('rgb') ? color : 'var(--primary)', transition: 'width 0.6s var(--ease-out-expo)' }} />
       </div>
     </div>
   );
@@ -189,13 +167,9 @@ function renderProgressGroup(props: Record<string, unknown>) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
-      {title && <p className="text-base font-semibold">{title}</p>}
-      {items.map((item, i) => (
-        <div key={i}>
-          {renderProgressBar(item as unknown as Record<string, unknown>)}
-        </div>
-      ))}
+    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {title && <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)' }}>{title}</p>}
+      {items.map((item, i) => <div key={i}>{renderProgressBar(item as unknown as Record<string, unknown>)}</div>)}
     </div>
   );
 }
@@ -216,37 +190,20 @@ function renderTransactionList(props: Record<string, unknown>) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
-      {title && <p className="text-base font-semibold mb-4">{title}</p>}
-      <div className="space-y-3">
+    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+      {title && <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>{title}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         {items.map((item, i) => {
-          const amountColor =
-            item.status === 'positive'
-              ? 'text-emerald-600'
-              : item.status === 'negative'
-                ? 'text-red-500'
-                : 'text-foreground';
-
+          const amountColor = item.status === 'positive' ? '#30d158' : item.status === 'negative' ? 'var(--danger)' : 'var(--text)';
           return (
-            <div
-              key={i}
-              className="flex items-center justify-between py-2 border-b last:border-0"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{item.title}</p>
-                {item.subtitle && (
-                  <p className="text-xs text-muted-foreground">
-                    {item.subtitle}
-                  </p>
-                )}
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: i < items.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
+                {item.subtitle && <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{item.subtitle}</p>}
               </div>
-              <div className="text-right ml-4">
-                <p className={`text-sm font-semibold ${amountColor}`}>
-                  {item.amount}
-                </p>
-                {item.date && (
-                  <p className="text-xs text-muted-foreground">{item.date}</p>
-                )}
+              <div style={{ textAlign: 'right', marginLeft: '1rem' }}>
+                <p style={{ fontSize: '0.875rem', fontWeight: 600, color: amountColor }}>{item.amount}</p>
+                {item.date && <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{item.date}</p>}
               </div>
             </div>
           );
@@ -293,10 +250,10 @@ function renderMiniChart(props: Record<string, unknown>) {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
-      <p className="text-sm font-medium text-muted-foreground">{title}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      <div className="h-[60px] mt-3">
+    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+      <p style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text-tertiary)' }}>{title}</p>
+      <p style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.4px', marginTop: '0.25rem', color: 'var(--text)' }}>{value}</p>
+      <div style={{ height: 60, marginTop: '0.75rem' }}>
         <Line data={chartData as never} options={chartOptions} />
       </div>
     </div>
@@ -315,17 +272,14 @@ function renderDataSummary(props: Record<string, unknown>) {
   if (!columns || !rows) return null;
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-      {title && <p className="text-base font-semibold p-6 pb-3">{title}</p>}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+      {title && <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)', padding: '1.5rem 1.5rem 0.75rem' }}>{title}</p>}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <thead>
-            <tr className="border-b bg-muted/50">
+            <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
               {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className="text-left px-4 py-3 font-medium text-muted-foreground"
-                >
+                <th key={col.key} style={{ textAlign: 'left', padding: '0.6rem 1rem', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--text-tertiary)', background: 'var(--surface-2)' }}>
                   {col.label}
                 </th>
               ))}
@@ -333,15 +287,11 @@ function renderDataSummary(props: Record<string, unknown>) {
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr
-                key={i}
-                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-              >
+              <tr key={i} style={{ borderBottom: i < rows.length - 1 ? '1px solid var(--border-color)' : 'none' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 {columns.map((col, ci) => (
-                  <td
-                    key={col.key}
-                    className={`px-4 py-3 ${ci === 0 && highlightFirst ? 'font-medium' : ''}`}
-                  >
+                  <td key={col.key} style={{ padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontWeight: ci === 0 && highlightFirst ? 600 : 400 }}>
                     {formatCellValue(row[col.key])}
                   </td>
                 ))}
@@ -426,8 +376,8 @@ function renderChart(props: Record<string, unknown>) {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
-      <div className="relative h-[280px] w-full">
+    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ position: 'relative', height: 280, width: '100%' }}>
         {type === 'bar' && (
           <Bar data={chartData as never} options={chartOptions} />
         )}
@@ -476,7 +426,7 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
 
   if (!Component) {
     return (
-      <div className="p-2 border border-dashed border-destructive rounded text-sm text-destructive">
+      <div style={{ padding: '0.5rem 0.75rem', border: '1.5px dashed var(--danger)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--danger)', opacity: 0.7 }}>
         Unknown component: {component}
       </div>
     );
@@ -499,23 +449,20 @@ interface DynamicRendererProps {
 export default function DynamicRenderer({ config }: DynamicRendererProps) {
   if (!config || !config.components) {
     return (
-      <div className="p-4 text-sm text-muted-foreground">
+      <div style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
         No UI config available to render.
       </div>
     );
   }
 
-  const gridClass =
-    config.layout === 'grid'
-      ? `grid gap-4 grid-cols-1 md:grid-cols-${config.columns || 2}`
-      : 'flex flex-col gap-4';
+  const isGrid = config.layout === 'grid';
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {config.description && (
-        <p className="text-sm text-muted-foreground">{config.description}</p>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{config.description}</p>
       )}
-      <div className={gridClass}>
+      <div style={isGrid ? { display: 'grid', gridTemplateColumns: `repeat(${config.columns || 2}, 1fr)`, gap: '1rem' } : { display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {config.components.map((comp, i) => (
           <RenderComponent key={i} config={comp} />
         ))}

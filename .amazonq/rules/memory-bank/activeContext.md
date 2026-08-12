@@ -1,44 +1,51 @@
 # Active Context — MCP MVP Dashboard
 
 ## Current State
-Phase 1 (MVP local) — pipeline end-to-end validated.
+Phase 1 (MVP local) — pipeline end-to-end validated and working.
 
-## Active Architecture Decision
-mcp-main exposes **two modes** from the same binary:
-- `PORT=4000 node dist/index.js` → Fastify HTTP server (for frontend + Alexa)
-- `node dist/index.js --mcp` → MCP Server via stdio (for IDE)
+## Active Architecture: Sequential Pipeline
+`mcp-main` runs as a **Fastify HTTP server** (port 4000). The pipeline is sequential (not Bedrock tool-use loop):
 
-Bedrock is now the **orchestrator** (not just a parser). It receives the user intent + tool definitions and decides dynamically which tools to call (query_data, generate_ui) and in what order via a ConverseCommand tool-use loop.
+1. `interpretIntent()` calls Bedrock ConverseCommand with a system prompt → returns ParsedIntent JSON
+2. `getComponentCatalog()` calls library-context MCP → hardcoded component list augmented by regex
+3. `queryData()` calls mcp-gcp-mock with merged filters
+4. `uiClient.callTool('generate_ui')` calls mcp-ui with enhanced intent + records + catalog
+5. Result cached in Redis and returned
 
-## MCP Tool: generate_dashboard
-```typescript
-{
-  intent: string;           // Natural language (Spanish)
-  dataset?: string;         // Default: "ventas-credito"
-  filters?: Record<string, unknown>;
-  limit?: number;
-}
-// Returns: { url, key, title, cached }
-```
+## Key Source Files
+| File | Responsibility |
+|---|---|
+| `packages/mcp-main/src/index.ts` | Fastify server setup, route registration |
+| `packages/mcp-main/src/pipeline.ts` | `Pipeline.generateUi()` — sequential orchestration |
+| `packages/mcp-main/src/intent-interpreter.ts` | `interpretIntent()` — Bedrock ConverseCommand |
+| `packages/mcp-main/src/mcp-client.ts` | `McpClient` class, `createMcpClients()` |
+| `packages/mcp-main/src/cache.ts` | Redis helpers: `cacheGet`, `cacheSet`, `generateCacheKey`, TTL constants |
+| `packages/mcp-main/src/orchestrator.ts` | (exists — may contain alternate Bedrock tool-use orchestration) |
+| `packages/mcp-gcp-mock/src/index.ts` | MCP Server: `list_datasets`, `query_data` tools |
+| `packages/mcp-ui/src/index.ts` | MCP Server: `generate_ui` tool |
+| `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React renderer |
+| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic page — intent input + API call |
 
-## HTTP Endpoint: POST /api/generate-ui
-```bash
-curl -X POST http://localhost:4000/api/generate-ui \
-  -H "Content-Type: application/json" \
-  -d '{ "intent": "gráfica de motos por estado", "dataset": "ventas-credito" }'
-```
+## HTTP Endpoints (mcp-main)
+| Method | Route | Description |
+|---|---|---|
+| GET | `/health` | Health check + MCP server connection status |
+| POST | `/api/generate-ui` | Full pipeline: intent → UIConfig |
+| POST | `/api/generate-chart` | Chart-only pipeline |
+| POST | `/api/generate-dashboard` | Dashboard pipeline |
 
-## Bedrock Tool-Use Loop (orchestrator.ts)
-1. Send intent + tool definitions to Bedrock
-2. Bedrock responds with tool_use → mcp-main executes the tool via McpClient
-3. Tool result sent back to Bedrock
-4. Loop until stopReason = end_turn → UIConfig returned
+## Bedrock Configuration
+- Model: `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+- Region: `us-east-1`
+- Credentials: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN for SSO)
+- Fallback on error: executive template, no filters, limit 100
 
-## Known Issues / Watch Points
+## Known Watch Points
 - `uncaughtException` handler suppresses ioredis errors to prevent process crash
 - Redis TLS enabled by default (`REDIS_TLS !== 'false'`)
-- `DASHBOARD_URL` env var must be set for the returned URL to be valid
-- Component catalog is hardcoded in `orchestrator.ts` COMPONENT_CATALOG constant
+- Component catalog is hardcoded in `pipeline.ts` `parseComponentsFromContext()` + regex augmentation
+- MCP servers must be built (`npm run build`) before mcp-main can spawn them as child processes
+- AWS SSO credentials expire — update `.env` on expiry
 
 ## Roadmap
 | Phase | Status | Description |

@@ -442,11 +442,19 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
 
 // ─── Main DynamicRenderer ──────────────────────────────────
 
+const STAGGER_STYLES = `
+  @keyframes componentEnter {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+`;
+
 interface DynamicRendererProps {
   config: UIConfig;
+  animated?: boolean;
 }
 
-export default function DynamicRenderer({ config }: DynamicRendererProps) {
+export default function DynamicRenderer({ config, animated = false }: DynamicRendererProps) {
   if (!config || !config.components) {
     return (
       <div style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
@@ -459,12 +467,25 @@ export default function DynamicRenderer({ config }: DynamicRendererProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {animated && <style>{STAGGER_STYLES}</style>}
       {config.description && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{config.description}</p>
       )}
       <div style={isGrid ? { display: 'grid', gridTemplateColumns: `repeat(${config.columns || 2}, 1fr)`, gap: '1rem' } : { display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {config.components.map((comp, i) => (
-          <RenderComponent key={i} config={comp} />
+          <div
+            key={i}
+            style={animated ? {
+              opacity: 0,
+              animationName: 'componentEnter',
+              animationDuration: '0.6s',
+              animationTimingFunction: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              animationFillMode: 'forwards',
+              animationDelay: `${i * 0.08}s`,
+            } : undefined}
+          >
+            <RenderComponent config={comp} />
+          </div>
         ))}
       </div>
     </div>

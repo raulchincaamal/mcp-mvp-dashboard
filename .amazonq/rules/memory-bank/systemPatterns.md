@@ -1,14 +1,29 @@
 # System Patterns — MCP MVP Dashboard
 
 ## Architecture Pattern
-Sequential MCP pipeline orchestrated by a central HTTP server. Each MCP server is a child process communicating via stdio.
+Bedrock tool-use loop orchestrated by a central HTTP server. Each MCP server is a child process communicating via stdio. `orchestrator.ts` is the primary entry point; `pipeline.ts` exists but is unused by current routes.
 
 ```
 mcp-main (Fastify :4000)
-  ├── McpClient → mcp-gcp-mock (child process, stdio)
-  ├── McpClient → mcp-ui (child process, stdio)
-  └── McpClient → library-context (node_modules, stdio)
+  └── orchestrate() → createMcpClients() per request
+        ├── McpClient → mcp-gcp-mock (child process, stdio)
+        └── McpClient → mcp-ui (child process, stdio)
 ```
+
+## Orchestrator Pattern (`orchestrate()` — PRIMARY)
+Single entry point for all HTTP routes:
+1. Check Redis cache by SHA-256 hash of `{ dataset, intent, filters, limit }`
+2. `createMcpClients()` → spawns mcp-gcp-mock + mcp-ui child processes
+3. `runBedrockLoop()` — Bedrock tool-use loop (max 10 iterations):
+   - Bedrock calls `query_data` → orchestrator calls `gcpClient.callTool('query_data', ...)` → returns summary (not full records) to Bedrock
+   - Bedrock calls `generate_ui` → orchestrator injects `stashedRecords` + `COMPONENT_CATALOG` → calls `uiClient.callTool('generate_ui', ...)` → UIConfig
+4. On loop failure → `runHardcodedPipeline()` fallback (Bedrock ConverseCommand for intent parsing + direct MCP calls)
+5. Cache UIConfig in Redis (TTL.INTENT = 60 min)
+6. Disconnect MCP clients in `finally` block
+
+## Nova vs Claude Tool-Use Difference
+- Nova models: `toolChoice` forced to `{ tool: { name: 'query_data' } }` on first call, then `{ tool: { name: 'generate_ui' } }`
+- Claude models: `toolChoice: { any: {} }` on first call, then `{ auto: {} }`
 
 ## MCP Client Pattern
 `McpClient` wraps `@modelcontextprotocol/sdk` Client. Two connection methods:
@@ -17,21 +32,13 @@ mcp-main (Fastify :4000)
 
 Tool responses are `content[]` arrays; text content is extracted and JSON-parsed automatically.
 
-## Pipeline Class Pattern (`Pipeline.generateUi()`)
-Single entry point for the full pipeline:
-1. Check Redis cache by SHA-256 hash of `{ dataset, intent, filters, limit }`
-2. `interpretIntent(intent)` → Bedrock ConverseCommand → `ParsedIntent`
-3. `getComponentCatalog()` → library-context MCP → hardcoded list + regex augmentation
-4. Merge `parsed.filters` + `params.filters` (params override)
-5. `queryData(dataset, filters, limit)` → mcp-gcp-mock `query_data`
-6. Build enhanced intent: `"<intent> [groupBy:x] [metric:x] [metricField:x] [chartType:x] [template:x]"`
-7. `uiClient.callTool('generate_ui', { intent, records, componentCatalog, title, layout, columns })`
-8. Cache UIConfig in Redis (TTL.INTENT = 60 min)
+## Pipeline Class Pattern (`Pipeline.generateUi()` — UNUSED)
+`pipeline.ts` contains a sequential pipeline class that is no longer called by HTTP routes. It uses `interpretIntent()` + `library-context` MCP + direct `mcp-gcp-mock` + `mcp-ui` calls. Kept for reference.
 
 ## Intent Interpreter Pattern (`interpretIntent()`)
+- Used only by `pipeline.ts` (unused path) and `runHardcodedPipeline()` fallback
 - Sends system prompt + user intent to Bedrock via `ConverseCommand`
-- System prompt defines all dataset fields + JSON output schema + inference rules
-- Strips markdown code fences from response before JSON.parse
+- Strips markdown code fences before JSON.parse
 - Returns `ParsedIntent` with defaults on any error
 
 ## MCP Server Pattern (mcp-gcp-mock, mcp-ui)
@@ -68,14 +75,13 @@ Switch-based dispatch in `RenderComponent`:
 `mcp-dashboard:<prefix>:<sha256(JSON.stringify(data))>`
 
 ## Component Catalog Pattern
-Hardcoded list of 19 known components in `parseComponentsFromContext()` (pipeline.ts).
-Augmented at runtime by regex `/**(\w+)**/g` on library-context response text.
+`COMPONENT_CATALOG` is a hardcoded array of 10 components in `orchestrator.ts`, injected directly into `generate_ui` calls. Not fetched from library-context at runtime.
 
 ## Build Pattern
 All MCP packages (`mcp-gcp-mock`, `mcp-ui`, `mcp-main`) use `tsup` for bundling.
 `npm run build` must be run after source changes before child processes can be spawned.
 
 ## Error Handling
-- Bedrock failures → fallback `ParsedIntent` (executive template, no filters, limit 100)
+- Bedrock loop failure → `runHardcodedPipeline()` fallback
 - Redis unavailable → `uncaughtException` handler suppresses ioredis errors; pipeline continues
 - Unknown UIConfig component → red dashed border with component name

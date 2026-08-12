@@ -1,14 +1,13 @@
 'use client';
 
-import Sidebar from '@/shared/components/Sidebar';
+import Navbar from '@/shared/components/Navbar';
 
 export default function PagesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
+    <div style={{ minHeight: '100vh' }}>
+      <Navbar />
       <main style={{
-        flex: 1,
-        marginLeft: 248,
+        paddingTop: 56,
         minHeight: '100vh',
         background: 'var(--bg)',
         transition: 'background var(--t-slow) var(--ease-in-out)',

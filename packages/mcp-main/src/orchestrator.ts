@@ -258,11 +258,43 @@ async function runBedrockLoop(
         try {
           if (name === 'query_data') {
             const rawFilters = (args.filters ?? {}) as Record<string, unknown>;
-            // Normalize string filter values to match dataset casing
+            // Normalize filter values to match dataset casing
+            // Use known value maps for fields with specific casing
+            const KNOWN_VALUES: Record<string, Record<string, string>> = {
+              estado: {
+                'nuevo leon': 'Nuevo León', 'nuevo león': 'Nuevo León',
+                'ciudad de mexico': 'Ciudad de México', 'ciudad de méxico': 'Ciudad de México', 'cdmx': 'Ciudad de México',
+                'estado de mexico': 'Estado de México', 'estado de méxico': 'Estado de México',
+                'michoacan': 'Michoacán', 'michoacán': 'Michoacán',
+                'queretaro': 'Querétaro', 'querétaro': 'Querétaro',
+                'yucatan': 'Yucatán', 'yucatán': 'Yucatán',
+                'san luis potosi': 'San Luis Potosí', 'san luis potosí': 'San Luis Potosí',
+                'baja california sur': 'Baja California Sur',
+                'baja california': 'Baja California',
+                'quintana roo': 'Quintana Roo',
+              },
+              estatus_credito: {
+                'al corriente': 'al_corriente', 'alcorriente': 'al_corriente',
+                'atrasado': 'atrasado', 'liquidado': 'liquidado', 'cancelado': 'cancelado',
+              },
+              canal_venta: {
+                'en linea': 'en_linea', 'en línea': 'en_linea', 'online': 'en_linea',
+                'tienda fisica': 'tienda_fisica', 'tienda física': 'tienda_fisica',
+                'telefono': 'telefono', 'teléfono': 'telefono',
+              },
+            };
+
             const normalizedFilters: Record<string, unknown> = {};
             for (const [k, v] of Object.entries(rawFilters)) {
               if (typeof v === 'string') {
-                normalizedFilters[k] = v.charAt(0).toUpperCase() + v.slice(1);
+                const lower = v.toLowerCase();
+                const knownMap = KNOWN_VALUES[k];
+                if (knownMap && knownMap[lower]) {
+                  normalizedFilters[k] = knownMap[lower];
+                } else {
+                  // Default: capitalize first letter of each word for proper nouns
+                  normalizedFilters[k] = v.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                }
               } else {
                 normalizedFilters[k] = v;
               }
@@ -280,15 +312,24 @@ async function runBedrockLoop(
               message: `Query successful. ${stashedRecords.length} records ready. Now call generate_ui with your visualization parameters.`,
             };
           } else if (name === 'generate_ui') {
-            // Nova decides the visualization — we inject records + catalog
             const baseIntent = (args.intent ?? params.intent as string).replace(/\s*\[\w+:[^\]]+\]/g, '').trim();
+
+            // Override template when filters imply a specific one
+            let template = args.template as string;
+            if (stashedRecords && stashedRecords.length > 0) {
+              const sample = stashedRecords[0] as Record<string, unknown>;
+              const uniqueStatuses = new Set((stashedRecords as Record<string, unknown>[]).map(r => r['estatus_credito']));
+              if (uniqueStatuses.size === 1 && sample['estatus_credito'] !== undefined) {
+                template = 'credit';
+              }
+            }
             const enhancedIntent = [
               baseIntent,
               args.groupBy ? `[groupBy:${args.groupBy}]` : '',
               args.metric ? `[metric:${args.metric}]` : '',
               args.metricField ? `[metricField:${args.metricField}]` : '',
               args.chartType ? `[chartType:${args.chartType}]` : '',
-              args.template ? `[template:${args.template}]` : '',
+              template ? `[template:${template}]` : '',
             ].filter(Boolean).join(' ');
 
             let rawUiConfig = await uiClient.callTool('generate_ui', {
@@ -350,6 +391,16 @@ async function runHardcodedPipeline(
   console.log('[orchestrator] fallback parsed intent:', JSON.stringify(parsedIntent));
 
   const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
+  // Normalize estado values to match dataset accents
+  if (typeof filters['estado'] === 'string') {
+    const estadoMap: Record<string, string> = {
+      'nuevo leon': 'Nuevo León', 'michoacan': 'Michoacán', 'queretaro': 'Querétaro',
+      'yucatan': 'Yucatán', 'san luis potosi': 'San Luis Potosí',
+      'ciudad de mexico': 'Ciudad de México', 'estado de mexico': 'Estado de México',
+    };
+    const lower = (filters['estado'] as string).toLowerCase();
+    if (estadoMap[lower]) filters['estado'] = estadoMap[lower];
+  }
   for (const [key, value] of Object.entries(filters)) {
     if (Array.isArray(value) && value.length >= 8) delete filters[key];
   }
@@ -393,96 +444,156 @@ async function interpretIntentWithBedrock(intent: string): Promise<{
   template: string;
   limit: number | null;
 }> {
-  const fallback = { filters: {}, groupBy: null, metric: 'count', chartType: null, template: 'executive', limit: 500 };
+  const i = intent.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents for matching
+    .replace(/[¿?¡!]/g, '');
 
-  // ─── Local regex parser (no Bedrock needed) ───────────────
-  const i = intent.toLowerCase();
   const filters: Record<string, unknown> = {};
 
-  // Categorías
+  // ─── Categorías ───────────────────────────────────────────
   const categorias: Record<string, string> = {
-    moto: 'Motos', motos: 'Motos',
-    celular: 'Celulares', celulares: 'Celulares', telefono: 'Celulares', teléfono: 'Celulares',
-    bicicleta: 'Bicicletas Eléctricas', bicicletas: 'Bicicletas Eléctricas',
-    pantalla: 'Pantallas/TV', pantallas: 'Pantallas/TV', tv: 'Pantallas/TV', televisor: 'Pantallas/TV',
-    audio: 'Audio', bocina: 'Audio', bocinas: 'Audio',
-    tablet: 'Tablets', tablets: 'Tablets',
-    consola: 'Consolas', consolas: 'Consolas', nintendo: 'Consolas', playstation: 'Consolas', xbox: 'Consolas',
-    clima: 'Climatización', climatización: 'Climatización', ac: 'Climatización', aire: 'Climatización',
+    moto: 'Motos', motos: 'Motos', motocicleta: 'Motos', motocicletas: 'Motos',
+    celular: 'Celulares', celulares: 'Celulares', smartphone: 'Celulares', smartphon: 'Celulares', telefono: 'Celulares', telefonos: 'Celulares', movil: 'Celulares',
+    bicicleta: 'Bicicletas Eléctricas', bicicletas: 'Bicicletas Eléctricas', bici: 'Bicicletas Eléctricas', electrica: 'Bicicletas Eléctricas',
+    pantalla: 'Pantallas/TV', pantallas: 'Pantallas/TV', tv: 'Pantallas/TV', tele: 'Pantallas/TV', television: 'Pantallas/TV', televisor: 'Pantallas/TV', televisores: 'Pantallas/TV',
+    audio: 'Audio', bocina: 'Audio', bocinas: 'Audio', altavoz: 'Audio', altavoces: 'Audio', parlante: 'Audio',
+    tablet: 'Tablets', tablets: 'Tablets', ipad: 'Tablets',
+    consola: 'Consolas', consolas: 'Consolas', nintendo: 'Consolas', playstation: 'Consolas', xbox: 'Consolas', switch: 'Consolas', videojuego: 'Consolas',
+    clima: 'Climatización', climatizacion: 'Climatización', ac: 'Climatización', aire: 'Climatización', minisplit: 'Climatización', ventilador: 'Climatización',
     accesorio: 'Accesorios', accesorios: 'Accesorios',
   };
   for (const [kw, val] of Object.entries(categorias)) {
-    if (i.includes(kw)) { filters['categoria'] = val; break; }
+    const re = new RegExp(`\\b${kw}\\b`);
+    if (re.test(i)) { filters['categoria'] = val; break; }
   }
 
-  // Colores
-  const colores = ['rojo', 'azul', 'negro', 'blanco', 'gris', 'verde', 'amarillo', 'morado', 'rosa', 'naranja', 'lila', 'dorado', 'plateado'];
+  // ─── Estados de México ────────────────────────────────────
+  const estados: Record<string, string> = {
+    'aguascalientes': 'Aguascalientes',
+    'baja california': 'Baja California', 'baja california norte': 'Baja California',
+    'baja california sur': 'Baja California Sur',
+    'campeche': 'Campeche',
+    'chiapas': 'Chiapas',
+    'chihuahua': 'Chihuahua',
+    'coahuila': 'Coahuila',
+    'colima': 'Colima',
+    'durango': 'Durango',
+    'guanajuato': 'Guanajuato',
+    'guerrero': 'Guerrero',
+    'hidalgo': 'Hidalgo',
+    'jalisco': 'Jalisco',
+    'mexico': 'Estado de México', 'estado de mexico': 'Estado de México', 'edomex': 'Estado de México',
+    'ciudad de mexico': 'Ciudad de México', 'cdmx': 'Ciudad de México', 'df': 'Ciudad de México',
+    'michoacan': 'Michoacán',
+    'morelos': 'Morelos',
+    'nayarit': 'Nayarit',
+    'nuevo leon': 'Nuevo León', 'monterrey': 'Nuevo León',
+    'oaxaca': 'Oaxaca',
+    'puebla': 'Puebla',
+    'queretaro': 'Querétaro',
+    'quintana roo': 'Quintana Roo', 'cancun': 'Quintana Roo',
+    'san luis potosi': 'San Luis Potosí',
+    'sinaloa': 'Sinaloa', 'culiacan': 'Sinaloa',
+    'sonora': 'Sonora', 'hermosillo': 'Sonora',
+    'tabasco': 'Tabasco',
+    'tamaulipas': 'Tamaulipas',
+    'tlaxcala': 'Tlaxcala',
+    'veracruz': 'Veracruz',
+    'yucatan': 'Yucatán', 'merida': 'Yucatán',
+    'zacatecas': 'Zacatecas',
+  };
+  for (const [kw, val] of Object.entries(estados)) {
+    if (i.includes(kw)) { filters['estado'] = val; break; }
+  }
+
+  // ─── Colores ──────────────────────────────────────────────
+  const colores = ['rojo', 'azul', 'negro', 'blanco', 'gris', 'verde', 'amarillo', 'morado', 'rosa', 'naranja', 'lila', 'dorado', 'plateado', 'marino', 'citrus', 'grafito', 'plata', 'purpura', 'lila'];
   for (const color of colores) {
-    if (i.includes(color)) {
+    if (new RegExp(`\\b${color}\\b`).test(i)) {
       filters['color'] = color.charAt(0).toUpperCase() + color.slice(1);
       break;
     }
   }
 
-  // Estatus crédito
-  if (i.includes('atrasado') || i.includes('atraso') || i.includes('mora')) filters['estatus_credito'] = 'atrasado';
-  else if (i.includes('liquidado') || i.includes('pagado')) filters['estatus_credito'] = 'liquidado';
-  else if (i.includes('cancelado')) filters['estatus_credito'] = 'cancelado';
-  else if (i.includes('al corriente') || i.includes('corriente')) filters['estatus_credito'] = 'al_corriente';
+  // ─── Estatus crédito ──────────────────────────────────────
+  if (/atrasad|atraso|mora|vencid|debe|deben/.test(i)) filters['estatus_credito'] = 'atrasado';
+  else if (/liquidad|pagad|saldad|terminad/.test(i)) filters['estatus_credito'] = 'liquidado';
+  else if (/cancelad/.test(i)) filters['estatus_credito'] = 'cancelado';
+  else if (/al corriente|corriente|vigente|activo/.test(i)) filters['estatus_credito'] = 'al_corriente';
 
-  // Canal de venta
-  if (i.includes('en línea') || i.includes('en linea') || i.includes('online')) filters['canal_venta'] = 'en_linea';
-  else if (i.includes('tienda') || i.includes('física') || i.includes('fisica')) filters['canal_venta'] = 'tienda_fisica';
-  else if (i.includes('teléfono') || i.includes('telefono')) filters['canal_venta'] = 'telefono';
+  // ─── Canal de venta ───────────────────────────────────────
+  if (/en linea|online|internet|web|digital/.test(i)) filters['canal_venta'] = 'en_linea';
+  else if (/tienda|fisica|presencial|sucursal/.test(i)) filters['canal_venta'] = 'tienda_fisica';
+  else if (/telefono|llamada|call/.test(i)) filters['canal_venta'] = 'telefono';
 
-  // Fecha (mes)
-  const meses: Record<string, string> = {
-    enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
-    julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
-  };
-  for (const [mes, num] of Object.entries(meses)) {
-    if (i.includes(mes)) {
-      const yearMatch = intent.match(/(202\d)/);
-      const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
-      filters['fecha_venta'] = { gte: `${year}-${num}-01`, lte: `${year}-${num}-31` };
-      break;
+  // ─── Fecha ────────────────────────────────────────────────
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+  if (/este mes|el mes/.test(i)) {
+    filters['fecha_venta'] = { gte: `${currentYear}-${currentMonth}-01`, lte: `${currentYear}-${currentMonth}-31` };
+  } else if (/este año|este ano/.test(i)) {
+    filters['fecha_venta'] = { gte: `${currentYear}-01-01`, lte: `${currentYear}-12-31` };
+  } else if (/año pasado|ano pasado/.test(i)) {
+    filters['fecha_venta'] = { gte: `${currentYear - 1}-01-01`, lte: `${currentYear - 1}-12-31` };
+  } else {
+    const meses: Record<string, string> = {
+      enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
+      julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
+    };
+    for (const [mes, num] of Object.entries(meses)) {
+      if (i.includes(mes)) {
+        const yearMatch = intent.match(/(202\d)/);
+        const year = yearMatch ? yearMatch[1] : currentYear.toString();
+        filters['fecha_venta'] = { gte: `${year}-${num}-01`, lte: `${year}-${num}-31` };
+        break;
+      }
     }
   }
 
-  // Template
+  // ─── Template ─────────────────────────────────────────────
+  // Conversational patterns first, then keywords
   let template = 'executive';
-  if (/cr[eé]dito|estatus|pago|atraso|liquidado|corriente/i.test(i)) template = 'credit';
-  else if (/categor[ií]a|por\s+categor/i.test(i)) template = 'category';
-  else if (/tabla|listado|registros|detalle|últimas|ultimas/i.test(i)) template = 'table';
-  else if (/gr[aá]fica|chart|tendencia|pastel|pie|dona|doughnut/i.test(i)) template = 'chart';
-  else if (/resumen|ejecutivo|dashboard|general|kpi/i.test(i)) template = 'executive';
-  else if (Object.keys(filters).length > 0) template = 'chart'; // filtered query → chart
+  if (/credito|estatus|pago|atraso|liquidado|corriente|mora|cartera|vencido/.test(i)) template = 'credit';
+  else if (/por categoria|cada categoria|todas las categoria|categoria/.test(i) && !filters['categoria']) template = 'category';
+  else if (/tabla|lista|listado|registros|detalle|muestra|dame|ver las|ultimas|primeras|recientes/.test(i)) template = 'table';
+  else if (/grafica|grafico|chart|tendencia|pastel|pie|dona|barra|linea|como van|evolucion|distribucion/.test(i)) template = 'chart';
+  else if (/resumen|ejecutivo|dashboard|general|kpi|panorama|overview|como estamos|como vamos|que paso|situacion/.test(i)) template = 'executive';
+  else if (Object.keys(filters).length > 0) template = 'chart';
 
-  // chartType
+  // ─── chartType ────────────────────────────────────────────
   let chartType: string | null = null;
-  if (/pastel|pie/i.test(i)) chartType = 'pie';
-  else if (/dona|doughnut/i.test(i)) chartType = 'doughnut';
-  else if (/l[ií]nea|line|tendencia/i.test(i)) chartType = 'line';
-  else if (/barra|bar/i.test(i)) chartType = 'bar';
+  if (/pastel|pie|circular/.test(i)) chartType = 'pie';
+  else if (/dona|doughnut|anillo/.test(i)) chartType = 'doughnut';
+  else if (/linea|line|tendencia|evolucion|historico/.test(i)) chartType = 'line';
+  else if (/barra|bar|columna/.test(i)) chartType = 'bar';
 
-  // groupBy
+  // ─── groupBy ──────────────────────────────────────────────
   let groupBy: string | null = null;
-  if (/por estado/i.test(i)) groupBy = 'estado';
-  else if (/por categor/i.test(i)) groupBy = 'categoria';
-  else if (/por canal/i.test(i)) groupBy = 'canal_venta';
-  else if (/por ciudad/i.test(i)) groupBy = 'ciudad';
-  else if (/por sucursal/i.test(i)) groupBy = 'sucursal';
-  else if (/por color/i.test(i)) groupBy = 'color';
-  else if (/por vendedor/i.test(i)) groupBy = 'vendedor';
-  else if (/por mes/i.test(i)) groupBy = 'fecha_venta';
+  if (/por estado|cada estado|estados/.test(i) && !filters['estado']) groupBy = 'estado';
+  else if (/por categoria|cada categoria/.test(i) && !filters['categoria']) groupBy = 'categoria';
+  else if (/por canal|cada canal/.test(i)) groupBy = 'canal_venta';
+  else if (/por ciudad|cada ciudad/.test(i)) groupBy = 'ciudad';
+  else if (/por sucursal|cada sucursal/.test(i)) groupBy = 'sucursal';
+  else if (/por color|cada color/.test(i)) groupBy = 'color';
+  else if (/por vendedor|cada vendedor/.test(i)) groupBy = 'vendedor';
+  else if (/por mes|cada mes|mensual/.test(i)) groupBy = 'fecha_venta';
+  else if (/por producto|cada producto/.test(i)) groupBy = 'producto';
+  // Infer groupBy from question words
+  else if (/que estado|cual estado|cuales estados/.test(i)) groupBy = 'estado';
+  else if (/que categoria|cual categoria/.test(i)) groupBy = 'categoria';
+  else if (/que vendedor|quien vende|quien vendio/.test(i)) groupBy = 'vendedor';
+  else if (/que canal|como se vende/.test(i)) groupBy = 'canal_venta';
 
-  // metric
+  // ─── metric ───────────────────────────────────────────────
   let metric = 'count';
-  if (/promedio|media|avg/i.test(i)) metric = 'avg';
-  else if (/total|suma|sum/i.test(i)) metric = 'sum';
+  if (/promedio|media|avg|en promedio/.test(i)) metric = 'avg';
+  else if (/total|suma|sum|cuanto se vendio|cuanto dinero|monto/.test(i)) metric = 'sum';
+  else if (/cuantos|cuantas|numero de|cantidad de|conteo/.test(i)) metric = 'count';
 
-  // limit
-  const limitMatch = intent.match(/(?:últimas?|ultimas?|top|primeras?)\s+(\d+)/i);
+  // ─── limit ────────────────────────────────────────────────
+  const limitMatch = intent.match(/(?:ultimas?|últimas?|top|primeras?|los|las)\s+(\d+)/i);
   const limit = limitMatch ? Number(limitMatch[1]) : 500;
 
   console.log('[orchestrator] local parser result:', JSON.stringify({ filters, template, chartType, groupBy, metric, limit }));

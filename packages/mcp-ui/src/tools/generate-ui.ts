@@ -493,15 +493,13 @@ function buildGroupedChart(
 
   const datasets =
     metric === 'count'
-      ? [
-          {
-            label: 'Cantidad',
-            data: labels.map((l) => countByGroup[l] || 0),
-            backgroundColor: colors[0],
-            borderColor: colors[0],
-            borderWidth: 2,
-          },
-        ]
+      ? [{
+          label: 'Cantidad',
+          data: labels.map((l) => countByGroup[l] || 0),
+          backgroundColor: colors.slice(0, labels.length),
+          borderColor: colors.slice(0, labels.length),
+          borderWidth: 2,
+        }]
       : metricFields.map((field, i) => ({
           label: formatLabel(field),
           data: labels.map((l) => {
@@ -510,8 +508,9 @@ function buildGroupedChart(
               ? Math.round(val / (countByGroup[l] || 1))
               : val;
           }),
-          backgroundColor: colors[i % colors.length],
-          borderColor: colors[i % colors.length],
+          // Single dataset → one color per bar; multiple datasets → one color per dataset
+          backgroundColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i % colors.length],
+          borderColor: metricFields.length === 1 ? colors.slice(0, labels.length) : colors[i % colors.length],
           borderWidth: 2,
         }));
 
@@ -871,15 +870,13 @@ function buildCategoryTemplate(
       title: `${formatLabel(valueField)} por ${formatLabel(categoryField)}`,
       data: {
         labels: categories,
-        datasets: [
-          {
-            label: formatLabel(valueField),
-            data: pieData,
-            backgroundColor: '#4F46E5',
-            borderColor: '#4F46E5',
-            borderWidth: 2,
-          },
-        ],
+        datasets: [{
+          label: formatLabel(valueField),
+          data: pieData,
+          backgroundColor: colors.slice(0, categories.length),
+          borderColor: colors.slice(0, categories.length),
+          borderWidth: 2,
+        }],
       },
       options: {
         responsive: true,
@@ -954,14 +951,14 @@ function buildCreditTemplate(
   // Progress bars
   const progressItems = isFiltered
     ? (() => {
-        // Show breakdown by categoria when filtered to one status
         const catCount = countByField(records, 'categoria');
+        const progressColors = ['#4F46E5','#7C3AED','#2563EB','#0891B2','#059669','#D97706','#DC2626','#6366F1','#8B5CF6'];
         return Object.entries(catCount)
           .sort((a, b) => b[1] - a[1])
-          .map(([cat, count]) => ({
+          .map(([cat, count], idx) => ({
             label: `${cat} (${count})`,
             value: Math.round((count / total) * 100),
-            color: '#D97706',
+            color: progressColors[idx % progressColors.length],
           }));
       })()
     : Object.entries(statusCounts).map(([status, count]) => {
@@ -984,20 +981,24 @@ function buildCreditTemplate(
     },
   });
 
-  // Chart: if filtered, show bar by estado; otherwise pie by status
+  // Chart: if filtered by one status, show breakdown by ciudad (not estado if already filtered)
   if (isFiltered && records[0]?.['estado'] !== undefined) {
-    const countByEstado = countByField(records, 'estado');
-    const estadoLabels = Object.keys(countByEstado).sort((a, b) => countByEstado[b] - countByEstado[a]).slice(0, 12);
+    const allSameEstado = new Set((records as Record<string,unknown>[]).map(r => r['estado'])).size === 1;
+    const groupField = allSameEstado ? 'ciudad' : 'estado';
+    const countByGroup = countByField(records, groupField);
+    const groupLabels = Object.keys(countByGroup).sort((a, b) => countByGroup[b] - countByGroup[a]).slice(0, 12);
+    const groupTitle = allSameEstado ? 'Créditos Atrasados por Ciudad' : 'Créditos Atrasados por Estado';
+    const colors = ['#4F46E5','#7C3AED','#2563EB','#0891B2','#059669','#D97706','#DC2626','#6366F1','#8B5CF6','#0EA5E9','#10B981','#F59E0B'];
     components.push({
       component: 'Chart',
       props: {
         type: 'bar',
-        title: 'Créditos Atrasados por Estado',
+        title: groupTitle,
         data: {
-          labels: estadoLabels,
-          datasets: [{ label: 'Atrasados', data: estadoLabels.map(l => countByEstado[l]), backgroundColor: '#D97706', borderColor: '#D97706', borderWidth: 2 }],
+          labels: groupLabels,
+          datasets: [{ label: 'Atrasados', data: groupLabels.map(l => countByGroup[l]), backgroundColor: colors.slice(0, groupLabels.length), borderColor: colors.slice(0, groupLabels.length), borderWidth: 2 }],
         },
-        options: { responsive: true, xAxis: { label: 'Estado' }, yAxis: { label: 'Cantidad' } },
+        options: { responsive: true, xAxis: { label: groupField === 'ciudad' ? 'Ciudad' : 'Estado' }, yAxis: { label: 'Cantidad' } },
       },
     });
   }

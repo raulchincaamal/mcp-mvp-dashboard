@@ -106,12 +106,13 @@ async function interpretIntent(intent: string): Promise<{
     const response = await bedrockClient.send(new ConverseCommand({
       modelId: MODEL_ID,
       system: [{
-        text: `Convierte el intent del usuario en un JSON estructurado. Responde SOLO con JSON válido, sin markdown, sin explicaciones.
+        text: `Eres un intérprete de intents para el sistema de dashboards de Macropay, empresa mexicana de ventas a crédito de productos (motos, celulares, bicicletas eléctricas, pantallas, tablets, consolas, audio, accesorios). Tu trabajo es convertir lo que pide el usuario en una consulta estructurada JSON.
 
+Responde SOLO con JSON válido, sin markdown, sin explicaciones.
 Estructura exacta:
 {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null,"title":null}
 
-Campos del dataset ventas-credito: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
+Campos: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
 Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
 Estatus: al_corriente, atrasado, liquidado, cancelado.
 Canales: tienda_fisica, en_linea, telefono.
@@ -119,10 +120,10 @@ Canales: tienda_fisica, en_linea, telefono.
 Reglas:
 - "por estado/categoría/mes/vendedor" → groupBy
 - categoría específica mencionada → filters.categoria
-- "atrasado/liquidado/al corriente" → filters.estatus_credito
+- "atrasado/liquidado/al corriente/cancelado" → filters.estatus_credito
 - "tabla/listado" → template:table
 - "gráfica/chart/tendencia" → template:chart
-- "crédito/estatus/pago" → template:credit
+- "crédito/estatus/pago/morosidad" → template:credit
 - "por categoría/análisis" → template:category
 - "resumen/dashboard/kpi/ejecutivo" → template:executive
 - número mencionado (últimas 10, top 20) → limit
@@ -155,23 +156,27 @@ async function generateUIConfig(
   // Compute basic aggregations to help Bedrock
   const aggregations = computeAggregations(records, parsedIntent);
 
-  const systemPrompt = `Eres un generador de dashboards. Recibes datos de ventas y generas un UIConfig JSON que el frontend renderiza.
+  const systemPrompt = `Eres un experto en visualización de datos para Macropay, una empresa mexicana de ventas a crédito de productos como motos, celulares, bicicletas eléctricas, pantallas, tablets, consolas, audio y accesorios.
 
-Componentes disponibles:
+Tu rol es generar dashboards claros, informativos y visualmente ricos para que los equipos de ventas, cobranza y dirección puedan tomar decisiones rápidas. El usuario final puede ser un gerente, un analista o un agente de Alexa que pide información en lenguaje natural.
+
+Contexto del negocio:
+- Los créditos tienen estatus: al_corriente (bueno), atrasado (riesgo), liquidado (completado), cancelado (perdido)
+- Los canales de venta son: tienda_fisica, en_linea, telefono
+- Las ventas se distribuyen en los 32 estados de México
+- Los montos están en pesos mexicanos (MXN)
+- Un crédito atrasado representa riesgo de cartera vencida
+- El monto_total_credito incluye intereses; precio_contado es el valor sin financiamiento
+
+Componentes disponibles para renderizar:
 ${COMPONENT_CATALOG.map(c => `- ${c.name}: ${c.description}`).join('\n')}
 
 UIConfig schema:
 {
   "title": "string",
   "description": "string (opcional)",
-  "layout": "vertical" | "grid",
-  "columns": number (solo si layout=grid),
-  "components": [
-    {
-      "component": "NombreComponente",
-      "props": { ... }
-    }
-  ]
+  "layout": "vertical",
+  "components": [{ "component": "NombreComponente", "props": { ... } }]
 }
 
 Props por componente:
@@ -182,23 +187,35 @@ Props por componente:
 - ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
 - StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
-REGLAS:
-- Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
-- Usa datos reales de las agregaciones y registros proporcionados
-- El template "${parsedIntent.template}" sugiere qué componentes usar
-- Formatea montos en pesos mexicanos (ej: "$1,234")`;
+REGLAS DE VISUALIZACIÓN (obligatorias):
+1. SIEMPRE incluye al menos un KPIGrid con 3-5 métricas de resumen (total registros, sumas, promedios)
+2. Si uniqueValues > 5 en el campo de agrupación → Chart bar. NUNCA un card por grupo
+3. Si uniqueValues <= 5 → ProgressGroup o pie/doughnut
+4. Para template "category" o "executive": KPIGrid + Chart doughnut + Chart bar
+5. Para template "credit": KPIGrid + ProgressGroup + Chart bar + TransactionList
+6. Para template "chart": KPIGrid (resumen) + Chart principal
+7. Para template "table": KPIGrid (resumen) + DataSummary
+8. Usa aggregations.groupBy.data directamente para labels/values del Chart
+9. Usa aggregations.numericSummaries para los valores de KPIGrid
+10. Usa aggregations.fieldSummaries[campo].topValues para charts de distribución
+11. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
+12. Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K", resto → "$1,234"
 
-  const userMessage = `Intent: "${intent}"
+COLORES para charts (usa estos exactos):
+["#49a4d8","#7C3AED","#059669","#D97706","#DC2626","#2563EB","#6366F1","#0891B2","#10B981","#F59E0B","#EF4444","#EC4899","#14B8A6","#8B5CF6","#F97316"]`;
+
+  const userMessage = `Intent del usuario: "${intent}"
 Template sugerido: ${parsedIntent.template}
-GroupBy: ${parsedIntent.groupBy ?? 'ninguno'}
+GroupBy detectado: ${parsedIntent.groupBy ?? 'ninguno'}
 Métrica: ${parsedIntent.metric}${parsedIntent.metricField ? ` de ${parsedIntent.metricField}` : ''}
-Total registros: ${totalRecords}
 
-Agregaciones calculadas:
+CONTEXTO DE LOS DATOS (${totalRecords} registros totales):
 ${JSON.stringify(aggregations, null, 2)}
 
 Muestra de registros (${sampleRecords.length} de ${totalRecords}):
 ${JSON.stringify(sampleRecords, null, 2)}
+
+IMPORTANTE: Revisa "fieldSummaries" para ver la cardinalidad de cada campo antes de decidir qué componente usar. Si el campo de agrupación tiene uniqueValues > 5, usa Chart bar, no KPIGrid.
 
 Genera el UIConfig JSON ahora.`;
 
@@ -231,53 +248,66 @@ function computeAggregations(
 ): Record<string, unknown> {
   if (records.length === 0) return {};
 
+  const first = records[0];
+  const fields = Object.keys(first);
+  const stringFields = fields.filter(f => typeof first[f] === 'string');
+  const numericFields = fields.filter(f => typeof first[f] === 'number');
+
   const agg: Record<string, unknown> = {
     totalRecords: records.length,
   };
 
-  // Group by aggregation
+  // ─── String fields: cardinality + top values ──────────────
+  const fieldSummaries: Record<string, unknown> = {};
+  for (const field of stringFields) {
+    const counts: Record<string, number> = {};
+    for (const r of records) {
+      const key = String(r[field] ?? '');
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    fieldSummaries[field] = {
+      uniqueValues: sorted.length,
+      topValues: sorted.slice(0, 10).map(([value, count]) => ({ value, count })),
+    };
+  }
+  agg.fieldSummaries = fieldSummaries;
+
+  // ─── Numeric fields: min, max, sum, avg ───────────────────
+  const numericSummaries: Record<string, unknown> = {};
+  for (const field of numericFields) {
+    const values = records.map(r => Number(r[field] ?? 0));
+    const sum = values.reduce((a, b) => a + b, 0);
+    numericSummaries[field] = {
+      sum: Math.round(sum),
+      avg: Math.round(sum / values.length),
+      min: Math.min(...values),
+      max: Math.max(...values),
+    };
+  }
+  agg.numericSummaries = numericSummaries;
+
+  // ─── GroupBy aggregation (from parsed intent) ─────────────
   if (parsedIntent.groupBy) {
     const field = parsedIntent.groupBy;
     const groups: Record<string, number> = {};
-
     for (const record of records) {
       const key = String(record[field] ?? 'N/A');
       if (parsedIntent.metric === 'count') {
         groups[key] = (groups[key] ?? 0) + 1;
       } else if (parsedIntent.metricField) {
-        const val = Number(record[parsedIntent.metricField] ?? 0);
-        groups[key] = (groups[key] ?? 0) + val;
+        groups[key] = (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
       }
     }
-
     agg.groupBy = {
       field,
       metric: parsedIntent.metric,
+      uniqueGroups: Object.keys(groups).length,
       data: Object.entries(groups)
-        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 15)
         .map(([label, value]) => ({ label, value })),
     };
-  }
-
-  // General KPIs
-  const numericFields = ['precio_contado', 'monto_total_credito', 'pago_semanal'];
-  for (const field of numericFields) {
-    if (records[0]?.[field] !== undefined) {
-      const values = records.map(r => Number(r[field] ?? 0));
-      agg[`total_${field}`] = values.reduce((a, b) => a + b, 0);
-      agg[`avg_${field}`] = Math.round(agg[`total_${field}`] as number / values.length);
-    }
-  }
-
-  // Status distribution
-  if (records[0]?.estatus_credito !== undefined) {
-    const statusCount: Record<string, number> = {};
-    for (const r of records) {
-      const s = String(r.estatus_credito ?? 'N/A');
-      statusCount[s] = (statusCount[s] ?? 0) + 1;
-    }
-    agg.estatus_credito = statusCount;
   }
 
   return agg;

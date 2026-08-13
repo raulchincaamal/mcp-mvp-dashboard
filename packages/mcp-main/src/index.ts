@@ -5,6 +5,18 @@ import { z } from 'zod';
 import { orchestrate } from './orchestrator.js';
 import { initCache, generateCacheKey, isCacheConnected } from './cache.js';
 
+function isCredentialError(err: unknown): boolean {
+  const msg = (err as Error)?.message ?? '';
+  return (
+    msg.includes('security token') ||
+    msg.includes('token is expired') ||
+    msg.includes('ExpiredToken') ||
+    msg.includes('InvalidClientTokenId') ||
+    msg.includes('UnrecognizedClientException') ||
+    msg.includes('AccessDeniedException')
+  );
+}
+
 // Prevent unhandled ioredis errors from crashing the process
 process.on('uncaughtException', (err) => {
   console.error('[mcp-main] Uncaught exception (non-fatal):', err.message);
@@ -39,6 +51,13 @@ if (!IS_MCP_MODE) {
       const uiConfig = await orchestrate({ intent, dataset, filters, limit });
       return { success: true, data: uiConfig };
     } catch (error) {
+      if (isCredentialError(error)) {
+        return reply.status(401).send({
+          success: false,
+          error: 'Las credenciales de AWS han expirado. Actualiza AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY y AWS_SESSION_TOKEN en packages/mcp-main/.env y reinicia el servidor.',
+          code: 'AWS_CREDENTIALS_EXPIRED',
+        });
+      }
       fastify.log.error(error);
       return reply.status(500).send({ success: false, error: (error as Error).message });
     }

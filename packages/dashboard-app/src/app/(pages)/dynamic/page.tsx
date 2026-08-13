@@ -29,13 +29,15 @@ export default function DynamicPage() {
   const [credExpired, setCredExpired] = useState(false);
   const [resultKey, setResultKey] = useState(0);
   const [chatOpen, setChatOpen] = useState(true);
-  const [pollingHash, setPollingHash] = useState<string | null>(null);
-  const [processingTimeout, setProcessingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const loadingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Use refs for values needed inside polling closure
+  const pollingHashRef = useRef<string | null>(null);
 
-  // Polling: detect dashboards generated externally (Alexa/Postman)
+  // Polling: single interval, uses refs to avoid stale closures
   useEffect(() => {
     async function checkLatest() {
       try {
@@ -44,26 +46,34 @@ export default function DynamicPage() {
         const json = await res.json();
         if (!json.success || !json.hash) return;
 
-        if (json.hash !== pollingHash) {
-          setPollingHash(json.hash);
-          if (json.status === 'processing') {
-            setUiConfig(null);
-            setLoading(true);
-            setError(null);
-            setChatOpen(false);
-            // Safety timeout: if processing takes more than 60s, show error
-            const t = setTimeout(() => {
-              setLoading(false);
-              setError('El dashboard tardó demasiado en generarse. Intenta de nuevo.');
-            }, 60000);
-            setProcessingTimeout(t);
-          } else if (json.status === 'ready' && json.data) {
-            if (processingTimeout) clearTimeout(processingTimeout);
-            setUiConfig(json.data);
-            setResultKey((k) => k + 1);
+        if (json.hash === pollingHashRef.current) return;
+
+        pollingHashRef.current = json.hash;
+
+        if (json.status === 'processing') {
+          setUiConfig(null);
+          setError(null);
+          setLoading(true);
+          setChatOpen(false);
+          // Clear any previous timeout
+          if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+          processingTimeoutRef.current = setTimeout(() => {
+            processingTimeoutRef.current = null;
             setLoading(false);
-            setChatOpen(false);
+            setError('El dashboard tardó demasiado. Intenta de nuevo.');
+          }, 120000);
+        } else if (json.status === 'ready' && json.data) {
+          // Cancel timeout — result arrived in time
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
           }
+          setError(null);
+          setCredExpired(false);
+          setLoading(false);
+          setUiConfig(json.data);
+          setResultKey((k) => k + 1);
+          setChatOpen(false);
         }
       } catch {
         // silently ignore — API may not be running
@@ -71,9 +81,11 @@ export default function DynamicPage() {
     }
 
     pollingInterval.current = setInterval(checkLatest, 1000);
-    return () => { if (pollingInterval.current) clearInterval(pollingInterval.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pollingHash]);
+    return () => {
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+      if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+    };
+  }, []); // single interval, never recreated
 
   // Loading message rotation
   useEffect(() => {
@@ -110,11 +122,11 @@ export default function DynamicPage() {
       setResultKey((k) => k + 1);
       setUiConfig(json.data as UIConfig);
       setChatOpen(false);
-      // sync polling hash so it doesn't re-render the same result
+      // Sync polling hash so polling doesn't re-render the same result
       const latestRes = await fetch(`${API_URL}/api/latest`).catch(() => null);
       if (latestRes?.ok) {
         const latestJson = await latestRes.json();
-        if (latestJson.hash) setPollingHash(latestJson.hash);
+        if (latestJson.hash) pollingHashRef.current = latestJson.hash;
       }
     } catch (err) {
       setError((err as Error).message);
@@ -146,13 +158,9 @@ export default function DynamicPage() {
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <div style={{
               width: 36, height: 36, flexShrink: 0,
-              background: 'var(--primary-light)',
-              borderRadius: 10,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1rem',
-            }}>
-              ✦
-            </div>
+              background: 'var(--primary-light)', borderRadius: 10,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem',
+            }}>✦</div>
             <input
               ref={inputRef}
               type="text"
@@ -293,7 +301,7 @@ export default function DynamicPage() {
         )}
 
         {/* Error */}
-        {error && !loading && (
+        {error && !loading && !uiConfig && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', paddingTop: '4rem', textAlign: 'center', animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both' }}>
             <div style={{ width: 56, height: 56, background: 'rgba(255,69,58,0.08)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem' }}>⚠️</div>
             <div>

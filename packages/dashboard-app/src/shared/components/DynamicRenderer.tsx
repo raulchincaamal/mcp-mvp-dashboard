@@ -77,28 +77,31 @@ const componentMap: Record<
 
 const ICON_MAP: Record<string, string> = {
   // money
-  'money-bill': '💵', 'cash': '💵', 'money': '💵', 'peso': '💵', 'dollar': '💵',
-  'credit-card': '💳', 'card': '💳', 'credito': '💳', 'credit': '💳',
-  'wallet': '👛', 'bank': '🏦', 'coins': '🪙',
+  'money-bill': '💵', 'cash': '💵', 'money': '💵', 'peso': '💵', 'dollar': '💵', 'sales': '💵', 'revenue': '💵', 'monto': '💵', 'ventas': '💵',
+  'credit-card': '💳', 'card': '💳', 'credito': '💳', 'credit': '💳', 'creditos': '💳',
+  'wallet': '👛', 'bank': '🏦', 'coins': '🪙', 'finance': '💰', 'financiado': '💰',
   // data / lists
-  'list': '📋', 'table': '📋', 'clipboard': '📋', 'registros': '📋',
-  'chart': '📊', 'bar-chart': '📊', 'graph': '📊', 'grafica': '📊',
-  'pie': '🥧', 'pie-chart': '🥧',
+  'list': '📋', 'table': '📋', 'clipboard': '📋', 'registros': '📋', 'records': '📋', 'total': '📋', 'count': '📋',
+  'chart': '📊', 'bar-chart': '📊', 'graph': '📊', 'grafica': '📊', 'analytics': '📊', 'stats': '📊',
+  'pie': '🥧', 'pie-chart': '🥧', 'distribution': '🥧',
   // time
-  'calendar': '📅', 'calendar-week': '📅', 'calendar-day': '📅', 'date': '📅', 'clock': '🕐',
+  'calendar': '📅', 'calendar-week': '📅', 'calendar-day': '📅', 'date': '📅', 'clock': '🕐', 'time': '🕐', 'semanas': '📅', 'plazo': '📅',
   // status
-  'check': '✅', 'warning': '⚠️', 'alert': '⚠️', 'error': '❌', 'info': 'ℹ️',
-  'trending-up': '📈', 'trending-down': '📉', 'trend': '📈',
+  'check': '✅', 'warning': '⚠️', 'alert': '⚠️', 'error': '❌', 'info': 'ℹ️', 'risk': '⚠️', 'riesgo': '⚠️',
+  'trending-up': '📈', 'trending-down': '📉', 'trend': '📈', 'growth': '📈', 'up': '📈', 'down': '📉',
+  'liquidado': '✅', 'atrasado': '⚠️', 'cancelado': '❌', 'corriente': '✅',
   // categories
-  'moto': '🏍️', 'bike': '🏍️', 'celular': '📱', 'phone': '📱',
-  'tv': '📺', 'tablet': '📱', 'audio': '🎵', 'consola': '🎮', 'game': '🎮',
-  'ac': '❄️', 'clima': '❄️', 'accesorios': '🎒',
+  'moto': '🏍️', 'bike': '🏍️', 'motos': '🏍️', 'motorcycle': '🏍️',
+  'celular': '📱', 'phone': '📱', 'celulares': '📱', 'mobile': '📱',
+  'tv': '📺', 'tablet': '📱', 'tablets': '📱', 'audio': '🎵', 'consola': '🎮', 'game': '🎮', 'consolas': '🎮',
+  'ac': '❄️', 'clima': '❄️', 'climatizacion': '❄️', 'accesorios': '🎒', 'bicicleta': '🚲', 'bici': '🚲',
   // people
-  'user': '👤', 'users': '👥', 'person': '👤', 'team': '👥',
+  'user': '👤', 'users': '👥', 'person': '👤', 'team': '👥', 'cliente': '👤', 'clientes': '👥', 'vendedor': '👨‍💼',
   // location
-  'map': '🗺️', 'location': '📍', 'estado': '📍',
+  'map': '🗺️', 'location': '📍', 'estado': '📍', 'estados': '📍', 'ciudad': '🏙️', 'store': '🏪', 'sucursal': '🏪',
   // misc
-  'star': '⭐', 'fire': '🔥', 'bolt': '⚡', 'tag': '🏷️', 'box': '📦',
+  'star': '⭐', 'fire': '🔥', 'bolt': '⚡', 'tag': '🏷️', 'box': '📦', 'package': '📦', 'producto': '📦', 'productos': '📦',
+  'canal': '📡', 'channel': '📡', 'online': '💻', 'tienda': '🏪',
 };
 
 function resolveIcon(icon: string): string {
@@ -115,9 +118,13 @@ function renderStatCard(props: Record<string, unknown>) {
   const value = props.value as string;
   const subtitle = props.subtitle as string | undefined;
   const trend = props.trend as string | undefined;
-  const trendDirection = props.trendDirection as 'up' | 'down' | 'neutral' | undefined;
-  const trendColor = trendDirection === 'up' ? '#30d158' : trendDirection === 'down' ? 'var(--danger)' : 'var(--text-tertiary)';
-  const trendIcon = trendDirection === 'up' ? '↑' : trendDirection === 'down' ? '↓' : '';
+  const trendDirection = (props.trendDirection as string | undefined)
+    ?.toLowerCase().trim() as 'up' | 'down' | 'neutral' | undefined;
+  const validTrend = trendDirection === 'up' || trendDirection === 'down' || trendDirection === 'neutral' ? trendDirection : undefined;
+  const trendColor = validTrend === 'up' ? '#30d158' : validTrend === 'down' ? 'var(--danger)' : 'var(--text-tertiary)';
+  const trendIcon = validTrend === 'up' ? '↑' : validTrend === 'down' ? '↓' : '';
+  // Clean trend text — remove if it's just the direction word
+  const trendText = typeof trend === 'string' && !['up','down','neutral'].includes(trend.toLowerCase().trim()) ? trend : undefined;
 
   return (
     <div style={{
@@ -133,7 +140,7 @@ function renderStatCard(props: Record<string, unknown>) {
       </div>
       <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', marginTop: '0.5rem', color: 'var(--text)' }}>{value}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-        {trend && <span style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}>{trendIcon} {trend}</span>}
+        {trendText && <span style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}>{trendIcon} {trendText}</span>}
         {subtitle && <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>{subtitle}</span>}
       </div>
     </div>

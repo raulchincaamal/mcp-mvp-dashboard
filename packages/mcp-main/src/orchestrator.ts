@@ -187,6 +187,9 @@ Props por componente:
 - ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
 - StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
+FILOSOFÍA DE VISUALIZACIÓN:
+Siempre genera dashboards RICOS y COMPLETOS. Más información es mejor que menos. El usuario quiere entender sus datos en profundidad, no solo ver un número. Cada dashboard debe contar una historia completa: qué pasó, dónde, cuánto, y cómo se distribuye. Nunca generes menos de 4 componentes para cualquier template.
+
 REGLAS DE VISUALIZACIÓN (obligatorias):
 1. SIEMPRE incluye al menos un KPIGrid con 3-5 métricas de resumen (total registros, sumas, promedios)
 2. Si uniqueValues > 5 en el campo de agrupación → Chart bar. NUNCA un card por grupo
@@ -215,7 +218,32 @@ ${JSON.stringify(aggregations, null, 2)}
 Muestra de registros (${sampleRecords.length} de ${totalRecords}):
 ${JSON.stringify(sampleRecords, null, 2)}
 
-IMPORTANTE: Revisa "fieldSummaries" para ver la cardinalidad de cada campo antes de decidir qué componente usar. Si el campo de agrupación tiene uniqueValues > 5, usa Chart bar, no KPIGrid.
+INSTRUCCIONES SEGÚN TEMPLATE:
+${ parsedIntent.template === 'executive' ? `Genera un dashboard COMPLETO con:
+1. KPIGrid: total ventas, monto total, promedio precio, tasa morosidad (si aplica)
+2. Chart bar: ventas/monto por estado (usa fieldSummaries.estado.topValues)
+3. Chart doughnut: distribución por estatus_credito (usa fieldSummaries.estatus_credito.topValues)
+4. Chart bar: ventas por canal_venta (usa fieldSummaries.canal_venta.topValues)
+5. TransactionList: últimas 6-8 operaciones de la muestra de registros` :
+parsedIntent.template === 'category' ? `Genera:
+1. KPIGrid: total ventas, monto total, promedio
+2. Chart doughnut: distribución por categoría
+3. Chart bar: monto total por categoría
+4. ProgressGroup: top categorías por cantidad` :
+parsedIntent.template === 'credit' ? `Genera:
+1. KPIGrid: totales por estatus, monto en riesgo
+2. ProgressGroup: distribución de estatus
+3. Chart bar: créditos atrasados por estado
+4. TransactionList: créditos con mayor riesgo` :
+parsedIntent.template === 'chart' ? `Genera:
+1. KPIGrid: 3 métricas de resumen
+2. Chart principal según groupBy detectado` :
+parsedIntent.template === 'table' ? `Genera:
+1. KPIGrid: 3 métricas de resumen
+2. DataSummary con las columnas más relevantes` :
+'Genera el dashboard más útil posible para este intent.'}
+
+IMPORTANTE: Usa los datos reales de aggregations. Si fieldSummaries.estado.uniqueValues > 5, usa Chart bar para estado, nunca KPIGrid por estado.
 
 Genera el UIConfig JSON ahora.`;
 
@@ -223,7 +251,7 @@ Genera el UIConfig JSON ahora.`;
     modelId: MODEL_ID,
     system: [{ text: systemPrompt }],
     messages: [{ role: 'user', content: [{ text: userMessage }] }],
-    inferenceConfig: { maxTokens: 4096, temperature: 0 },
+    inferenceConfig: { maxTokens: 8192, temperature: 0 },
   }));
 
   const block = response.output?.message?.content?.[0];
@@ -233,9 +261,17 @@ Genera el UIConfig JSON ahora.`;
 
   try {
     const parsed = JSON.parse(raw);
-    // Handle potential wrapping
     return (parsed as Record<string, unknown>).uiConfig ?? parsed;
   } catch {
+    // Try to recover truncated JSON by finding the last complete component
+    const lastBracket = raw.lastIndexOf('},');
+    if (lastBracket > 0) {
+      try {
+        const recovered = raw.slice(0, lastBracket + 1) + ']}';
+        const parsed = JSON.parse(recovered);
+        return (parsed as Record<string, unknown>).uiConfig ?? parsed;
+      } catch { /* fall through */ }
+    }
     throw new Error(`Bedrock returned invalid JSON: ${raw.slice(0, 200)}`);
   }
 }

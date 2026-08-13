@@ -3,7 +3,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { orchestrate } from './orchestrator.js';
-import { initCache, generateCacheKey, isCacheConnected } from './cache.js';
+import { initCache, generateCacheKey, cacheGet, cacheSet, isCacheConnected, TTL } from './cache.js';
+
+const LATEST_KEY = 'mcp-dashboard:latest';
 
 // Prevent unhandled ioredis errors from crashing the process
 process.on('uncaughtException', (err) => {
@@ -26,6 +28,18 @@ if (!IS_MCP_MODE) {
     mode: 'bedrock-orchestrator',
   }));
 
+  fastify.get('/api/latest', async (_request, reply) => {
+    const latest = await cacheGet<{ hash: string; status: string; uiConfig: unknown }>(LATEST_KEY);
+    if (!latest) return reply.status(404).send({ success: false, error: 'No dashboard generated yet' });
+    return {
+      success: true,
+      hash: latest.hash,
+      status: latest.status ?? 'ready',
+      data: latest.status === 'ready' ? latest.uiConfig : null,
+      url: latest.status === 'ready' ? `${DASHBOARD_BASE_URL}/dashboard?key=${latest.hash}` : null,
+    };
+  });
+
   fastify.post<{
     Body: { intent: string; dataset?: string; filters?: Record<string, unknown>; limit?: number };
   }>('/api/generate-ui', async (request, reply) => {
@@ -36,8 +50,23 @@ if (!IS_MCP_MODE) {
     }
 
     try {
+      // Signal frontend that a new dashboard is being generated
+      const processingHash = `processing-${Date.now()}`;
+      await cacheSet(LATEST_KEY, { hash: processingHash, status: 'processing' }, 1);
+
       const uiConfig = await orchestrate({ intent, dataset, filters, limit });
-      return { success: true, data: uiConfig };
+
+      // Save final result
+      const cacheKey = generateCacheKey('ui', { dataset, intent, filters, limit });
+      const hash = cacheKey.split(':').pop() ?? cacheKey;
+      await cacheSet(LATEST_KEY, { hash, status: 'ready', uiConfig }, TTL.INTENT);
+      await cacheSet(cacheKey, uiConfig, TTL.INTENT);
+
+      return {
+        success: true,
+        data: uiConfig,
+        url: `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`,
+      };
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ success: false, error: (error as Error).message });

@@ -182,6 +182,14 @@ function buildExecutiveTemplate(
   const metricFields = resolveMetricFields(hints?.metricField, intentLower, numericFields);
   const metric = hints?.metric || detectMetricType(intentLower);
 
+  // If grouping by high-cardinality field (states, cities), redirect to chart template
+  const uniqueGroupCount = groupByField
+    ? new Set(records.map(r => String(r[groupByField] || ''))).size
+    : 0;
+  if (uniqueGroupCount > 5) {
+    return buildChartTemplate(records, numericFields, stringFields, intent, title);
+  }
+
   // ─── 1. KPIs ─────────────────────────────────────────────
   const kpiItems = buildKpiItems(records, metricFields, numericFields, metric);
   if (kpiItems.length > 0) {
@@ -190,9 +198,17 @@ function buildExecutiveTemplate(
 
   // ─── 2. Main chart: metric grouped by primary field ──────
   if (groupByField && metricFields.length > 0) {
-    components.push(buildGroupedChart(
-      records, groupByField, metricFields, metric, hints?.chartType || 'bar',
-    ));
+    const uniqueGroups = new Set(records.map(r => String(r[groupByField] || ''))).size;
+    // If grouping by a high-cardinality field (states, cities), always use chart — never KPIGrid per group
+    if (uniqueGroups > 6) {
+      components.push(buildGroupedChart(
+        records, groupByField, metricFields, metric, hints?.chartType || 'bar',
+      ));
+    } else {
+      components.push(buildGroupedChart(
+        records, groupByField, metricFields, metric, hints?.chartType || 'bar',
+      ));
+    }
   }
 
   // ─── 3. Distribution by category (always for executive) ──

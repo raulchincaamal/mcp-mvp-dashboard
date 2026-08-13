@@ -18,9 +18,8 @@
     },
     "mcp-main": {
       "command": "node",
-      "args": ["packages/mcp-main/dist/index.js"],
+      "args": ["--env-file=packages/mcp-main/.env", "packages/mcp-main/dist/index.js", "--mcp"],
       "env": {
-        "DASHBOARD_URL": "http://localhost:3000",
         "MCP_PROJECT_ROOT": "${workspaceFolder}"
       },
       "disabled": false

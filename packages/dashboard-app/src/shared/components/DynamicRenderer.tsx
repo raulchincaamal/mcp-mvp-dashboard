@@ -73,6 +73,40 @@ const componentMap: Record<
   Avatar: Avatar as unknown as React.ComponentType<Record<string, unknown>>,
 };
 
+// ─── Icon map: LLM string names → emojis ──────────────────
+
+const ICON_MAP: Record<string, string> = {
+  // money
+  'money-bill': '💵', 'cash': '💵', 'money': '💵', 'peso': '💵', 'dollar': '💵',
+  'credit-card': '💳', 'card': '💳', 'credito': '💳', 'credit': '💳',
+  'wallet': '👛', 'bank': '🏦', 'coins': '🪙',
+  // data / lists
+  'list': '📋', 'table': '📋', 'clipboard': '📋', 'registros': '📋',
+  'chart': '📊', 'bar-chart': '📊', 'graph': '📊', 'grafica': '📊',
+  'pie': '🥧', 'pie-chart': '🥧',
+  // time
+  'calendar': '📅', 'calendar-week': '📅', 'calendar-day': '📅', 'date': '📅', 'clock': '🕐',
+  // status
+  'check': '✅', 'warning': '⚠️', 'alert': '⚠️', 'error': '❌', 'info': 'ℹ️',
+  'trending-up': '📈', 'trending-down': '📉', 'trend': '📈',
+  // categories
+  'moto': '🏍️', 'bike': '🏍️', 'celular': '📱', 'phone': '📱',
+  'tv': '📺', 'tablet': '📱', 'audio': '🎵', 'consola': '🎮', 'game': '🎮',
+  'ac': '❄️', 'clima': '❄️', 'accesorios': '🎒',
+  // people
+  'user': '👤', 'users': '👥', 'person': '👤', 'team': '👥',
+  // location
+  'map': '🗺️', 'location': '📍', 'estado': '📍',
+  // misc
+  'star': '⭐', 'fire': '🔥', 'bolt': '⚡', 'tag': '🏷️', 'box': '📦',
+};
+
+function resolveIcon(icon: string): string {
+  if (!icon) return '';
+  const key = icon.toLowerCase().trim();
+  return ICON_MAP[key] ?? (icon.length <= 4 ? icon : '📌');
+}
+
 // ─── Composite: StatCard ───────────────────────────────────
 // Props: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
@@ -90,12 +124,11 @@ function renderStatCard(props: Record<string, unknown>) {
       background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)',
       border: '1px solid var(--border-color)', borderRadius: 'var(--radius)',
       padding: '1.5rem', boxShadow: 'var(--shadow-sm)',
-      animation: 'cardEnter 0.5s var(--ease-out-expo) both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <p style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text-tertiary)' }}>{title}</p>
         {typeof props.icon === 'string' && props.icon && (
-          <span style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{props.icon}</span>
+          <span style={{ fontSize: '1.2rem' }}>{resolveIcon(props.icon)}</span>
         )}
       </div>
       <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', marginTop: '0.5rem', color: 'var(--text)' }}>{value}</p>
@@ -436,12 +469,7 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
 
 // ─── Main DynamicRenderer ──────────────────────────────────
 
-const STAGGER_STYLES = `
-  @keyframes componentEnter {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-`;
+const STAGGER_STYLES = '';
 
 interface DynamicRendererProps {
   config: UIConfig;
@@ -504,7 +532,7 @@ export default function DynamicRenderer({ config, animated = false }: DynamicRen
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {animated && <style>{STAGGER_STYLES}</style>}
+      {animated && STAGGER_STYLES && <style>{STAGGER_STYLES}</style>}
       {config.description && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{config.description}</p>
       )}
@@ -515,10 +543,10 @@ export default function DynamicRenderer({ config, animated = false }: DynamicRen
             style={animated ? {
               opacity: 0,
               animationName: 'componentEnter',
-              animationDuration: '0.6s',
-              animationTimingFunction: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              animationDuration: '0.7s',
+              animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
               animationFillMode: 'forwards',
-              animationDelay: `${i * 0.08}s`,
+              animationDelay: `${i * 0.14}s`,
             } : undefined}
           >
             <RenderComponent config={comp} />

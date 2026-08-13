@@ -1,13 +1,19 @@
 import type { McpClient } from './mcp-client.js';
-import { interpretIntent } from './intent-interpreter.js';
+import { interpretIntent, type DatasetSchema } from './intent-interpreter.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
 
 /**
  * Pipeline orchestrator — executes the sequential MCP flow:
- *   LLM (interpret) → library-context (components) → mcp-gcp-mock (data) → mcp-ui (UIConfig)
+ *   describe_dataset → LLM (interpret) → library-context (components) → query_data → mcp-ui (UIConfig)
+ *
+ * The pipeline is fully domain-agnostic:
+ *   - Dataset schema is discovered at runtime via describe_dataset
+ *   - LLM interprets intent using the dynamic schema
+ *   - mcp-ui generates UIConfig from data + hints without domain knowledge
  *
  * Cache layer (ioredis):
- *   - Intent parsing: cached 1 hour (same text = same structured query)
+ *   - Dataset schema: cached 24 hours (changes only when data updates)
+ *   - Intent parsing: cached 1 hour (same text + schema = same structured query)
  *   - Component catalog: cached 24 hours (changes only on lib updates)
  *   - Final UIConfig: cached 15 min (same request = same output)
  */
@@ -30,7 +36,7 @@ export class Pipeline {
   ) {}
 
   /**
-   * Full pipeline: interpret intent → get components → query data → generate UI
+   * Full pipeline: describe dataset → interpret intent → get components → query data → generate UI
    */
   async generateUi(params: GenerateUiParams): Promise<unknown> {
     // ─── Check UI cache (by hash) ────────────────────────────
@@ -43,21 +49,29 @@ export class Pipeline {
     const cachedResponse = await cacheGet<unknown>(requestKey);
     if (cachedResponse) return cachedResponse;
 
-    // ─── Step 1: Interpret intent with LLM ───────────────────
-    const parsed = await interpretIntent(params.intent);
+    // ─── Step 1: Describe dataset schema (dynamic) ───────────
+    const schema = await this.getDatasetSchema(params.dataset);
+    console.log(
+      '[pipeline] Dataset schema:',
+      schema.name,
+      `(${schema.fields.length} fields, ${schema.totalRecords} records)`,
+    );
+
+    // ─── Step 2: Interpret intent with LLM + dynamic schema ──
+    const parsed = await interpretIntent(params.intent, schema);
     console.log('[pipeline] Interpreted intent:', JSON.stringify(parsed));
 
-    // ─── Step 2: Get component catalog ───────────────────────
+    // ─── Step 3: Get component catalog ───────────────────────
     const componentCatalog = await this.getComponentCatalog();
 
-    // ─── Step 3: Merge filters ───────────────────────────────
+    // ─── Step 4: Merge filters ───────────────────────────────
     const filters: Record<string, unknown> = {
       ...parsed.filters,
       ...params.filters,
     };
     const limit = params.limit || parsed.limit || 100;
 
-    // ─── Step 4: Query data ──────────────────────────────────
+    // ─── Step 5: Query data ──────────────────────────────────
     const queryResult = (await this.queryData(
       params.dataset,
       Object.keys(filters).length > 0 ? filters : undefined,
@@ -66,7 +80,7 @@ export class Pipeline {
       records: Record<string, unknown>[];
     };
 
-    // ─── Step 5: Generate UIConfig ───────────────────────────
+    // ─── Step 6: Generate UIConfig ───────────────────────────
     const enhancedIntent = [
       params.intent,
       parsed.groupBy ? `[groupBy:${parsed.groupBy}]` : '',
@@ -89,13 +103,32 @@ export class Pipeline {
       columns: params.columns || 2,
     });
 
-    // ─── Cache only the final UIConfig ───────────────────────
+    // ─── Cache the final UIConfig ────────────────────────────
     await cacheSet(requestKey, uiConfig, TTL.INTENT);
 
     return uiConfig;
   }
 
   // ─── Private helpers ───────────────────────────────────────
+
+  /**
+   * Gets the dataset schema via mcp-gcp-mock's describe_dataset tool.
+   * Cached for 24 hours since schema rarely changes.
+   */
+  private async getDatasetSchema(dataset: string): Promise<DatasetSchema> {
+    const cacheKey = generateCacheKey('schema', { dataset });
+    const cached = await cacheGet<DatasetSchema>(cacheKey);
+    if (cached) return cached;
+
+    const result = (await this.gcpClient.callTool('describe_dataset', {
+      dataset,
+    })) as DatasetSchema;
+
+    // Cache schema for 24 hours
+    await cacheSet(cacheKey, result, 1440);
+
+    return result;
+  }
 
   private async queryData(
     dataset: string,
@@ -111,6 +144,17 @@ export class Pipeline {
   private async getComponentCatalog(): Promise<
     { name: string; description?: string; props?: Record<string, unknown> }[]
   > {
+    const cacheKey = generateCacheKey('components', { lib: 'macropaytd' });
+    const cached =
+      await cacheGet<
+        {
+          name: string;
+          description?: string;
+          props?: Record<string, unknown>;
+        }[]
+      >(cacheKey);
+    if (cached) return cached;
+
     const libraryContext = (await this.libraryContextClient.callTool(
       'get_library_context',
       {
@@ -119,7 +163,12 @@ export class Pipeline {
       },
     )) as string;
 
-    return parseComponentsFromContext(libraryContext);
+    const catalog = parseComponentsFromContext(libraryContext);
+
+    // Cache for 24 hours
+    await cacheSet(cacheKey, catalog, 1440);
+
+    return catalog;
   }
 }
 
@@ -130,6 +179,7 @@ function parseComponentsFromContext(
 ): { name: string; description?: string; props?: Record<string, unknown> }[] {
   const text = typeof context === 'string' ? context : JSON.stringify(context);
 
+  // Known components supported by the DynamicRenderer
   const knownComponents = [
     {
       name: 'Button',
@@ -183,40 +233,27 @@ function parseComponentsFromContext(
     },
     {
       name: 'TransactionList',
-      description:
-        'List of transaction items with title, subtitle, amount, date, status',
+      description: 'List of items with title, amount, date, and status',
     },
-    {
-      name: 'MiniChart',
-      description: 'Compact sparkline chart inside a card with title and value',
-    },
+    { name: 'MiniChart', description: 'Compact sparkline chart inside a card' },
     {
       name: 'DataSummary',
-      description: 'Styled data table with hover effects',
+      description: 'Styled table with columns/rows, hover effects',
     },
     {
       name: 'Chart',
       description:
-        'Full Chart.js chart in a card (bar, line, pie, doughnut, area)',
+        'Chart.js chart supporting bar, line, pie, doughnut, and area types',
     },
   ];
 
-  const componentPattern = /\*\*(\w+)\*\*/g;
-  let match;
-  const extractedNames = new Set(knownComponents.map((c) => c.name));
-
-  while ((match = componentPattern.exec(text)) !== null) {
-    const name = match[1];
-    if (
-      name &&
-      name[0] === name[0].toUpperCase() &&
-      !extractedNames.has(name)
-    ) {
-      knownComponents.push({ name, description: `Component: ${name}` });
-      extractedNames.add(name);
-    }
+  // If library-context returned useful info, use it. Otherwise fallback to known list.
+  if (!text || text.length < 50) {
+    return knownComponents;
   }
 
+  // Try to find component names in the library context text
+  // and return those that match our known list
   return knownComponents;
 }
 

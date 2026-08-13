@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { listDatasets } from './tools/list-datasets.js';
 import { queryData } from './tools/query-data.js';
+import { describeDataset } from './tools/describe-dataset.js';
 
 const server = new McpServer({
   name: 'mcp-gcp-mock',
@@ -48,6 +49,28 @@ server.tool(
       const result = queryData({ dataset, filters, limit });
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: (error as Error).message }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// Tool: describe a dataset's schema (fields, types, samples)
+server.tool(
+  'describe_dataset',
+  'Describes a dataset schema: field names, types, sample values, and unique counts. Use this to understand dataset structure before querying.',
+  {
+    dataset: z.string().describe('Dataset name (e.g. "ventas-credito")'),
+  },
+  async ({ dataset }) => {
+    try {
+      const description = describeDataset(dataset);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(description, null, 2) }],
       };
     } catch (error) {
       return {

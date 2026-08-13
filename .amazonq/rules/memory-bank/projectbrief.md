@@ -1,14 +1,14 @@
 # Project Brief — MCP MVP Dashboard
 
 ## Purpose
-Monorepo that implements a dynamic dashboard generation pipeline using Model Context Protocol (MCP). Transforms natural language intents into renderable React UIs through a sequential orchestrated flow with AWS Bedrock LLM interpretation.
+Monorepo that implements a dynamic dashboard generation pipeline using Model Context Protocol (MCP). Transforms natural language intents (Spanish) into renderable React UIs through a sequential orchestrated flow with AWS Bedrock LLM interpretation.
 
 ## Core Requirements
 - Accept natural language intents in Spanish (e.g. "gráfica de ventas de motos por estado")
-- Interpret intent via AWS Bedrock Claude Haiku → structured query
+- Interpret intent via AWS Bedrock Claude Haiku → structured ParsedIntent
 - Query mock sales data (5,000 records, ventas-credito dataset)
-- Generate declarative UIConfig JSON
-- Render UIConfig dynamically in Next.js frontend
+- Generate declarative UIConfig JSON via mcp-ui
+- Render UIConfig dynamically in Next.js frontend via DynamicRenderer
 
 ## Stack
 - **Runtime**: Node.js >= 18, npm workspaces monorepo
@@ -23,5 +23,11 @@ Monorepo that implements a dynamic dashboard generation pipeline using Model Con
 |---|---|---|
 | `mcp-gcp-mock` | Data source (mock GCP/SAP) | stdio |
 | `mcp-ui` | Data → UIConfig transformer | stdio |
-| `mcp-main` | HTTP orchestrator + LLM | 4000 |
+| `mcp-main` | HTTP orchestrator + LLM interpreter | 4000 |
 | `dashboard-app` | Next.js frontend | 3000 |
+
+## Global Imperatives
+- NEVER manually edit `package-lock.json`
+- NEVER commit `.env` or `.npmrc` files
+- ALWAYS run `npm run build` after modifying MCP server source files
+- ALWAYS update AGENTS.md when adding tools, endpoints, or changing behavior

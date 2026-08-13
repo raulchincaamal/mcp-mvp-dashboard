@@ -1,67 +1,95 @@
 # System Patterns — MCP MVP Dashboard
 
 ## Architecture Pattern
-Sequential MCP pipeline orchestrated by a central HTTP server. Each MCP server is a child process communicating via stdio.
+Bedrock tool-use loop orchestrated by a central HTTP server. Each MCP server is a child process via stdio.
 
 ```
 mcp-main (Fastify :4000)
-  ├── McpClient → mcp-gcp-mock (child process, stdio)
-  ├── McpClient → mcp-ui (child process, stdio)
-  └── McpClient → library-context (node_modules, stdio)
+  └── orchestrate()
+        ├── normalizeDateExpressions()   ← before anything
+        ├── createMcpClients()
+        └── runBedrockLoop()
+              ├── query_data → filter normalization → mcp-gcp-mock
+              └── generate_ui → template override → mcp-ui → double-parse
 ```
 
-## MCP Client Pattern
-`McpClient` wraps `@modelcontextprotocol/sdk` Client. Two connection methods:
-- `connect(serverPath)` — spawns `node <path>` 
-- `connectCommand(command, args, env)` — arbitrary command (used for library-context)
+## Date Normalization Pattern
+Applied **before** Bedrock sees the intent. Converts relative expressions to concrete ranges:
+```ts
+"ventas de este mes"
+→ "ventas de el mes 2026-08 (del 2026-08-01 al 2026-08-31)"
+```
+Handles: "este mes", "mes pasado", "este año", "año pasado", "hoy", named months.
+Nova's date hallucination (using training cutoff year) is mitigated because the dates are explicit in the text.
 
-Tool responses are always `content[]` arrays; text content is extracted and JSON-parsed automatically.
+## Filter Normalization Pattern
+Applied in orchestrator before calling `query_data`:
+- `KNOWN_VALUES` map for `estado` (32 states with accents), `estatus_credito`, `canal_venta`
+- Date range clamping: future years (2027+) → current year
+- Default: capitalize each word for proper nouns
 
-## Pipeline Class Pattern
-`Pipeline.generateUi()` is the single entry point:
-1. Check Redis cache by request hash
-2. `interpretIntent()` → Bedrock ConverseCommand → ParsedIntent
-3. `getComponentCatalog()` → library-context MCP → parsed component list
-4. `queryData()` → mcp-gcp-mock `query_data` tool
-5. Build enhanced intent string with `[hint:value]` brackets
-6. `uiClient.callTool('generate_ui', ...)` → UIConfig
-7. Cache UIConfig in Redis
+## Template Override Pattern
+After `generate_ui` is called, orchestrator checks `stashedRecords` and overrides:
+1. All records share one `estatus_credito` → force `[template:credit]`
+2. General query (ventas/mes/año keywords, no chart/table keywords) + >50 records + Nova chose `chart` → force `[template:executive]`
 
-## MCP Server Pattern (mcp-gcp-mock, mcp-ui)
-Both use `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js` with `StdioServerTransport`. Tools registered with `server.tool(name, description, zodSchema, handler)`.
-
-## UIConfig Schema
-```typescript
-interface UIConfig {
-  title: string;
-  description?: string;
-  layout: 'vertical' | 'grid';
-  columns?: number;
-  components: UIComponentConfig[];
-}
-interface UIComponentConfig {
-  component: string;  // component name
-  props: Record<string, unknown>;
-  children?: (UIComponentConfig | string)[];
+## Double-Parse Pattern
+`mcp-ui` returns `JSON.stringify(config)`. Orchestrator loops until object:
+```ts
+while (typeof raw === 'string') {
+  try { raw = JSON.parse(raw); } catch { break; }
 }
 ```
 
-## DynamicRenderer Pattern
-Switch-based dispatch in `RenderComponent`:
-- Composite components (StatCard, KPIGrid, ProgressGroup, TransactionList, MiniChart, DataSummary, Chart) → custom render functions
-- Base components (Button, Card, Badge, Text, etc.) → `componentMap` lookup → `@macropaytd` library
+## Local Parser Pattern (`interpretIntentWithBedrock`)
+Pure regex, no Bedrock. Handles:
+- 9 categorías with 30+ keyword synonyms
+- 32 estados de México with aliases (CDMX, Edomex, Monterrey, Cancún, etc.)
+- 18 colores
+- Estatus crédito with conversational variants ("debe", "vencido", "pagado")
+- Canal de venta
+- Fechas: meses, "este mes", "este año", "año pasado" → concrete ranges
+- Template from conversational patterns ("cómo van", "muéstrame", "dame")
+- groupBy from question words ("qué estado", "quién vende")
+- Accent normalization via `normalize('NFD')` before matching
 
-## Filter Pattern (mcp-gcp-mock)
-Supports exact match `{ campo: valor }` and range operators `{ campo: { gte, lte, gt, lt } }`.
+## Smart Pivot Pattern (mcp-ui)
+When filtered data has low cardinality:
+- 1 categoria → group by `estado`
+- 1 estado → group by `ciudad`
+- 1 estatus_credito → show breakdown by `categoria` in ProgressGroup + chart by `ciudad`
 
-## Cache Key Pattern
-`mcp-dashboard:<prefix>:<sha256(JSON.stringify(data))>`
-The hash suffix is used as the dashboard URL key: `/dashboard?key=<hash>`
+## Color Pattern
+- Pie/doughnut: `backgroundColor: colors.slice(0, labels.length)` — one per segment
+- Bar single dataset: `backgroundColor: colors.slice(0, labels.length)` — one per bar
+- Bar multiple datasets: `backgroundColor: colors[i * 4 % colors.length]` — skip 4 for contrast
+- ProgressGroup: `color: progressColors[idx % progressColors.length]` — one per item
 
-## Build Pattern
-All MCP packages use `tsup` for bundling. Must run `npm run build` after source changes before the child processes can be spawned.
+## Staggered Animation Pattern (DynamicRenderer)
+```tsx
+style={{
+  opacity: 0,
+  animationName: 'componentEnter',
+  animationDuration: '0.6s',
+  animationTimingFunction: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+  animationFillMode: 'forwards',
+  animationDelay: `${i * 0.08}s`,
+}}
+```
+Keyframe injected inline via `<style>` tag — not globals.css.
+
+## Theme Persistence Pattern
+1. `layout.tsx`: `<html data-theme="light" suppressHydrationWarning>` + inline script reads localStorage before first paint
+2. `Navbar.tsx`: reads localStorage on mount, writes on change, default `light`
+3. Dropdown uses fixed dark background (`#1a1d27`) independent of current theme
+
+## Nova vs Claude Tool-Use Difference
+- Nova: `toolChoice` forced to `{ tool: { name: 'query_data' } }` first, then `{ tool: { name: 'generate_ui' } }`
+- Claude: `{ any: {} }` first, then `{ auto: {} }`
 
 ## Error Handling
-- Bedrock failures → fallback ParsedIntent (executive template, no filters, limit 100)
-- Redis unavailable → pipeline continues without cache
-- Unknown UIConfig component → renders dashed red border with component name
+- AWS credential error → 401 with actionable message
+- Bedrock loop failure → local parser fallback
+- 0 records → styled empty state with 🔍 icon and tip
+- Redis unavailable → uncaughtException suppresses, pipeline continues
+- Unknown UIConfig component → red dashed border with component name

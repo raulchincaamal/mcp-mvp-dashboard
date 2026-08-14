@@ -36,7 +36,9 @@ Phase 1 (MVP local) — pipeline end-to-end validated and working, including con
 | POST | `/api/generate-ui` | Full pipeline: intent → UIConfig via `orchestrate()` |
 
 ## Orchestrator Smart Behaviors
-- **Date normalization**: "este mes" → "el mes 2026-08 (del 2026-08-01 al 2026-08-31)" before Bedrock sees it
+- **Date normalization**: "este mes" → "el mes agosto 2025 (del 2025-08-01 al 2025-08-31)" before Bedrock sees it
+- **Chart type normalization**: "pastel/pie/circular" → pie, "dona/donut" → doughnut, "barras" → bar, "líneas" → line
+- **GroupBy "mes"**: extracts month from fecha_venta, sorts chronologically ("Enero 2024", "Febrero 2024", etc.)
 - **Filter normalization**: known value maps for `estado` (32 states with accents), `estatus_credito`, `canal_venta`; date range clamping for future year hallucinations
 - **Template overrides**:
   - All records share one `estatus_credito` → force `credit`

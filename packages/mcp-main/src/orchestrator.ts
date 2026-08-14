@@ -10,6 +10,94 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 
+// ─── Date helpers ─────────────────────────────────────────────
+
+function normalizeDateExpressions(intent: string): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+  
+  const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  
+  let normalized = intent;
+  
+  // "este mes" → rango concreto
+  if (/este\s+mes/i.test(normalized)) {
+    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const end = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+    normalized = normalized.replace(/este\s+mes/gi, `el mes ${monthNames[month]} ${year} (del ${start} al ${end})`);
+  }
+  
+  // "mes pasado" → rango concreto
+  if (/mes\s+pasado/i.test(normalized)) {
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const start = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(prevYear, prevMonth + 1, 0).getDate();
+    const end = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${lastDay}`;
+    normalized = normalized.replace(/mes\s+pasado/gi, `el mes ${monthNames[prevMonth]} ${prevYear} (del ${start} al ${end})`);
+  }
+  
+  // "este año" → rango concreto
+  if (/este\s+a[ñn]o/i.test(normalized)) {
+    normalized = normalized.replace(/este\s+a[ñn]o/gi, `el año ${year} (del ${year}-01-01 al ${year}-12-31)`);
+  }
+  
+  // "año pasado" → rango concreto
+  if (/a[ñn]o\s+pasado/i.test(normalized)) {
+    const prevYear = year - 1;
+    normalized = normalized.replace(/a[ñn]o\s+pasado/gi, `el año ${prevYear} (del ${prevYear}-01-01 al ${prevYear}-12-31)`);
+  }
+  
+  // "por mes" → groupBy mes (extraer mes de fecha_venta)
+  if (/por\s+mes/i.test(normalized) && !/groupBy/i.test(normalized)) {
+    normalized = normalized.replace(/por\s+mes/gi, 'agrupado por mes (campo: mes extraído de fecha_venta)');
+  }
+  
+  // Meses específicos: "en julio", "de agosto", etc.
+  for (let i = 0; i < monthNames.length; i++) {
+    const regex = new RegExp(`(en|de|del mes de)\\s+${monthNames[i]}(?!\\s+\\d{4})`, 'gi');
+    if (regex.test(normalized)) {
+      // Asume año actual si no se especifica
+      const start = `${year}-${String(i + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, i + 1, 0).getDate();
+      const end = `${year}-${String(i + 1).padStart(2, '0')}-${lastDay}`;
+      normalized = normalized.replace(regex, `en ${monthNames[i]} ${year} (del ${start} al ${end})`);
+    }
+  }
+  
+  return normalized;
+}
+
+// ─── Chart type synonyms ──────────────────────────────────────
+
+function normalizeChartType(intent: string): { chartType: string | null; normalizedIntent: string } {
+  let normalized = intent;
+  let chartType: string | null = null;
+  
+  const chartMappings: [RegExp, string][] = [
+    [/gr[aá]fica?\s+de\s+(pastel|pay|pie|circular)/gi, 'pie'],
+    [/(pastel|pay|pie|circular)/gi, 'pie'],
+    [/gr[aá]fica?\s+de\s+(dona|donut|doughnut|rosquilla)/gi, 'doughnut'],
+    [/(dona|donut|doughnut)/gi, 'doughnut'],
+    [/gr[aá]fica?\s+de\s+(barras?|columnas?)/gi, 'bar'],
+    [/(barras?|columnas?)/gi, 'bar'],
+    [/gr[aá]fica?\s+de\s+(l[ií]neas?|tendencia)/gi, 'line'],
+    [/(l[ií]neas?|tendencia)/gi, 'line'],
+    [/gr[aá]fica?\s+de\s+[aá]rea/gi, 'area'],
+  ];
+  
+  for (const [regex, type] of chartMappings) {
+    if (regex.test(normalized)) {
+      chartType = type;
+      break;
+    }
+  }
+  
+  return { chartType, normalizedIntent: normalized };
+}
+
 // ─── Component catalog ────────────────────────────────────────
 
 const COMPONENT_CATALOG = [
@@ -33,10 +121,18 @@ export interface OrchestrationParams {
 
 export async function orchestrate(params: OrchestrationParams): Promise<unknown> {
   const dataset = params.dataset ?? 'ventas-credito';
+  
+  // Pre-process intent: normalize dates and chart types
+  const normalizedIntent = normalizeDateExpressions(params.intent);
+  const { chartType: detectedChartType, normalizedIntent: finalIntent } = normalizeChartType(normalizedIntent);
+  
+  console.log(`[orchestrator] original intent: "${params.intent}"`);
+  console.log(`[orchestrator] normalized intent: "${finalIntent}"`);
+  if (detectedChartType) console.log(`[orchestrator] detected chart type: ${detectedChartType}`);
 
   const cacheKey = generateCacheKey('ui', {
     dataset,
-    intent: params.intent,
+    intent: finalIntent,
     filters: params.filters,
     limit: params.limit,
   });
@@ -53,7 +149,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
   try {
     // Step 1: Interpret intent with Bedrock → structured query
     console.log(`[orchestrator] interpreting intent with model: ${MODEL_ID}`);
-    const parsedIntent = await interpretIntent(params.intent);
+    const parsedIntent = await interpretIntent(finalIntent, detectedChartType);
     console.log('[orchestrator] parsed intent:', JSON.stringify(parsedIntent));
 
     // Step 2: Query real data
@@ -87,7 +183,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
 
 // ─── Step 1: Interpret intent ─────────────────────────────────
 
-async function interpretIntent(intent: string): Promise<{
+async function interpretIntent(intent: string, detectedChartType: string | null): Promise<{
   filters: Record<string, unknown>;
   groupBy: string | null;
   metric: string;
@@ -99,35 +195,97 @@ async function interpretIntent(intent: string): Promise<{
 }> {
   const fallback = {
     filters: {}, groupBy: null, metric: 'count', metricField: null,
-    chartType: null, template: 'executive', limit: 100, title: null,
+    chartType: detectedChartType, template: 'chart', limit: 100, title: null,
   };
+
+  const now = new Date();
+  const currentDate = now.toISOString().split('T')[0];
 
   try {
     const response = await bedrockClient.send(new ConverseCommand({
       modelId: MODEL_ID,
       system: [{
-        text: `Eres un intérprete de intents para el sistema de dashboards de Macropay, empresa mexicana de ventas a crédito de productos (motos, celulares, bicicletas eléctricas, pantallas, tablets, consolas, audio, accesorios). Tu trabajo es convertir lo que pide el usuario en una consulta estructurada JSON.
+        text: `Eres un intérprete de intents para el sistema de dashboards de Macropay, empresa mexicana de ventas a crédito.
+
+FECHA ACTUAL: ${currentDate}
+El dataset contiene ventas desde 2024-01-01 hasta hoy.
 
 Responde SOLO con JSON válido, sin markdown, sin explicaciones.
 Estructura exacta:
-{"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null,"title":null}
+{"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"chart","limit":null,"title":null}
 
-Campos: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
-Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
-Estatus: al_corriente, atrasado, liquidado, cancelado.
-Canales: tienda_fisica, en_linea, telefono.
+CAMPOS DISPONIBLES:
+- id: identificador único
+- fecha_venta: fecha en formato YYYY-MM-DD (2024-01-01 a ${currentDate})
+- cliente: nombre del cliente
+- edad_cliente: edad numérica
+- genero: "Masculino" o "Femenino"
+- estado: uno de los 32 estados de México (ej: "Jalisco", "Nuevo León", "Ciudad de México")
+- ciudad: ciudad dentro del estado
+- sucursal: nombre de la sucursal
+- categoria: "Motos", "Celulares", "Bicicletas Eléctricas", "Pantallas/TV", "Audio", "Tablets", "Consolas", "Climatización", "Accesorios"
+- producto: nombre específico del producto
+- color: color del producto
+- precio_contado: precio sin financiamiento (número)
+- enganche: pago inicial (número)
+- monto_financiado: monto a crédito (número)
+- monto_total_credito: total con intereses (número)
+- plazo_semanas: duración del crédito (número)
+- pago_semanal: pago por semana (número)
+- semanas_pagadas: semanas ya pagadas (número)
+- estatus_credito: "al_corriente", "atrasado", "liquidado", "cancelado"
+- canal_venta: "tienda_fisica", "en_linea", "telefono"
+- vendedor: nombre del vendedor
 
-Reglas:
-- "por estado/categoría/mes/vendedor" → groupBy
-- categoría específica mencionada → filters.categoria
-- "atrasado/liquidado/al corriente/cancelado" → filters.estatus_credito
-- "tabla/listado" → template:table
-- "gráfica/chart/tendencia" → template:chart
-- "crédito/estatus/pago/morosidad" → template:credit
-- "por categoría/análisis" → template:category
-- "resumen/dashboard/kpi/ejecutivo" → template:executive
-- número mencionado (últimas 10, top 20) → limit
-- genera un título descriptivo en español → title`,
+REGLAS DE INTERPRETACIÓN:
+
+1. FILTROS DE FECHA (filters.fecha_venta):
+   - Si el intent menciona un rango de fechas como "(del YYYY-MM-DD al YYYY-MM-DD)", usa: {"gte": "YYYY-MM-DD", "lte": "YYYY-MM-DD"}
+   - "ventas de enero" → filters.fecha_venta: {"gte": "2025-01-01", "lte": "2025-01-31"}
+   - "año pasado" → filters.fecha_venta: {"gte": "2024-01-01", "lte": "2024-12-31"}
+
+2. AGRUPACIÓN (groupBy):
+   - "por estado" → groupBy: "estado"
+   - "por categoría" → groupBy: "categoria"
+   - "por mes" → groupBy: "mes" (el sistema extraerá el mes de fecha_venta)
+   - "por vendedor" → groupBy: "vendedor"
+   - "por canal" → groupBy: "canal_venta"
+
+3. FILTROS DE CATEGORÍA:
+   - "motos" → filters.categoria: "Motos"
+   - "celulares/teléfonos" → filters.categoria: "Celulares"
+   - "bicis/bicicletas" → filters.categoria: "Bicicletas Eléctricas"
+   - "pantallas/tv/televisores" → filters.categoria: "Pantallas/TV"
+
+4. TIPO DE GRÁFICA (chartType):
+   - "pie/pastel/circular" → chartType: "pie"
+   - "dona/donut" → chartType: "doughnut"
+   - "barras/columnas" → chartType: "bar"
+   - "líneas/tendencia" → chartType: "line"
+   - Si no se especifica, usa "bar" para comparaciones, "pie" para distribuciones
+
+5. TEMPLATE:
+   - "gráfica/chart" → template: "chart"
+   - "tabla/listado" → template: "table"
+   - "resumen/dashboard/kpi" → template: "executive"
+   - "crédito/estatus/morosidad" → template: "credit"
+   - "por categoría/análisis" → template: "category"
+
+6. LÍMITE:
+   - "20 motos" → limit: 20, filters.categoria: "Motos"
+   - "últimas 10" → limit: 10
+   - "top 5" → limit: 5
+
+7. MÉTRICAS:
+   - "ventas" sin especificar → metric: "count" (contar registros)
+   - "monto/dinero/pesos" → metric: "sum", metricField: "monto_total_credito"
+   - "promedio de precio" → metric: "avg", metricField: "precio_contado"
+
+EJEMPLOS:
+- "ventas por mes" → {"groupBy":"mes","metric":"count","template":"chart","chartType":"bar"}
+- "20 motos en gráfica de pie" → {"filters":{"categoria":"Motos"},"limit":20,"chartType":"pie","template":"chart"}
+- "ventas de celulares del año pasado" → {"filters":{"categoria":"Celulares","fecha_venta":{"gte":"2024-01-01","lte":"2024-12-31"}},"template":"chart"}
+- "monto total por estado" → {"groupBy":"estado","metric":"sum","metricField":"monto_total_credito","chartType":"bar"}`,
       }],
       messages: [{ role: 'user', content: [{ text: intent }] }],
       inferenceConfig: { maxTokens: 512, temperature: 0 },
@@ -136,7 +294,14 @@ Reglas:
     const block = response.output?.message?.content?.[0];
     if (!block || !('text' in block)) return fallback;
     const clean = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    return { ...fallback, ...JSON.parse(clean) };
+    const parsed = { ...fallback, ...JSON.parse(clean) };
+    
+    // Override chartType if we detected it from the original intent
+    if (detectedChartType && !parsed.chartType) {
+      parsed.chartType = detectedChartType;
+    }
+    
+    return parsed;
   } catch (err) {
     console.log('[orchestrator] intent interpretation failed:', (err as Error).message);
     return fallback;
@@ -327,20 +492,50 @@ function computeAggregations(
   if (parsedIntent.groupBy) {
     const field = parsedIntent.groupBy;
     const groups: Record<string, number> = {};
+    
+    const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    
     for (const record of records) {
-      const key = String(record[field] ?? 'N/A');
+      let key: string;
+      
+      // Special handling for "mes" - extract month from fecha_venta
+      if (field === 'mes' && record.fecha_venta) {
+        const date = new Date(String(record.fecha_venta));
+        const monthIdx = date.getMonth();
+        const year = date.getFullYear();
+        key = `${monthNames[monthIdx]} ${year}`;
+      } else {
+        key = String(record[field] ?? 'N/A');
+      }
+      
       if (parsedIntent.metric === 'count') {
         groups[key] = (groups[key] ?? 0) + 1;
       } else if (parsedIntent.metricField) {
         groups[key] = (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
       }
     }
+    
+    // Sort by date for "mes" groupBy, otherwise by value
+    let sortedEntries = Object.entries(groups);
+    if (field === 'mes') {
+      sortedEntries = sortedEntries.sort(([a], [b]) => {
+        const parseMonthYear = (s: string) => {
+          const parts = s.split(' ');
+          const monthIdx = monthNames.indexOf(parts[0]);
+          const year = parseInt(parts[1] || '2024');
+          return year * 12 + monthIdx;
+        };
+        return parseMonthYear(a) - parseMonthYear(b);
+      });
+    } else {
+      sortedEntries = sortedEntries.sort(([, a], [, b]) => b - a);
+    }
+    
     agg.groupBy = {
       field,
       metric: parsedIntent.metric,
       uniqueGroups: Object.keys(groups).length,
-      data: Object.entries(groups)
-        .sort(([, a], [, b]) => b - a)
+      data: sortedEntries
         .slice(0, 15)
         .map(([label, value]) => ({ label, value })),
     };

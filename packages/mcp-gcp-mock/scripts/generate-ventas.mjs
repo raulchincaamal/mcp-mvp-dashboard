@@ -197,15 +197,20 @@ function generateRecord(id) {
   const montoTotal = Math.round(montoFinanciado * (1 + tasaInteres));
   const pagoSemanal = Math.round(montoTotal / plazoSemanas);
 
-  // Weighted date distribution: ensure ~30% of records fall in Q4 2024
+  // Dynamic date distribution: spread across 2024 to today
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const currentYear = today.getFullYear();
+
   const dateRange = faker.helpers.weightedArrayElement([
-    { value: { from: '2024-10-01', to: '2024-12-31' }, weight: 30 }, // Q4 2024 — heavy
-    { value: { from: '2024-01-01', to: '2024-09-30' }, weight: 40 }, // Q1-Q3 2024
-    { value: { from: '2025-01-01', to: '2025-07-31' }, weight: 30 }, // 2025
+    { value: { from: '2024-01-01', to: '2024-06-30' }, weight: 15 },
+    { value: { from: '2024-07-01', to: '2024-12-31' }, weight: 20 },
+    { value: { from: `${currentYear - 1}-01-01`, to: `${currentYear - 1}-12-31` }, weight: 30 },
+    { value: { from: `${currentYear}-01-01`, to: todayStr }, weight: 35 },
   ]);
   const fechaVenta = faker.date.between(dateRange);
   const semanasTranscurridas = Math.floor(
-    (new Date('2025-08-01').getTime() - fechaVenta.getTime()) /
+    (today.getTime() - fechaVenta.getTime()) /
       (7 * 24 * 60 * 60 * 1000),
   );
 

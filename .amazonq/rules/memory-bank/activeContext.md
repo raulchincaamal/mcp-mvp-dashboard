@@ -38,13 +38,16 @@ Phase 1 (MVP local) — pipeline end-to-end validated and working, including con
 ## Orchestrator Smart Behaviors
 - **Date normalization**: "este mes" → "el mes agosto 2025 (del 2025-08-01 al 2025-08-31)" before Bedrock sees it
 - **Chart type normalization**: "pastel/pie/circular" → pie, "dona/donut" → doughnut, "barras" → bar, "líneas" → line
+- **Multiple chart types**: detects ALL chart types in intent, returns array
 - **GroupBy "mes"**: extracts month from fecha_venta, sorts chronologically ("Enero 2024", "Febrero 2024", etc.)
-- **Filter normalization**: known value maps for `estado` (32 states with accents), `estatus_credito`, `canal_venta`; date range clamping for future year hallucinations
-- **Template overrides**:
-  - All records share one `estatus_credito` → force `credit`
-  - General query (ventas/mes/año) + >50 records + Nova chose `chart` → force `executive`
-- **Double-parse**: loops `JSON.parse` until result is an object
-- **Hint deduplication**: strips existing `[hint:x]` from intent before adding new ones
+- **Session context**: stores last intent/filters in Redis for refinement ("hazlo en verde")
+- **Refinement detection**: patterns like "hazlo en", "cámbialo", "agrégale", "quítale" merge with previous context
+- **Exclusion filters**: "todo menos motos" → client-side filtering after query
+- **Numeric ranges**: "mayores a 50000" → filters with gte/lte/gt/lt
+- **Top/Bottom**: "los 5 peores vendedores" → topBottom: {type: "bottom", count: 5}
+- **Color themes**: 7 palettes (default, blue, green, dark, light, mono, corporate)
+- **Comparisons**: "compara enero vs febrero" → comparison object
+- **Percentages**: "qué porcentaje" → showPercentages: true
 
 ## Dataset
 - 5,000 records, dates from 2024-01-01 to today (regenerated)

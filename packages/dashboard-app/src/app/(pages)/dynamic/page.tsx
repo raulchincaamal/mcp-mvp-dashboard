@@ -5,6 +5,11 @@ import DynamicRenderer, { type UIConfig } from '@/shared/components/DynamicRende
 
 const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
 
+// Stable session ID per browser tab
+const SESSION_ID = typeof crypto !== 'undefined'
+  ? crypto.randomUUID()
+  : Math.random().toString(36).slice(2);
+
 const EXAMPLE_INTENTS = [
   { label: 'Resumen ejecutivo', intent: 'resumen ejecutivo de ventas', icon: '📊' },
   { label: 'Motos por estado', intent: 'gráfica de ventas de motos por estado', icon: '🏍️' },
@@ -103,6 +108,12 @@ export default function DynamicPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!intent.trim()) return;
+
+    // Strip HTML tags in case user pasted rendered content
+    const sanitized = intent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!sanitized || sanitized.length < 3) return;
+
+    setIntent(sanitized);
     setLoading(true);
     setError(null);
     setCredExpired(false);
@@ -111,7 +122,7 @@ export default function DynamicPage() {
       const res = await fetch(`${API_URL}/api/generate-ui`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent: intent.trim(), dataset: 'ventas-credito' }),
+        body: JSON.stringify({ intent: sanitized, dataset: 'ventas-credito', sessionId: SESSION_ID }),
       });
       const json = await res.json();
       if (res.status === 401 || json.code === 'AWS_CREDENTIALS_EXPIRED') {

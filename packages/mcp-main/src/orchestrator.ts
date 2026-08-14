@@ -172,9 +172,21 @@ function normalizeDateExpressions(intent: string): string {
     normalized = normalized.replace(/por\s+mes/gi, 'agrupado por mes (campo: mes extraído de fecha_venta)');
   }
   
-  // Meses específicos: "en julio", "de agosto", etc.
+  // Meses específicos con año explícito: "de abril de 2025", "del mes de julio 2024"
   for (let i = 0; i < monthNames.length; i++) {
-    const regex = new RegExp(`(en|de|del mes de)\\s+${monthNames[i]}(?!\\s+\\d{4})`, 'gi');
+    const regexWithYear = new RegExp(`(en|de|del mes de)\\s+${monthNames[i]}\\s+(\\d{4})`, 'gi');
+    normalized = normalized.replace(regexWithYear, (_match, _prep, y) => {
+      const yr = parseInt(y);
+      const start = `${yr}-${pad(i + 1)}-01`;
+      const lastDay = new Date(yr, i + 1, 0).getDate();
+      const end = `${yr}-${pad(i + 1)}-${lastDay}`;
+      return `en ${monthNames[i]} ${yr} (del ${start} al ${end})`;
+    });
+  }
+
+  // Meses específicos sin año: "en julio", "de agosto"
+  for (let i = 0; i < monthNames.length; i++) {
+    const regex = new RegExp(`(en|de|del mes de)\\s+${monthNames[i]}(?!\\s+\\d{4})(?!\\s+20\\d{2})`, 'gi');
     if (regex.test(normalized)) {
       const start = `${year}-${pad(i + 1)}-01`;
       const lastDay = new Date(year, i + 1, 0).getDate();
@@ -419,7 +431,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     } else if (parsedIntent.drillDown) {
       console.log(`[orchestrator] handling drillDown: ${JSON.stringify(parsedIntent.drillDown)}`);
       specialResult = handleDrillDown(records, parsedIntent.drillDown);
-    } else if (parsedIntent.comparison) {
+    } else if (parsedIntent.comparison && !filters['fecha_venta']) {
       console.log(`[orchestrator] handling comparison: ${JSON.stringify(parsedIntent.comparison)}`);
       specialResult = handleComparison(records, parsedIntent.comparison, parsedIntent.metricField);
     } else if (parsedIntent.groupByMultiple?.length) {

@@ -10,7 +10,6 @@ const MODEL_ID = process.env.BEDROCK_MODEL_ID;
 
 /**
  * Structured query parsed from a natural language intent.
- * Completely domain-agnostic — field names come from the dataset, not hardcoded.
  */
 export interface ParsedIntent {
   filters: Record<string, unknown>;
@@ -18,124 +17,71 @@ export interface ParsedIntent {
   metric: 'count' | 'sum' | 'avg' | 'max' | 'min';
   metricField: string | null;
   chartType: 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | null;
-  template: 'dashboard' | 'chart' | 'table' | 'kpi' | 'cards';
+  template: 'executive' | 'category' | 'credit' | 'table' | 'cards' | 'chart';
   limit: number | null;
   title: string | null;
 }
 
-/**
- * Describes a single field in a dataset for LLM context.
- */
-export interface FieldSchema {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'date';
-  description?: string;
-  sampleValues?: unknown[];
-  uniqueCount?: number;
-}
+const SYSTEM_PROMPT = `Eres un intérprete de consultas para un dashboard de ventas a crédito. Tu trabajo es convertir un intent en lenguaje natural a un JSON estructurado.
 
-/**
- * Dataset schema passed dynamically to the interpreter.
- */
-export interface DatasetSchema {
-  name: string;
-  description?: string;
-  fields: FieldSchema[];
-  totalRecords?: number;
-}
+El dataset tiene estos campos:
+- id (string): ID de venta
+- fecha_venta (string, formato YYYY-MM-DD): fecha de la venta
+- cliente (string): nombre del cliente
+- edad_cliente (number): edad
+- genero (string): M o F
+- estado (string): estado de México
+- ciudad (string): ciudad
+- sucursal (string): nombre de sucursal
+- categoria (string): Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios
+- producto (string): nombre completo del producto
+- color (string): color del producto
+- precio_contado (number): precio en pesos
+- enganche (number): pago inicial
+- monto_financiado (number): monto del crédito
+- tasa_interes (number): tasa de interés (0-1)
+- monto_total_credito (number): monto total a pagar
+- plazo_semanas (number): plazo en semanas
+- pago_semanal (number): pago semanal
+- semanas_pagadas (number): semanas ya pagadas
+- estatus_credito (string): al_corriente, atrasado, liquidado, cancelado
+- canal_venta (string): tienda_fisica, en_linea, telefono
+- vendedor (string): nombre del vendedor
 
-/**
- * Builds the system prompt dynamically from the dataset schema.
- * No hardcoded field names or domain logic.
- */
-function buildSystemPrompt(schema: DatasetSchema): string {
-  const fieldsDescription = schema.fields
-    .map((f) => {
-      let line = `- ${f.name} (${f.type})`;
-      if (f.description) line += `: ${f.description}`;
-      if (f.sampleValues && f.sampleValues.length > 0) {
-        line += ` [examples: ${f.sampleValues.slice(0, 4).join(', ')}]`;
-      }
-      if (f.uniqueCount !== undefined) {
-        line += ` (${f.uniqueCount} unique values)`;
-      }
-      return line;
-    })
-    .join('\n');
-
-  const numericFields = schema.fields
-    .filter((f) => f.type === 'number')
-    .map((f) => f.name);
-  const stringFields = schema.fields
-    .filter((f) => f.type === 'string')
-    .map((f) => f.name);
-  const dateFields = schema.fields
-    .filter((f) => f.type === 'date')
-    .map((f) => f.name);
-
-  return `You are a query interpreter for a data dashboard system. Your job is to convert a natural language intent into a structured JSON query.
-
-Dataset: "${schema.name}"${schema.description ? ` — ${schema.description}` : ''}
-${schema.totalRecords ? `Total records: ${schema.totalRecords}` : ''}
-
-Available fields:
-${fieldsDescription}
-
-Field categories:
-- Numeric fields (usable as metrics): ${numericFields.join(', ') || 'none'}
-- Categorical fields (usable for groupBy): ${stringFields.join(', ') || 'none'}
-- Date fields (usable for time filtering/grouping): ${dateFields.join(', ') || 'none'}
-
-Respond ONLY with valid JSON (no markdown, no explanation) using this structure:
+Responde SOLO con un JSON válido (sin markdown, sin explicación) con esta estructura:
 {
-  "filters": {},
-  "groupBy": null,
-  "metric": "count",
-  "metricField": null,
-  "chartType": null,
-  "template": "dashboard",
-  "limit": null,
-  "title": null
+  "filters": {},          // filtros exactos o rangos. Ej: {"categoria": "Motos"} o {"fecha_venta": {"gte": "2025-07-01", "lte": "2025-07-31"}}
+  "groupBy": null,        // campo para agrupar. Ej: "estado", "categoria", "canal_venta"
+  "metric": "count",      // count = contar registros, sum/avg/max/min = operación sobre metricField
+  "metricField": null,    // campo numérico para sum/avg/max/min. Ej: "precio_contado", "monto_total_credito"
+  "chartType": null,      // bar, line, pie, doughnut, area, o null si no es gráfica
+  "template": "executive",// executive, category, credit, table, cards, chart
+  "limit": null,          // número de registros máximo, null = sin límite específico
+  "title": null           // título sugerido para el dashboard, o null
 }
 
-Field descriptions:
-- "filters": exact match or range filters. Example: {"field": "value"} or {"date_field": {"gte": "2025-01-01", "lte": "2025-12-31"}}. Only use field names from the dataset.
-- "groupBy": a field name to group/aggregate by (must be one of the available fields). Best used with categorical or date fields.
-- "metric": the aggregation type — "count" (count records), "sum", "avg", "max", "min" (applied to metricField).
-- "metricField": the numeric field to apply the metric on. Required when metric is sum/avg/max/min. Must be one of the numeric fields.
-- "chartType": "bar", "line", "pie", "doughnut", "area", or null. Use "line" for time series, "doughnut"/"pie" for few categories, "bar" for comparisons.
-- "template": the layout template — "dashboard" (KPIs + chart + table), "chart" (focused chart), "table" (data listing), "kpi" (metrics only), "cards" (card list).
-- "limit": max records to return, or null for default.
-- "title": a suggested title for the visualization, or null.
-
-Rules:
-- If the intent mentions quantity/count/number of items: metric = "count"
-- If the intent mentions total/sum: metric = "sum", set metricField to the relevant numeric field
-- If the intent mentions average/mean: metric = "avg", set metricField
-- If the intent mentions "by X" or "per X" or "grouped by X": set groupBy to the matching field
-- If the intent mentions a specific category value: add it to filters
-- If the intent mentions a date range: add range filter on the date field
-- If the intent says "table" or "list" or "records": template = "table"
-- If the intent says "chart" or "graph": template = "chart"
-- If a number is mentioned (top 10, last 20): set limit
-- ONLY use field names that exist in the dataset. Do not invent field names.
-- Current date: ${new Date().toISOString().split('T')[0]}`;
-}
+Reglas:
+- Si mencionan "cantidad", "cuántos", "número de": metric = "count"
+- Si mencionan "total", "suma": metric = "sum"
+- Si mencionan "promedio": metric = "avg"
+- Si mencionan "por estado/categoría/mes/etc": usa groupBy
+- Si mencionan una categoría específica (motos, celulares, etc): agrégala a filters
+- Si mencionan un mes: agrega filtro de rango en fecha_venta
+- Si mencionan "tabla" o "listado": template = "table"
+- Si mencionan "gráfica" o "chart": template = "chart"
+- Si mencionan "crédito" o "estatus": template = "credit"
+- Si mencionan "categoría" o "por categoría": template = "category"
+- Si mencionan un número (últimas 10, top 20): ponlo en limit
+- La fecha actual es ${new Date().toISOString().split('T')[0]}`;
 
 /**
- * Interprets a natural language intent into a structured query using Claude via Bedrock.
- * The dataset schema is injected dynamically — no hardcoded domain knowledge.
+ * Interprets a natural language intent into a structured query using Claude Haiku via Bedrock.
  */
-export async function interpretIntent(
-  intent: string,
-  schema: DatasetSchema,
-): Promise<ParsedIntent> {
-  const systemPrompt = buildSystemPrompt(schema);
-
+export async function interpretIntent(intent: string): Promise<ParsedIntent> {
   try {
     const command = new ConverseCommand({
       modelId: MODEL_ID,
-      system: [{ text: systemPrompt }],
+      system: [{ text: SYSTEM_PROMPT }],
       messages: [
         {
           role: 'user',
@@ -157,6 +103,7 @@ export async function interpretIntent(
       .replace(/\s*```\s*$/i, '')
       .trim();
 
+    // Parse the JSON response
     const parsed = JSON.parse(cleanJson) as ParsedIntent;
 
     // Validate and set defaults
@@ -166,7 +113,7 @@ export async function interpretIntent(
       metric: parsed.metric || 'count',
       metricField: parsed.metricField || null,
       chartType: parsed.chartType || null,
-      template: normalizeTemplate(parsed.template),
+      template: parsed.template || 'executive',
       limit: parsed.limit || null,
       title: parsed.title || null,
     };
@@ -175,34 +122,17 @@ export async function interpretIntent(
       '[intent-interpreter] Error calling Bedrock:',
       (error as Error).message,
     );
-    // Fallback: return a basic dashboard template with no filters
+    // Fallback: return a basic executive template with no filters
     return {
       filters: {},
       groupBy: null,
       metric: 'count',
       metricField: null,
       chartType: null,
-      template: 'dashboard',
+      template: 'executive',
       limit: 100,
       title: null,
     };
   }
-}
-
-/**
- * Normalize template value to the supported set.
- */
-function normalizeTemplate(
-  template: string | undefined | null,
-): ParsedIntent['template'] {
-  const valid = ['dashboard', 'chart', 'table', 'kpi', 'cards'];
-  if (template && valid.includes(template)) {
-    return template as ParsedIntent['template'];
-  }
-  // Map legacy/alternative names
-  if (template === 'executive') return 'dashboard';
-  if (template === 'category') return 'chart';
-  if (template === 'credit') return 'dashboard';
-  return 'dashboard';
 }
 

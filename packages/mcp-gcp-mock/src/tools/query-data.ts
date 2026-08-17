@@ -71,12 +71,15 @@ export function queryData({
     );
   }
 
-  // Apply filters (supports exact match and range filters)
+  // Apply filters (supports exact match, array IN, and range filters)
   if (filters) {
     records = records.filter((record) =>
       Object.entries(filters).every(([key, value]) => {
         if (isRangeFilter(value)) {
           return matchesRange(record[key], value);
+        }
+        if (Array.isArray(value)) {
+          return value.includes(record[key]);
         }
         return record[key] === value;
       }),

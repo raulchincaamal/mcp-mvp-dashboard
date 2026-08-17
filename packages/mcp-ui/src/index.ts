@@ -1,28 +1,26 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { generateUi, validateUiConfig } from './tools/generate-ui.js';
+import { generateUi } from './tools/generate-ui.js';
 
 const server = new McpServer({
   name: 'mcp-ui',
-  version: '0.2.0',
+  version: '0.1.0',
 });
 
 // Tool: generate dynamic UI config from components + data + intent
 server.tool(
   'generate_ui',
-  'Generates a declarative UIConfig from data records + intent hints. Domain-agnostic: uses data inspection and LLM-provided hints ([groupBy:X], [metric:Y], [chartType:Z], [template:T]) to decide structure. Returns JSON that a frontend DynamicRenderer maps to real components.',
+  'Generates a declarative UIConfig using available UI components. The frontend DynamicRenderer maps this JSON to real React components. Supports KPI grids, charts, tables, progress bars, transaction lists, and more.',
   {
     intent: z
       .string()
       .describe(
-        'Natural language intent with optional LLM hints in brackets: [groupBy:field] [metric:sum|avg|count|max|min] [metricField:field1,field2] [chartType:bar|line|pie|doughnut|area] [template:dashboard|chart|table|kpi|cards] [sortBy:field] [limit:N]',
+        'What the user wants to see — includes LLM hints like [groupBy:estado] [metric:count] [template:chart]',
       ),
     records: z
       .array(z.record(z.unknown()))
-      .describe(
-        'Array of data records (any schema — fields are auto-detected)',
-      ),
+      .describe('Array of data records from MCP GCP'),
     componentCatalog: z
       .array(
         z.object({
@@ -34,13 +32,8 @@ server.tool(
           props: z.record(z.unknown()).optional().describe('Available props'),
         }),
       )
-      .describe(
-        'Available UI components from library-context (used to filter which components to generate)',
-      ),
-    title: z
-      .string()
-      .optional()
-      .describe('Override title for the generated UI'),
+      .describe('Available UI components from library-context'),
+    title: z.string().optional().describe('UI section title'),
     layout: z
       .enum(['vertical', 'grid'])
       .optional()
@@ -72,51 +65,6 @@ server.tool(
         isError: true,
       };
     }
-  },
-);
-
-// Tool: validate a pre-built UIConfig (e.g. from an LLM)
-server.tool(
-  'validate_ui',
-  'Validates a UIConfig JSON object against the expected schema. Use this when the LLM generates the UIConfig directly and you need to verify it before sending to the frontend.',
-  {
-    config: z
-      .record(z.unknown())
-      .describe(
-        'The UIConfig object to validate (must have title, layout, components[])',
-      ),
-  },
-  async ({ config }) => {
-    const result = validateUiConfig(config);
-
-    if (result.valid) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              { valid: true, config: result.config },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            { valid: false, errors: result.errors },
-            null,
-            2,
-          ),
-        },
-      ],
-      isError: true,
-    };
   },
 );
 

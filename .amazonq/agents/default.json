@@ -1,0 +1,104 @@
+{
+  "name": "q_ide_default",
+  "description": "Default agent configuration",
+  "prompt": "",
+  "mcpServers": {
+    "mcp-gcp-mock": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "packages/mcp-gcp-mock/src/index.ts"
+      ],
+      "env": {
+        "MCP_PROJECT_ROOT": "${workspaceFolder}"
+      }
+    },
+    "mcp-ui": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "packages/mcp-ui/src/index.ts"
+      ],
+      "env": {
+        "MCP_PROJECT_ROOT": "${workspaceFolder}"
+      }
+    },
+    "mcp-main": {
+      "command": "node",
+      "args": [
+        "packages/mcp-main/dist/index.js"
+      ],
+      "env": {
+        "DASHBOARD_URL": "http://localhost:3000",
+        "MCP_PROJECT_ROOT": "${workspaceFolder}",
+        "AWS_ACCESS_KEY_ID": "<AWS_ACCESS_KEY_ID>",
+        "AWS_SECRET_ACCESS_KEY": "<AWS_SECRET_ACCESS_KEY>",
+        "AWS_SESSION_TOKEN": "<AWS_SESSION_TOKEN>",
+        "AWS_REGION": "us-east-1",
+        "BEDROCK_MODEL_ID": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "REDIS_HOST": "<REDIS_HOST>",
+        "REDIS_PORT": "6379",
+        "REDIS_USER": "<REDIS_USER>",
+        "REDIS_PASS": "<REDIS_PASS>",
+        "TIMEOUT_SESSION_MINUTES": "60"
+      }
+    }
+  },
+  "tools": [
+    "fs_read",
+    "execute_bash",
+    "fs_write",
+    "report_issue",
+    "use_aws",
+    "@mcp-gcp-mock",
+    "@mcp-ui",
+    "@mcp-main",
+    "fsRead",
+    "fsWrite",
+    "fsReplace",
+    "listDirectory",
+    "fileSearch",
+    "executeBash",
+    "codeReview",
+    "displayFindings"
+  ],
+  "toolAliases": {},
+  "allowedTools": [
+    "fs_read",
+    "report_issue",
+    "use_aws",
+    "execute_bash",
+    "fs_write",
+    "fsRead",
+    "listDirectory",
+    "fileSearch",
+    "codeReview",
+    "displayFindings"
+  ],
+  "toolsSettings": {
+    "use_aws": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    },
+    "execute_bash": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    }
+  },
+  "resources": [
+    "file://AmazonQ.md",
+    "file://README.md",
+    "file://.amazonq/rules/**/*.md"
+  ],
+  "hooks": {
+    "agentSpawn": [],
+    "userPromptSubmit": []
+  },
+  "useLegacyMcpJson": true
+}

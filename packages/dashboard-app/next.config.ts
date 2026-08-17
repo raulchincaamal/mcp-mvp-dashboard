@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname, '../..'),
   },
   devIndicators: false,
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
 };
 
 export default nextConfig;

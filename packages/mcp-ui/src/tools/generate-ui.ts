@@ -1165,6 +1165,12 @@ function buildChartTemplate(
     (/l[ií]nea|line|tendencia/i.test(intent) ? 'line'
       : /pie|pastel/i.test(intent) ? 'pie'
       : /donut|dona|doughnut/i.test(intent) ? 'doughnut'
+      : /scatter|dispersi[oó]n/i.test(intent) ? 'scatter'
+      : /radar|ara[nñ]a/i.test(intent) ? 'radar'
+      : /embudo|funnel/i.test(intent) ? 'funnel'
+      : /gauge|medidor/i.test(intent) ? 'gauge'
+      : /heatmap|calor/i.test(intent) ? 'heatmap'
+      : /treemap|[aá]rbol/i.test(intent) ? 'treemap'
       : 'bar');
 
   const labelField =

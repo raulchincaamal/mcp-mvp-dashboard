@@ -4,7 +4,6 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import type { McpClient } from './mcp-client.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
-import { buildRichUIConfig } from './rich-ui-builder.js';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION,
@@ -361,8 +360,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     }
     const limit = params.limit ?? parsedIntent.limit ?? 100;
     const needsAllData = !!(parsedIntent.trendAnalysis || parsedIntent.percentile || parsedIntent.cumulative || parsedIntent.correlation || parsedIntent.comparison || parsedIntent.groupByMultiple || parsedIntent.drillDown);
-    const needsRichTemplate = ['category', 'executive', 'credit'].includes(parsedIntent.template);
-    const fetchLimit = needsAllData || needsRichTemplate ? 5000 : (parsedIntent.excludeFilters || parsedIntent.orFilters ? limit * 3 : limit);
+    const fetchLimit = needsAllData ? 5000 : (parsedIntent.excludeFilters || parsedIntent.orFilters ? limit * 3 : limit);
 
     console.log(`[orchestrator] querying data — filters: ${JSON.stringify(filters)}, limit: ${fetchLimit}`);
     const queryResult = await gcpClient.callTool('query_data', {
@@ -402,7 +400,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
       records = applyCalculatedField(records, parsedIntent.calculatedField);
     }
 
-    records = records.slice(0, needsRichTemplate ? 5000 : limit);
+    records = records.slice(0, limit);
     console.log(`[orchestrator] got ${records.length} records after client-side filters`);
 
     // Handle no results — ask Bedrock for smart suggestions based on what actually exists
@@ -452,11 +450,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
 
     // Step 3: Bedrock generates UIConfig from data + intent
     console.log('[orchestrator] generating UIConfig with Bedrock');
-    const needsFullDataset = ['category', 'executive', 'credit'].includes(parsedIntent.template);
-    const colors = COLOR_THEMES[parsedIntent.colorTheme ?? 'default'] ?? COLOR_THEMES.default;
-    const uiConfig = needsFullDataset
-      ? await buildRichUIConfig(bedrockClient, MODEL_ID, baseIntent, parsedIntent, records, colors)
-      : await generateUIConfig(baseIntent, parsedIntent, records);
+    const uiConfig = await generateUIConfig(baseIntent, parsedIntent, records);
 
     // Save session context for future refinements
     if (sessionId) {

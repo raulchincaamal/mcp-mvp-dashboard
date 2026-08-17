@@ -1,6 +1,7 @@
 import "@macropaytd/lib-front-ui-components/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
+import SmoothScroll from "@/shared/components/SmoothScroll";
 
 export const metadata = {
   title: "MCP Dashboard",
@@ -25,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="antialiased">
-        <Providers>{children}</Providers>
+        <Providers><SmoothScroll>{children}</SmoothScroll></Providers>
       </body>
     </html>
   );

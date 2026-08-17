@@ -1,5 +1,11 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+import AuroraChart from './AuroraChart';
+import ReactECharts from 'echarts-for-react';
+
+const HolographicChart3D = dynamic(() => import('./HolographicChart3D'), { ssr: false });
+
 import {
   Button,
   Input,
@@ -10,34 +16,6 @@ import {
   Checkbox,
   Avatar,
 } from '@macropaytd/lib-front-ui-components';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Filler,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Bar, Line, Pie, Doughnut } from 'react-chartjs-2';
-
-// Register Chart.js
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Filler,
-  Title,
-  Tooltip,
-  Legend,
-);
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -259,34 +237,27 @@ function renderTransactionList(props: Record<string, unknown>) {
 function renderMiniChart(props: Record<string, unknown>) {
   const title = props.title as string;
   const value = props.value as string;
-  const data = props.data as number[];
-  const color = (props.color as string) || '#4F46E5';
+  const data  = props.data as number[];
+  const color = (props.color as string) || '#818cf8';
 
   if (!data || data.length === 0) return null;
 
-  const chartData = {
-    labels: data.map((_, i) => String(i)),
-    datasets: [
-      {
-        data,
-        borderColor: color,
-        backgroundColor: `${color}20`,
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
+  const option = {
+    backgroundColor: 'transparent',
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
+    xAxis: { type: 'category' as const, show: false, data: data.map((_, i) => i) },
+    yAxis: { type: 'value' as const, show: false },
+    series: [{
+      type: 'line' as const,
+      data,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color },
+      areaStyle: {
+        color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: color + '40' }, { offset: 1, color: color + '05' }] },
       },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { enabled: false } },
-    scales: {
-      x: { display: false },
-      y: { display: false },
-    },
+    }],
   };
 
   return (
@@ -294,7 +265,7 @@ function renderMiniChart(props: Record<string, unknown>) {
       <p style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text-tertiary)' }}>{title}</p>
       <p style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.4px', marginTop: '0.25rem', color: 'var(--text)' }}>{value}</p>
       <div style={{ height: 60, marginTop: '0.75rem' }}>
-        <Line data={chartData as never} options={chartOptions} />
+        <ReactECharts option={option} style={{ height: 60, width: '100%' }} opts={{ renderer: 'canvas' }} />
       </div>
     </div>
   );
@@ -368,65 +339,41 @@ function renderTable(props: Record<string, unknown>) {
 // ─── Standard Chart ────────────────────────────────────────
 
 function renderChart(props: Record<string, unknown>) {
-  const type = props.type as string;
-  const title = props.title as string | undefined;
-  const data = props.data as {
-    labels: string[];
-    datasets: Record<string, unknown>[];
-  };
-  const options = props.options as Record<string, unknown> | undefined;
+  const type     = props.type as string;
+  const title    = props.title as string | undefined;
+  const data     = props.data as { labels: string[]; datasets: Record<string, unknown>[] };
+  const gradient = (props.gradient as 'aurora' | 'neon' | 'fire' | 'ocean') ?? 'aurora';
+  const height   = (props.height as number | undefined) ?? 300;
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      title: { display: false },
-      legend: { position: 'bottom' as const },
-    },
-    scales:
-      type !== 'pie' && type !== 'doughnut'
-        ? {
-            x: {
-              title: {
-                display: !!(options?.xAxis as Record<string, unknown>)?.label,
-                text: ((options?.xAxis as Record<string, unknown>)?.label as string) || '',
-              },
-            },
-            y: {
-              title: {
-                display: !!(options?.yAxis as Record<string, unknown>)?.label,
-                text: ((options?.yAxis as Record<string, unknown>)?.label as string) || '',
-              },
-            },
-          }
-        : undefined,
-  };
+  // Holographic 3D mode
+  if (props.holographic === true || props.style === 'holographic') {
+    const labels = data?.labels ?? [];
+    const values = (data?.datasets?.[0]?.data as number[]) ?? [];
+    return (
+      <HolographicChart3D
+        data={labels.map((label, i) => ({ label, value: values[i] ?? 0 }))}
+        title={title}
+        height={height}
+        gradient={gradient}
+      />
+    );
+  }
 
-  const chartData = {
-    labels: data.labels,
-    datasets: data.datasets.map((ds) => ({
-      ...ds,
-      fill: type === 'area',
-      tension: type === 'line' || type === 'area' ? 0.3 : undefined,
-    })),
-  };
+  // Aurora 2D mode — default for all charts
+  if (data?.labels && data?.datasets) {
+    const chartType = (type === 'area' ? 'area' : type === 'line' ? 'line' : type === 'pie' ? 'pie' : type === 'doughnut' ? 'doughnut' : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut';
+    return (
+      <AuroraChart
+        type={chartType}
+        data={data as { labels: string[]; datasets: { label?: string; data: number[] }[] }}
+        title={title}
+        height={height}
+        gradient={gradient}
+      />
+    );
+  }
 
-  const isPieType = type === 'pie' || type === 'doughnut';
-  const chartHeight = isPieType ? 320 : 280;
-
-  return (
-    <div style={{ background: 'var(--surface)', backdropFilter: 'var(--surface-blur)', WebkitBackdropFilter: 'var(--surface-blur)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
-      {title && (
-        <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>{title}</p>
-      )}
-      <div style={{ position: 'relative', height: chartHeight, width: '100%', ...(isPieType ? { maxWidth: 360, margin: '0 auto' } : {}) }}>
-        {type === 'bar' && <Bar data={chartData as never} options={chartOptions} />}
-        {(type === 'line' || type === 'area') && <Line data={chartData as never} options={chartOptions} />}
-        {type === 'pie' && <Pie data={chartData as never} options={chartOptions} />}
-        {type === 'doughnut' && <Doughnut data={chartData as never} options={chartOptions} />}
-      </div>
-    </div>
-  );
+  return null;
 }
 
 // ─── Recursive Component Renderer ──────────────────────────

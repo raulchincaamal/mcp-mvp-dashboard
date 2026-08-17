@@ -1,18 +1,28 @@
 # Active Context — MCP MVP Dashboard
 
 ## Current State
-Phase 1 (MVP local) — pipeline end-to-end validated and working, including conversational NLP fallback.
+Phase 2 (Tool Use Nativo) — implementado, pendiente validación.
 
-## Active Architecture: Bedrock Tool-Use Orchestrator
-`mcp-main` runs as a **Fastify HTTP server** (port 4000). The primary entry point is `orchestrate()` in `orchestrator.ts`, which runs a **Bedrock tool-use loop**:
+## Active Architecture: Dual Orchestrator Mode
+`mcp-main` soporta dos modos de orquestación controlados por `USE_TOOL_USE` env var:
 
-1. `normalizeDateExpressions()` transforms relative dates ("este mes") → concrete ranges before anything else
-2. Bedrock receives the normalized intent + tool definitions (`query_data`, `generate_ui`)
-3. Bedrock calls `query_data` → orchestrator normalizes filters (casing, accents, known value maps) → `mcp-gcp-mock` returns records
-4. Bedrock calls `generate_ui` → orchestrator overrides template when needed → injects records + `COMPONENT_CATALOG` → `mcp-ui` returns UIConfig (double-parsed from string)
-5. UIConfig cached in Redis (TTL.INTENT = 60 min) and returned
+### Mode 1: Manual (USE_TOOL_USE=false) - DEFAULT
+```
+orchestrate()
+  ├── interpretIntent() → Bedrock Call #1
+  ├── gcpClient.callTool('query_data') → MCP
+  └── generateUIConfig() → Bedrock Call #2
+```
+Latencia: ~10s, 2 llamadas Bedrock fijas.
 
-**Fallback**: if Bedrock loop fails → `runHardcodedPipeline()` with local regex parser (no Bedrock needed)
+### Mode 2: Tool Use Nativo (USE_TOOL_USE=true)
+```
+orchestrate()
+  └── Bedrock Tool Use Loop
+        ├── Nova decide: query_data → MCP
+        └── Nova decide: generate_dashboard → local builder
+```
+Latencia: variable (1-5 iteraciones), Nova decide cuándo usar herramientas.
 
 ## Key Source Files
 | File | Responsibility |

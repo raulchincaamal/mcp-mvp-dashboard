@@ -2,8 +2,16 @@ import Fastify from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { orchestrate } from './orchestrator.js';
 import { initCache, generateCacheKey, cacheGet, cacheSet, isCacheConnected, TTL } from './cache.js';
+
+// Seleccionar orchestrator basado en variable de entorno
+const USE_TOOL_USE = process.env.USE_TOOL_USE === 'true';
+const orchestratorModule = USE_TOOL_USE
+  ? await import('./orchestrator-tooluse.js')
+  : await import('./orchestrator.js');
+const orchestrate = orchestratorModule.orchestrate;
+
+console.log(`[mcp-main] Using orchestrator: ${USE_TOOL_USE ? 'tool-use (native)' : 'manual (2-call)'}`);
 
 const LATEST_KEY = 'mcp-dashboard:latest';
 
@@ -25,7 +33,8 @@ if (!IS_MCP_MODE) {
   fastify.get('/health', async () => ({
     status: 'ok',
     cache: isCacheConnected(),
-    mode: 'bedrock-orchestrator',
+    mode: USE_TOOL_USE ? 'bedrock-tool-use' : 'bedrock-manual',
+    model: process.env.BEDROCK_MODEL_ID,
   }));
 
   fastify.get('/api/latest', async (_request, reply) => {

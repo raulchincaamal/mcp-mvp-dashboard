@@ -431,10 +431,10 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     } else if (parsedIntent.drillDown) {
       console.log(`[orchestrator] handling drillDown: ${JSON.stringify(parsedIntent.drillDown)}`);
       specialResult = handleDrillDown(records, parsedIntent.drillDown);
-    } else if (parsedIntent.comparison && !filters['fecha_venta']) {
+    } else if (parsedIntent.comparison && !filters['fecha_venta'] && parsedIntent.template !== 'executive') {
       console.log(`[orchestrator] handling comparison: ${JSON.stringify(parsedIntent.comparison)}`);
       specialResult = handleComparison(records, parsedIntent.comparison, parsedIntent.metricField);
-    } else if (parsedIntent.groupByMultiple?.length) {
+    } else if (parsedIntent.groupByMultiple?.length && parsedIntent.template !== 'executive') {
       console.log(`[orchestrator] handling groupByMultiple: ${parsedIntent.groupByMultiple}`);
       specialResult = handleGroupByMultiple(records, parsedIntent.groupByMultiple, parsedIntent.metricField);
     } else if (parsedIntent.percentile) {
@@ -578,8 +578,16 @@ REGLAS:
 
 12. FILTROS COMBINADOS, RANGOS, EXCLUSIONES, TOP/BOTTOM, PORCENTAJES, COLORES: (igual que antes)
 
+13. TEMPLATES:
+    - "resumen", "dashboard", "kpi", "ejecutivo", "general" → template:"executive"
+    - "por categoría", "análisis de categorías" → template:"category"
+    - "crédito", "estatus", "pago", "morosidad" → template:"credit"
+    - "tabla", "listado", "registros" → template:"table"
+    - "gráfica", "chart", "tendencia" → template:"chart"
+
 EJEMPLOS:
-- "motos o celulares por estado" → {"orFilters":{"categoria":["Motos","Celulares"]},"groupBy":"estado"}
+- "motos o celulares por estado" → {"orFilters":{"categoria":["Motos","Celulares"]},"groupBy":"estado","template":"chart"}
+- "resumen ejecutivo de motos y celulares" → {"orFilters":{"categoria":["Motos","Celulares"]},"template":"executive"}
 - "ventas por estado y categoría" → {"groupByMultiple":["estado","categoria"]}
 - "ventas acumuladas por mes" → {"cumulative":true,"groupBy":"mes","chartTypes":["line"]}
 - "relación edad-monto" → {"correlation":{"fields":["edad_cliente","monto_total_credito"]}}
@@ -1289,15 +1297,17 @@ Props por componente:
 - StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
 FILOSOFÍA DE VISUALIZACIÓN:
-Siempre genera dashboards RICOS y COMPLETOS. Más información es mejor que menos. El usuario quiere entender sus datos en profundidad, no solo ver un número. Cada dashboard debe contar una historia completa: qué pasó, dónde, cuánto, y cómo se distribuye.
+Siempre genera dashboards RICOS y COMPLETOS. Más información es mejor que menos. El usuario quiere entender sus datos en profundidad, no solo ver un número. Cada dashboard debe contar una historia completa: qué pasó, dónde, cuánto, y cómo se distribuye. Nunca generes menos de 4 componentes para template executive, category o credit.
 
 REGLAS DE VISUALIZACIÓN (obligatorias):
 1. SIEMPRE incluye al menos un KPIGrid con 3-5 métricas de resumen (total registros, sumas, promedios)
 2. Si uniqueValues > 5 en el campo de agrupación → Chart bar. NUNCA un card por grupo
 3. Si uniqueValues <= 5 → ProgressGroup o pie/doughnut
-4. Para template "mixed": genera TODAS las visualizaciones pedidas (múltiples Charts + DataSummary si pidió tabla)
-5. Para template "chart": KPIGrid (resumen) + Chart(s) principal(es)
-6. Para template "table": KPIGrid (resumen) + DataSummary
+4. Para template "executive" o "category": KPIGrid + Chart doughnut + Chart bar
+5. Para template "credit": KPIGrid + ProgressGroup + Chart bar + TransactionList
+6. Para template "mixed": genera TODAS las visualizaciones pedidas (múltiples Charts + DataSummary si pidió tabla)
+7. Para template "chart": KPIGrid (resumen) + Chart(s) principal(es)
+8. Para template "table": KPIGrid (resumen) + DataSummary
 7. Usa aggregations.groupBy.data directamente para labels/values del Chart
 8. Usa aggregations.numericSummaries para los valores de KPIGrid
 9. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
@@ -1310,6 +1320,14 @@ ${JSON.stringify(colorPalette)}`;
   const chartInstructions = parsedIntent.chartTypes.length > 1
     ? `El usuario pidió MÚLTIPLES visualizaciones: ${parsedIntent.chartTypes.join(', ')}. Genera UN Chart por cada tipo pedido con los mismos datos pero diferente visualización.`
     : `Genera un Chart de tipo ${parsedIntent.chartTypes[0] ?? 'bar'}.`;
+
+  // Override template to executive for general queries without specific chart/table keywords
+  if (parsedIntent.template === 'chart' && !parsedIntent.groupBy && records.length > 50) {
+    const intentLower = intent.toLowerCase();
+    const isGeneral = /resumen|ejecutivo|dashboard|kpi|ventas|general/.test(intentLower);
+    const hasSpecific = /gr[aá]fica|tabla|listado|por\s+\w+/.test(intentLower);
+    if (isGeneral && !hasSpecific) parsedIntent.template = 'executive';
+  }
 
   const userMessage = `Intent del usuario: "${intent}"
 Template sugerido: ${parsedIntent.template}
@@ -1325,9 +1343,32 @@ ${JSON.stringify(aggregations, null, 2)}
 Muestra de registros (${sampleRecords.length} de ${totalRecords}):
 ${JSON.stringify(sampleRecords, null, 2)}
 
-INSTRUCCIONES ESPECÍFICAS:
-${chartInstructions}
-${parsedIntent.template === 'mixed' ? 'Incluye también un DataSummary (tabla) con los datos más relevantes.' : ''}
+INSTRUCCIONES SEGÚN TEMPLATE:
+${ parsedIntent.template === 'executive' ? `Genera un dashboard COMPLETO con:
+1. KPIGrid: total ventas, monto total, promedio precio, tasa morosidad (si aplica)
+2. Chart bar: ventas/monto por estado (usa fieldSummaries.estado.topValues)
+3. Chart doughnut: distribución por estatus_credito (usa fieldSummaries.estatus_credito.topValues)
+4. Chart bar: ventas por canal_venta (usa fieldSummaries.canal_venta.topValues)
+5. TransactionList: últimas 6-8 operaciones de la muestra de registros
+Nunca generes menos de 4 componentes.` :
+parsedIntent.template === 'category' ? `Genera:
+1. KPIGrid: total ventas, monto total, promedio
+2. Chart doughnut: distribución por categoría
+3. Chart bar: monto total por categoría
+4. ProgressGroup: top categorías por cantidad` :
+parsedIntent.template === 'credit' ? `Genera:
+1. KPIGrid: totales por estatus, monto en riesgo
+2. ProgressGroup: distribución de estatus
+3. Chart bar: créditos atrasados por estado
+4. TransactionList: créditos con mayor riesgo` :
+parsedIntent.template === 'mixed' ? `Genera TODAS las visualizaciones pedidas (múltiples Charts + DataSummary si pidió tabla).` :
+parsedIntent.template === 'chart' ? `Genera:
+1. KPIGrid: 3 métricas de resumen
+2. ${chartInstructions}` :
+parsedIntent.template === 'table' ? `Genera:
+1. KPIGrid: 3 métricas de resumen
+2. DataSummary con las columnas más relevantes` :
+'Genera el dashboard más útil posible para este intent.'}
 ${parsedIntent.comparison ? `Genera una visualización comparativa entre ${parsedIntent.comparison.values.join(' y ')}.` : ''}
 
 IMPORTANTE: Usa los datos reales de aggregations. Si fieldSummaries.estado.uniqueValues > 5, usa Chart bar para estado, nunca KPIGrid por estado.

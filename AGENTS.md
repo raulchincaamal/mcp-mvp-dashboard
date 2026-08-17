@@ -76,7 +76,7 @@ npm run dev:dashboard          # Frontend en localhost:3000
 - **Framework**: Next.js 16 + React 19 + Tailwind 4
 - **Architecture**: Template front-template-kiro (FIFO orchestrator, Zustand, i18n)
 - **UI Library**: `@macropaytd/lib-front-ui-components`
-- **Chart Library**: Chart.js + react-chartjs-2
+- **Chart Library**: D3.js
 - **Key Component**: `DynamicRenderer` — mapea UIConfig JSON a componentes reales
 
 ### Rutas
@@ -89,17 +89,17 @@ npm run dev:dashboard          # Frontend en localhost:3000
 
 ### DynamicRenderer Components
 
-| Component                                  | Tipo        | Descripción                             |
-| ------------------------------------------ | ----------- | --------------------------------------- |
-| `StatCard`                                 | Composite   | Metric card con valor, tendencia, icono |
-| `KPIGrid`                                  | Composite   | Grid de StatCards                       |
-| `ProgressBar`                              | Composite   | Barra de progreso con label             |
-| `ProgressGroup`                            | Composite   | Card con múltiples progress bars        |
-| `TransactionList`                          | Composite   | Lista de items con monto y fecha        |
-| `MiniChart`                                | Composite   | Sparkline compacto en card              |
-| `DataSummary`                              | Composite   | Tabla estilizada con hover              |
-| `Chart`                                    | Chart.js    | Bar, Line, Pie, Doughnut, Area          |
-| `Card`, `Text`, `Badge`, `Button`, `Input` | @macropaytd | Componentes base de la librería         |
+| Component                                  | Tipo        | Descripción                                                                                                         |
+| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `StatCard`                                 | Composite   | Metric card con valor, tendencia, icono                                                                             |
+| `KPIGrid`                                  | Composite   | Grid de StatCards                                                                                                   |
+| `ProgressBar`                              | Composite   | Barra de progreso con label                                                                                         |
+| `ProgressGroup`                            | Composite   | Card con múltiples progress bars                                                                                    |
+| `TransactionList`                          | Composite   | Lista de items con monto y fecha                                                                                    |
+| `MiniChart`                                | Composite   | Sparkline compacto en card                                                                                          |
+| `DataSummary`                              | Composite   | Tabla estilizada con hover                                                                                          |
+| `Chart`                                    | D3.js       | Bar, Line, Pie, Doughnut, Area, Bollinger, Stacked Area, Diverging Bar, Radial, Candlestick, Hierarchical, Bar Race |
+| `Card`, `Text`, `Badge`, `Button`, `Input` | @macropaytd | Componentes base de la librería                                                                                     |
 
 ## [ON-DEMAND] Data Generation
 

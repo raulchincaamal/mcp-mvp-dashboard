@@ -1,11 +1,24 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { orchestrate } from './orchestrator.js';
-import { initCache, generateCacheKey, cacheGet, cacheSet, isCacheConnected, TTL } from './cache.js';
+import {
+  initCache,
+  generateCacheKey,
+  cacheGet,
+  cacheSet,
+  isCacheConnected,
+  TTL,
+} from './cache.js';
 
 const LATEST_KEY = 'mcp-dashboard:latest';
+
+function userLatestKey(userId?: string): string {
+  if (userId) return `${LATEST_KEY}:${userId}`;
+  return LATEST_KEY;
+}
 
 // Prevent unhandled ioredis errors from crashing the process
 process.on('uncaughtException', (err) => {
@@ -22,6 +35,10 @@ await initCache();
 if (!IS_MCP_MODE) {
   const fastify = Fastify({ logger: true });
 
+  await fastify.register(cors, {
+    origin: true, // Allow all origins in dev
+  });
+
   fastify.get('/health', async () => ({
     status: 'ok',
     cache: isCacheConnected(),
@@ -29,37 +46,77 @@ if (!IS_MCP_MODE) {
   }));
 
   fastify.get('/api/latest', async (_request, reply) => {
-    const latest = await cacheGet<{ hash: string; status: string; uiConfig: unknown }>(LATEST_KEY);
-    if (!latest) return reply.status(404).send({ success: false, error: 'No dashboard generated yet' });
+    const { userId } = _request.query as { userId?: string };
+    const latest = await cacheGet<{
+      hash: string;
+      status: string;
+      uiConfig: unknown;
+    }>(userLatestKey(userId));
+    if (!latest)
+      return reply
+        .status(404)
+        .send({ success: false, error: 'No dashboard generated yet' });
     return {
       success: true,
       hash: latest.hash,
       status: latest.status ?? 'ready',
       data: latest.status === 'ready' ? latest.uiConfig : null,
-      url: latest.status === 'ready' ? `${DASHBOARD_BASE_URL}/dashboard?key=${latest.hash}` : null,
+      url:
+        latest.status === 'ready'
+          ? `${DASHBOARD_BASE_URL}/dashboard?key=${latest.hash}`
+          : null,
     };
   });
 
   fastify.post<{
-    Body: { intent: string; dataset?: string; filters?: Record<string, unknown>; limit?: number };
+    Body: {
+      intent: string;
+      dataset?: string;
+      filters?: Record<string, unknown>;
+      limit?: number;
+      userId?: string;
+    };
   }>('/api/generate-ui', async (request, reply) => {
-    const { intent, dataset = 'ventas-credito', filters, limit } = request.body;
+    const {
+      intent,
+      dataset = 'ventas-credito',
+      filters,
+      limit,
+      userId,
+    } = request.body;
 
     if (!intent) {
-      return reply.status(400).send({ success: false, error: 'intent is required' });
+      return reply
+        .status(400)
+        .send({ success: false, error: 'intent is required' });
     }
 
     try {
       // Signal frontend that a new dashboard is being generated
+      const latestKey = userLatestKey(userId);
       const processingHash = `processing-${Date.now()}`;
-      await cacheSet(LATEST_KEY, { hash: processingHash, status: 'processing' }, 1);
+      await cacheSet(
+        latestKey,
+        { hash: processingHash, status: 'processing' },
+        1,
+      );
 
       const uiConfig = await orchestrate({ intent, dataset, filters, limit });
 
       // Save final result
-      const cacheKey = generateCacheKey('ui', { dataset, intent, filters, limit });
+      const cacheKey = generateCacheKey('ui', {
+        userId,
+        dataset,
+        intent,
+        filters,
+        limit,
+      });
       const hash = cacheKey.split(':').pop() ?? cacheKey;
-      await cacheSet(LATEST_KEY, { hash, status: 'ready', uiConfig }, TTL.INTENT);
+      await cacheSet(
+        latestKey,
+        { hash, status: 'ready', uiConfig },
+        TTL.INTENT,
+      );
       await cacheSet(cacheKey, uiConfig, TTL.INTENT);
 
       return {
@@ -69,7 +126,9 @@ if (!IS_MCP_MODE) {
       };
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ success: false, error: (error as Error).message });
+      return reply
+        .status(500)
+        .send({ success: false, error: (error as Error).message });
     }
   });
 
@@ -87,34 +146,54 @@ if (IS_MCP_MODE) {
     'generate_dashboard',
     'Generates a dashboard from a natural language intent using Bedrock as orchestrator. Returns a shareable dashboard URL.',
     {
-      intent: z.string().describe('Natural language description of the dashboard (Spanish)'),
-      dataset: z.string().default('ventas-credito').describe('Dataset to query'),
-      filters: z.record(z.unknown()).optional().describe('Optional extra filters'),
+      intent: z
+        .string()
+        .describe('Natural language description of the dashboard (Spanish)'),
+      dataset: z
+        .string()
+        .default('ventas-credito')
+        .describe('Dataset to query'),
+      filters: z
+        .record(z.unknown())
+        .optional()
+        .describe('Optional extra filters'),
       limit: z.number().positive().optional().describe('Max records to query'),
     },
     async ({ intent, dataset, filters, limit }) => {
       try {
         const uiConfig = await orchestrate({ intent, dataset, filters, limit });
 
-        const cacheKey = generateCacheKey('ui', { dataset, intent, filters, limit });
+        const cacheKey = generateCacheKey('ui', {
+          dataset,
+          intent,
+          filters,
+          limit,
+        });
         const hash = cacheKey.split(':').pop() ?? cacheKey;
 
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                url: `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`,
-                key: hash,
-                title: (uiConfig as Record<string, unknown>)?.title ?? 'Dashboard',
-                cached: isCacheConnected(),
-              }, null, 2),
+              text: JSON.stringify(
+                {
+                  url: `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`,
+                  key: hash,
+                  title:
+                    (uiConfig as Record<string, unknown>)?.title ?? 'Dashboard',
+                  cached: isCacheConnected(),
+                },
+                null,
+                2,
+              ),
             },
           ],
         };
       } catch (error) {
         return {
-          content: [{ type: 'text', text: `Error: ${(error as Error).message}` }],
+          content: [
+            { type: 'text', text: `Error: ${(error as Error).message}` },
+          ],
           isError: true,
         };
       }

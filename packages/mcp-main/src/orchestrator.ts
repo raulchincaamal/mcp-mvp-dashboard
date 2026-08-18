@@ -1,4 +1,4 @@
-import {
+﻿import {
   BedrockRuntimeClient,
   ConverseCommand,
 } from '@aws-sdk/client-bedrock-runtime';
@@ -353,6 +353,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     console.log(`[orchestrator] interpreting intent with model: ${MODEL_ID}`);
     const parsedIntent = await interpretIntent(finalIntent, detectedChartTypes);
     console.log('[orchestrator] parsed intent:', JSON.stringify(parsedIntent));
+    console.log('[orchestrator] template:', parsedIntent.template, '| filters:', JSON.stringify(parsedIntent.filters));
 
     // Step 2: Query real data
     const filters: Record<string, unknown> = { ...parsedIntent.filters, ...params.filters };
@@ -362,7 +363,17 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     const limit = params.limit ?? parsedIntent.limit ?? 100;
     const needsAllData = !!(parsedIntent.trendAnalysis || parsedIntent.percentile || parsedIntent.cumulative || parsedIntent.correlation || parsedIntent.comparison || parsedIntent.groupByMultiple || parsedIntent.drillDown);
     const needsRichTemplate = ['category', 'executive', 'credit'].includes(parsedIntent.template);
-    const fetchLimit = needsAllData || needsRichTemplate ? 5000 : (parsedIntent.excludeFilters || parsedIntent.orFilters ? limit * 3 : limit);
+
+    // Override to executive for general queries with no specific filters
+    if (!needsRichTemplate && !parsedIntent.groupBy && Object.keys(parsedIntent.filters ?? {}).length === 0) {
+      const intentLower = baseIntent.toLowerCase();
+      if (/resumen|ejecutivo|dashboard|general|kpi/.test(intentLower) && !/gr[aá]fica|tabla|listado|por\s+\w+|categor|cr[eé]dito|estatus/.test(intentLower)) {
+        parsedIntent.template = 'executive';
+        console.log('[orchestrator] overriding template to executive');
+      }
+    }
+    const isRichTemplate = ['category', 'executive', 'credit'].includes(parsedIntent.template);
+    const fetchLimit = needsAllData || isRichTemplate ? 5000 : (parsedIntent.excludeFilters || parsedIntent.orFilters ? limit * 3 : limit);
 
     console.log(`[orchestrator] querying data — filters: ${JSON.stringify(filters)}, limit: ${fetchLimit}`);
     const queryResult = await gcpClient.callTool('query_data', {
@@ -402,7 +413,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
       records = applyCalculatedField(records, parsedIntent.calculatedField);
     }
 
-    records = records.slice(0, needsRichTemplate ? 5000 : limit);
+    records = records.slice(0, isRichTemplate ? 5000 : limit);
     console.log(`[orchestrator] got ${records.length} records after client-side filters`);
 
     // Handle no results — ask Bedrock for smart suggestions based on what actually exists
@@ -436,7 +447,7 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     } else if (parsedIntent.comparison && !filters['fecha_venta'] && parsedIntent.template !== 'executive') {
       console.log(`[orchestrator] handling comparison: ${JSON.stringify(parsedIntent.comparison)}`);
       specialResult = handleComparison(records, parsedIntent.comparison, parsedIntent.metricField);
-    } else if (parsedIntent.groupByMultiple?.length && parsedIntent.template !== 'executive') {
+    } else if (parsedIntent.groupByMultiple?.length && parsedIntent.template !== 'executive' && parsedIntent.chartTypes.length === 0) {
       console.log(`[orchestrator] handling groupByMultiple: ${parsedIntent.groupByMultiple}`);
       specialResult = handleGroupByMultiple(records, parsedIntent.groupByMultiple, parsedIntent.metricField);
     } else if (parsedIntent.percentile) {
@@ -451,10 +462,9 @@ export async function orchestrate(params: OrchestrationParams): Promise<unknown>
     }
 
     // Step 3: Bedrock generates UIConfig from data + intent
-    console.log('[orchestrator] generating UIConfig with Bedrock');
-    const needsFullDataset = ['category', 'executive', 'credit'].includes(parsedIntent.template);
+    console.log('[orchestrator] generating UIConfig with Bedrock');
     const colors = COLOR_THEMES[parsedIntent.colorTheme ?? 'default'] ?? COLOR_THEMES.default;
-    const uiConfig = needsFullDataset
+    const uiConfig = isRichTemplate
       ? await buildRichUIConfig(bedrockClient, MODEL_ID, baseIntent, parsedIntent, records, colors)
       : await generateUIConfig(baseIntent, parsedIntent, records);
 

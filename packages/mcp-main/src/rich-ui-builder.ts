@@ -9,6 +9,36 @@ export interface ParsedIntentSlim {
   template: string;
   chartTypes: string[];
   colorTheme?: string;
+  groupBy?: string | null;
+  metricField?: string | null;
+  filters?: Record<string, unknown>;
+}
+
+// ─── Decision: which tier to use ──────────────────────────────
+
+type Tier = 'custom' | 'rich' | 'standard';
+
+function decideTier(intent: string, parsedIntent: ParsedIntentSlim): Tier {
+  const lower = intent.toLowerCase();
+
+  // CUSTOM: user asked for specific chart types, or the intent is very specific/creative
+  const hasSpecificCharts = parsedIntent.chartTypes.length > 0 &&
+    !['bar', 'line'].every(t => parsedIntent.chartTypes.includes(t)); // not just defaults
+  const isCreativeIntent = /treemap|heatmap|radar|funnel|gauge|scatter|dona|pastel|embudo|medidor|araña|calor|jerarqu/i.test(lower);
+  const isMultiChart = /y (tambi[eé]n|adem[aá]s)|m[aá]s (una|un) gr[aá]fica|varios|m[uú]ltiples/i.test(lower);
+  const isVerySpecific = parsedIntent.chartTypes.length >= 2;
+
+  if (hasSpecificCharts || isCreativeIntent || isMultiChart || isVerySpecific) {
+    return 'custom';
+  }
+
+  // RICH: dense templates without specific chart requests → deterministic, guaranteed
+  if (['category', 'executive', 'credit'].includes(parsedIntent.template)) {
+    return 'rich';
+  }
+
+  // STANDARD: everything else goes through existing generateUIConfig
+  return 'standard';
 }
 
 // ─── Pre-compute aggregations ─────────────────────────────────
@@ -27,7 +57,6 @@ export function computeRichAggregations(
   const totalMonto = records.reduce((s, r) => s + (Number(r.monto_total_credito) || 0), 0);
   const totalPrecio = records.reduce((s, r) => s + (Number(r.precio_contado) || 0), 0);
 
-  // By categoria
   const byCat: Record<string, { count: number; monto: number }> = {};
   for (const r of records) {
     const k = String(r.categoria ?? 'N/A');
@@ -37,7 +66,6 @@ export function computeRichAggregations(
   }
   const catEntries = Object.entries(byCat).sort((a, b) => b[1].count - a[1].count);
 
-  // By estado
   const byEst: Record<string, { count: number; monto: number; atrasados: number }> = {};
   for (const r of records) {
     const k = String(r.estado ?? 'N/A');
@@ -48,7 +76,6 @@ export function computeRichAggregations(
   }
   const estEntries = Object.entries(byEst).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
 
-  // By estatus
   const byStatus: Record<string, { count: number; monto: number }> = {};
   for (const r of records) {
     const k = String(r.estatus_credito ?? 'N/A');
@@ -59,13 +86,28 @@ export function computeRichAggregations(
   const statusEntries = Object.entries(byStatus).sort((a, b) => b[1].count - a[1].count);
   const atrasadosCount = byStatus['atrasado']?.count ?? 0;
 
-  // By canal
   const byCanal: Record<string, number> = {};
   for (const r of records) {
     const k = String(r.canal_venta ?? 'N/A');
     byCanal[k] = (byCanal[k] ?? 0) + 1;
   }
   const canalEntries = Object.entries(byCanal).sort((a, b) => b[1] - a[1]);
+
+  // Monthly trend
+  const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const byMonth: Record<string, { count: number; monto: number }> = {};
+  for (const r of records) {
+    if (!r.fecha_venta) continue;
+    const d = new Date(String(r.fecha_venta));
+    const k = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+    if (!byMonth[k]) byMonth[k] = { count: 0, monto: 0 };
+    byMonth[k].count++;
+    byMonth[k].monto += Number(r.monto_total_credito) || 0;
+  }
+  const monthEntries = Object.entries(byMonth).sort(([a], [b]) => {
+    const p = (s: string) => { const [m, y] = s.split(' '); return parseInt(y) * 12 + monthNames.indexOf(m); };
+    return p(a) - p(b);
+  });
 
   return {
     totalRecords: total,
@@ -76,6 +118,7 @@ export function computeRichAggregations(
       precioPromedio: fmt(totalPrecio / total),
       pctAtrasados: `${((atrasadosCount / total) * 100).toFixed(1)}%`,
       montoAtrasados: fmt(byStatus['atrasado']?.monto ?? 0),
+      atrasadosCount,
     },
     readyCategoryChart: {
       labels: catEntries.map(([k]) => k),
@@ -115,6 +158,11 @@ export function computeRichAggregations(
       labels: canalEntries.map(([k]) => k),
       counts: canalEntries.map(([, v]) => v),
     },
+    readyMonthChart: {
+      labels: monthEntries.map(([k]) => k),
+      counts: monthEntries.map(([, d]) => d.count),
+      montos: monthEntries.map(([, d]) => Math.round(d.monto)),
+    },
     readyTransactions: records.slice(0, 8).map(r => ({
       title: String(r.cliente ?? ''),
       subtitle: String(r.producto ?? r.categoria ?? ''),
@@ -126,9 +174,80 @@ export function computeRichAggregations(
   };
 }
 
-// ─── Fallback determinista ─────────────────────────────────────
+// ─── TIER 1: CUSTOM — Bedrock decides everything ──────────────
+// Used when user asks for specific chart types or creative layouts
 
-function fallback(
+async function buildCustom(
+  bedrockClient: BedrockRuntimeClient,
+  modelId: string,
+  intent: string,
+  parsedIntent: ParsedIntentSlim,
+  agg: Record<string, unknown>,
+  colors: string[],
+): Promise<unknown> {
+  const systemPrompt = `Eres un experto en visualizacion de datos para Macropay (ventas a credito en Mexico).
+El usuario hizo una peticion ESPECIFICA. Tienes libertad total para decidir la estructura del dashboard.
+
+DATOS PRE-COMPUTADOS disponibles (usa SOLO estos, no inventes numeros):
+  readyKPIs: { totalVentasFmt, montoTotal, ticketPromedio, pctAtrasados, montoAtrasados, precioPromedio, atrasadosCount }
+  readyCategoryChart: { labels[], counts[], montos[], promedios[] }  — por categoria
+  readyCategoryTable: [{ categoria, ventas, monto_total, ticket_promedio, pct_total }]
+  readyEstadoChart: { labels[], counts[], montos[] }  — top 10 estados
+  readyEstadoTable: [{ estado, ventas, monto_total, pct_atrasados }]
+  readyStatusChart: { labels[], counts[] }  — estatus credito
+  readyStatusTable: [{ estatus, cantidad, monto_total, pct_total }]
+  readyCanalChart: { labels[], counts[] }  — canal de venta
+  readyMonthChart: { labels[], counts[], montos[] }  — por mes cronologico
+  readyTransactions: [{ title, subtitle, amount, date, status }]
+
+TIPOS DE CHART disponibles: bar, line, area, doughnut, pie, treemap, funnel, gauge, radar, heatmap, scatter
+
+COMO CONSTRUIR CHARTS:
+  gauge: data.datasets[0].data[0] = valor 0-100, data.labels[0] = nombre del KPI
+  treemap: data.labels = nombres, data.datasets[0].data = valores de tamano
+  funnel: data.labels = etapas desc, data.datasets[0].data = valores
+  heatmap: data.labels = columnas, data.datasets[i].label = fila, data.datasets[i].data = valores por columna
+  scatter: data.labels = valores X (strings), data.datasets[i].data = valores Y
+  radar: data.labels = metricas, data.datasets[i].data = valores (misma escala)
+
+REGLAS:
+1. Responde el intent del usuario de la forma mas util y visual posible
+2. Minimo 1 KPIGrid + 2 Charts + 1 DataSummary
+3. Maximo 9 componentes
+4. USA SOLO datos de precomputedData
+5. Responde SOLO JSON valido sin markdown
+
+Colores: ${JSON.stringify(colors.slice(0, 9))}
+UIConfig: { "title": string, "layout": "vertical", "components": [{"component": string, "props": {}}] }
+Componentes: KPIGrid, Chart, DataSummary, TransactionList, ProgressGroup, StatCard`;
+
+  const userMessage = `Intent del usuario: "${intent}"
+Tipos de grafica pedidos: ${parsedIntent.chartTypes.join(', ') || 'decide tu'}
+Template: ${parsedIntent.template}
+
+DATOS:
+${JSON.stringify(agg, null, 2)}
+
+Genera el UIConfig JSON que mejor responda al intent.`;
+
+  const response = await bedrockClient.send(new ConverseCommand({
+    modelId,
+    system: [{ text: systemPrompt }],
+    messages: [{ role: 'user', content: [{ text: userMessage }] }],
+    inferenceConfig: { maxTokens: 6000, temperature: 0.2 },
+  }));
+
+  const block = response.output?.message?.content?.[0];
+  if (!block || !('text' in block)) throw new Error('no response');
+  const raw = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  const parsed = JSON.parse(raw);
+  return (parsed as Record<string, unknown>).uiConfig ?? parsed;
+}
+
+// ─── TIER 2: RICH — deterministic, guaranteed 6-7 components ──
+// Used for dense templates: executive, category, credit
+
+function buildRich(
   parsedIntent: ParsedIntentSlim,
   records: Record<string, unknown>[],
   agg: Record<string, unknown>,
@@ -155,9 +274,9 @@ function fallback(
     const components: unknown[] = [{ component: 'KPIGrid', props: { items: kpiItems } }];
     if (catChart) {
       components.push({ component: 'Chart', props: { type: 'bar', title: 'Ventas por Categoría', data: { labels: catChart.labels, datasets: [{ label: 'Ventas', data: catChart.counts, backgroundColor: colors.slice(0, (catChart.labels as string[]).length) }] } } });
-      components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Distribución de Monto', data: { labels: catChart.labels, datasets: [{ label: 'Monto', data: catChart.montos, backgroundColor: colors.slice(0, (catChart.labels as string[]).length) }] } } });
+      components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Distribución de Monto por Categoría', data: { labels: catChart.labels, datasets: [{ label: 'Monto', data: catChart.montos, backgroundColor: colors.slice(0, (catChart.labels as string[]).length) }] } } });
       components.push({ component: 'Chart', props: { type: 'bar', title: 'Ticket Promedio por Categoría', data: { labels: catChart.labels, datasets: [{ label: 'Promedio', data: catChart.promedios, backgroundColor: colors.slice(0, (catChart.labels as string[]).length) }] } } });
-      components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Estatus de Créditos', data: { labels: (agg.readyStatusChart as Record<string, unknown>)?.labels, datasets: [{ label: 'Créditos', data: (agg.readyStatusChart as Record<string, unknown>)?.counts, backgroundColor: ['#059669', '#D97706', '#2563EB', '#DC2626'] }] } } });
+      if (statusChart) components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Estatus de Créditos', data: { labels: statusChart.labels, datasets: [{ label: 'Créditos', data: statusChart.counts, backgroundColor: ['#059669', '#D97706', '#2563EB', '#DC2626'] }] } } });
     }
     if (catTable) {
       components.push({ component: 'ProgressGroup', props: { title: '% Participación por Categoría', items: catTable.slice(0, 6).map((r, i) => ({ label: `${r.categoria} (${r.ventas})`, value: Math.round((Number(r.ventas) / records.length) * 100), color: colors[i % colors.length] })) } });
@@ -181,14 +300,12 @@ function fallback(
     const atrasados = records.filter(r => r.estatus_credito === 'atrasado');
     const avgPlazo = records.reduce((s, r) => s + (Number(r.plazo_semanas) || 0), 0) / records.length;
     const fmt = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n).toLocaleString('es-MX')}`;
-    const components: unknown[] = [{
-      component: 'KPIGrid', props: { items: [
-        { title: 'Total Créditos', value: String(kpis.totalVentasFmt), icon: '💳' },
-        { title: 'Monto en Riesgo', value: String(kpis.montoAtrasados ?? '$0'), icon: '🚨', trendDirection: 'down' },
-        { title: '% Morosidad', value: String(kpis.pctAtrasados ?? '0%'), icon: '⚠️', trendDirection: 'down' },
-        { title: 'Plazo Promedio', value: `${Math.round(avgPlazo)} sem`, icon: '📅' },
-      ] }
-    }];
+    const components: unknown[] = [{ component: 'KPIGrid', props: { items: [
+      { title: 'Total Créditos', value: String(kpis.totalVentasFmt), icon: '💳' },
+      { title: 'Monto en Riesgo', value: String(kpis.montoAtrasados ?? '$0'), icon: '🚨', trendDirection: 'down' },
+      { title: '% Morosidad', value: String(kpis.pctAtrasados ?? '0%'), icon: '⚠️', trendDirection: 'down' },
+      { title: 'Plazo Promedio', value: `${Math.round(avgPlazo)} sem`, icon: '📅' },
+    ] } }];
     if (statusTable) {
       const sc: Record<string, string> = { al_corriente: '#059669', liquidado: '#2563EB', atrasado: '#D97706', cancelado: '#DC2626' };
       components.push({ component: 'ProgressGroup', props: { title: 'Distribución por Estatus', items: statusTable.map(r => ({ label: `${r.estatus} (${r.cantidad})`, value: Math.round(parseFloat(String(r.pct_total)) || 0), color: sc[String(r.estatus)] ?? '#6366F1' })) } });
@@ -200,6 +317,7 @@ function fallback(
       components.push({ component: 'Chart', props: { type: 'bar', title: 'Créditos Atrasados por Estado', data: { labels: ee.map(([k]) => k), datasets: [{ label: 'Atrasados', data: ee.map(([, v]) => v), backgroundColor: colors.slice(0, ee.length) }] } } });
     }
     if (canalChart) components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Distribución por Canal', data: { labels: canalChart.labels, datasets: [{ label: 'Ventas', data: canalChart.counts, backgroundColor: colors.slice(0, 3) }] } } });
+    if (statusChart) components.push({ component: 'Chart', props: { type: 'doughnut', title: 'Estatus de Créditos', data: { labels: statusChart.labels, datasets: [{ label: 'Créditos', data: statusChart.counts, backgroundColor: ['#059669', '#D97706', '#2563EB', '#DC2626'] }] } } });
     if (statusTable) components.push({ component: 'DataSummary', props: { title: 'Resumen por Estatus', highlightFirst: true, columns: [{ key: 'estatus', label: 'Estatus' }, { key: 'cantidad', label: 'Cantidad' }, { key: 'monto_total', label: 'Monto Total' }, { key: 'pct_total', label: '% del Total' }], rows: statusTable } });
     const topAt = atrasados.sort((a, b) => (Number(b.monto_total_credito) || 0) - (Number(a.monto_total_credito) || 0)).slice(0, 8).map(r => ({ title: String(r.cliente ?? ''), subtitle: String(r.producto ?? r.categoria ?? ''), amount: fmt(Number(r.monto_total_credito) || 0), date: String(r.fecha_venta ?? ''), status: 'negative' }));
     if (topAt.length > 0) components.push({ component: 'TransactionList', props: { title: 'Créditos Atrasados — Mayor Monto', items: topAt } });
@@ -209,7 +327,7 @@ function fallback(
   return { title: 'Dashboard', layout: 'vertical', components: [{ component: 'KPIGrid', props: { items: kpiItems } }] };
 }
 
-// ─── Main: Bedrock decides structure, fallback if it fails ─────
+// ─── Main entry point ──────────────────────────────────────────
 
 export async function buildRichUIConfig(
   bedrockClient: BedrockRuntimeClient,
@@ -220,81 +338,29 @@ export async function buildRichUIConfig(
   colors: string[],
 ): Promise<unknown> {
   const agg = computeRichAggregations(records);
+  const tier = decideTier(intent, parsedIntent);
 
-  const compactAgg = {
-    totalRecords: agg.totalRecords,
-    readyKPIs: agg.readyKPIs,
-    readyCategoryChart: agg.readyCategoryChart,
-    readyCategoryTable: agg.readyCategoryTable,
-    readyEstadoChart: agg.readyEstadoChart,
-    readyEstadoTable: agg.readyEstadoTable,
-    readyStatusChart: agg.readyStatusChart,
-    readyStatusTable: agg.readyStatusTable,
-    readyCanalChart: agg.readyCanalChart,
-    readyTransactions: agg.readyTransactions,
-  };
+  console.log(`[rich-ui] tier=${tier} template=${parsedIntent.template} chartTypes=${parsedIntent.chartTypes.join(',')}`);
 
-  const systemPrompt = `Eres un experto en visualizacion de datos para Macropay (ventas a credito en Mexico).
-Ensambla un UIConfig usando EXCLUSIVAMENTE los datos pre-computados que te doy.
-
-REGLAS OBLIGATORIAS:
-1. USA SOLO los datos de precomputedData. PROHIBIDO inventar numeros.
-2. KPIGrid: MAXIMO 4 items. Elige los mas relevantes al intent.
-3. MINIMO 4 Charts (tipo Chart). Innegociable.
-4. 1 DataSummary al final con la tabla mas relevante.
-5. Total componentes: entre 6 y 9.
-6. PROHIBIDO StatCard individual.
-
-DATOS DISPONIBLES:
-  readyKPIs: totalVentasFmt, montoTotal, ticketPromedio, pctAtrasados, montoAtrasados, precioPromedio
-  readyCategoryChart: labels[], counts[], montos[], promedios[]
-  readyCategoryTable: [{categoria, ventas, monto_total, ticket_promedio, pct_total}]
-  readyEstadoChart: labels[], counts[], montos[]
-  readyEstadoTable: [{estado, ventas, monto_total, pct_atrasados}]
-  readyStatusChart: labels[], counts[]
-  readyStatusTable: [{estatus, cantidad, monto_total, pct_total}]
-  readyCanalChart: labels[], counts[]
-  readyTransactions: [{title, subtitle, amount, date, status}]
-
-CHARTS DISPONIBLES por datos:
-  bar(categorias)   -> labels: readyCategoryChart.labels, data: readyCategoryChart.counts
-  doughnut(monto)   -> labels: readyCategoryChart.labels, data: readyCategoryChart.montos
-  bar(promedios)    -> labels: readyCategoryChart.labels, data: readyCategoryChart.promedios
-  bar(estados)      -> labels: readyEstadoChart.labels,   data: readyEstadoChart.counts
-  doughnut(estatus) -> labels: readyStatusChart.labels,   data: readyStatusChart.counts
-  bar(canal)        -> labels: readyCanalChart.labels,    data: readyCanalChart.counts
-  treemap(monto)    -> labels: readyCategoryChart.labels, data: readyCategoryChart.montos
-
-Colores: ${JSON.stringify(colors.slice(0, 9))}
-
-UIConfig schema: { "title": string, "layout": "vertical", "components": [{ "component": string, "props": {} }] }
-Componentes: KPIGrid, Chart, DataSummary, TransactionList, ProgressGroup
-Responde SOLO con JSON valido, sin markdown.`;
-
-  const userMessage = `Intent: "${intent}"
-Template: ${parsedIntent.template}
-Tipos de grafica pedidos: ${parsedIntent.chartTypes.join(', ') || 'elige los mejores'}
-
-DATOS:
-${JSON.stringify(compactAgg, null, 2)}
-
-CHECKLIST: KPIGrid<=4 items | >=4 Charts | 1 DataSummary | sin datos inventados
-Genera el UIConfig JSON ahora.`;
-
-  try {
-    const response = await bedrockClient.send(new ConverseCommand({
-      modelId,
-      system: [{ text: systemPrompt }],
-      messages: [{ role: 'user', content: [{ text: userMessage }] }],
-      inferenceConfig: { maxTokens: 6000, temperature: 0.1 },
-    }));
-    const block = response.output?.message?.content?.[0];
-    if (!block || !('text' in block)) throw new Error('no response');
-    const raw = block.text!.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    const parsed = JSON.parse(raw);
-    return (parsed as Record<string, unknown>).uiConfig ?? parsed;
-  } catch (err) {
-    console.log('[buildRichUIConfig] Bedrock failed, using fallback:', (err as Error).message);
-    return fallback(parsedIntent, records, agg, colors);
+  if (tier === 'rich') {
+    return buildRich(parsedIntent, records, agg, colors);
   }
+
+  if (tier === 'custom') {
+    try {
+      const result = await buildCustom(bedrockClient, modelId, intent, parsedIntent, agg, colors);
+      const comps = (result as Record<string, unknown>).components as unknown[];
+      const chartCount = comps?.filter((c: unknown) => (c as Record<string, unknown>).component === 'Chart').length ?? 0;
+      console.log(`[rich-ui] custom: ${comps?.length ?? 0} components, ${chartCount} charts`);
+      // If Bedrock generated too few charts, augment with rich fallback
+      if (chartCount < 2) throw new Error(`only ${chartCount} charts`);
+      return result;
+    } catch (err) {
+      console.log(`[rich-ui] custom failed (${(err as Error).message}), falling back to rich`);
+      return buildRich(parsedIntent, records, agg, colors);
+    }
+  }
+
+  // standard — should not reach here, handled by orchestrator
+  return buildRich(parsedIntent, records, agg, colors);
 }

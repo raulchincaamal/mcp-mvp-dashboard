@@ -1,8 +1,13 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import AuroraChart from './AuroraChart';
 import ReactECharts from 'echarts-for-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 
 const HolographicChart3D = dynamic(() => import('./HolographicChart3D'), { ssr: false });
 
@@ -423,14 +428,49 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
 
 // ─── Main DynamicRenderer ──────────────────────────────────
 
-const STAGGER_STYLES = '';
-
 interface DynamicRendererProps {
   config: UIConfig;
   animated?: boolean;
 }
 
 export default function DynamicRenderer({ config, animated = false }: DynamicRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!animated || !containerRef.current) return;
+    const items = containerRef.current.querySelectorAll<HTMLElement>('.dash-item');
+    if (!items.length) return;
+
+    // Enfoque 1: stagger entry
+    gsap.fromTo(
+      items,
+      { opacity: 0, y: 32 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        stagger: 0.1,
+        ease: 'power3.out',
+        clearProps: 'all',
+      }
+    );
+
+    // Enfoque 2: ScrollTrigger — re-anima si el item entra al viewport después del stagger
+    items.forEach((item) => {
+      ScrollTrigger.create({
+        trigger: item,
+        start: 'top 92%',
+        once: true,
+        onEnter: () => {
+          if (parseFloat(getComputedStyle(item).opacity) < 1) {
+            gsap.fromTo(item, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out', clearProps: 'all' });
+          }
+        },
+      });
+    });
+
+    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+  }, [animated, config]);
   if (!config || !config.components) {
     return (
       <div style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
@@ -486,23 +526,12 @@ export default function DynamicRenderer({ config, animated = false }: DynamicRen
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {animated && STAGGER_STYLES && <style>{STAGGER_STYLES}</style>}
       {config.description && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{config.description}</p>
       )}
-      <div style={isGrid ? { display: 'grid', gridTemplateColumns: `repeat(${config.columns || 2}, 1fr)`, gap: '1rem' } : { display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div ref={containerRef} style={isGrid ? { display: 'grid', gridTemplateColumns: `repeat(${config.columns || 2}, 1fr)`, gap: '1rem' } : { display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {config.components.map((comp, i) => (
-          <div
-            key={i}
-            style={animated ? {
-              opacity: 0,
-              animationName: 'componentEnter',
-              animationDuration: '0.7s',
-              animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-              animationFillMode: 'forwards',
-              animationDelay: `${i * 0.14}s`,
-            } : undefined}
-          >
+          <div key={i} className="dash-item">
             <RenderComponent config={comp} />
           </div>
         ))}

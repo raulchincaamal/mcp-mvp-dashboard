@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import gsap from 'gsap';
 import DynamicRenderer, { type UIConfig } from '@/shared/components/DynamicRenderer';
 
 const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
@@ -35,12 +36,19 @@ export default function DynamicPage() {
   const [resultKey, setResultKey] = useState(0);
   const [chatOpen, setChatOpen] = useState(true);
 
+  const pageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const loadingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Use refs for values needed inside polling closure
   const pollingHashRef = useRef<string | null>(null);
+
+  // Enfoque 3: page entry animation
+  useEffect(() => {
+    if (!pageRef.current) return;
+    gsap.fromTo(pageRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
+  }, []);
 
   // Polling: single interval, uses refs to avoid stale closures
   useEffect(() => {
@@ -152,7 +160,7 @@ export default function DynamicPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div ref={pageRef} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
 
       {/* ── Top bar: input area ─────────────────────────────── */}
       <div style={{

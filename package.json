@@ -10,7 +10,7 @@
     "build": "npm run build --workspaces",
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev:mcp-main\" \"npm run dev:dashboard\"",
     "dev:dashboard": "npm run dev --workspace=packages/dashboard-app",
-    "dev:mcp-main": "npm run start:http --workspace=packages/mcp-main",
+    "dev:mcp-main": "npm run build --workspace=packages/mcp-main && npm run start:http --workspace=packages/mcp-main",
     "dev:mcp-gcp": "npm run dev --workspace=packages/mcp-gcp-mock",
     "dev:mcp-ui": "npm run dev --workspace=packages/mcp-ui"
   },

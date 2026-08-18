@@ -374,16 +374,19 @@ function renderTable(props: Record<string, unknown>) {
 // ─── Standard Chart ────────────────────────────────────────
 
 function renderChart(props: Record<string, unknown>) {
-  const type     = props.type as string;
-  const title    = props.title as string | undefined;
-  const data     = props.data as { labels: string[]; datasets: Record<string, unknown>[] };
-  const gradient = (props.gradient as 'aurora' | 'neon' | 'fire' | 'ocean') ?? 'aurora';
-  const height   = (props.height as number | undefined) ?? 300;
+  const type      = props.type as string;
+  const title     = props.title as string | undefined;
+  const data      = props.data as import('./AuroraChart').AuroraChartData | undefined;
+  const flint     = props.flint as import('./AuroraChart').FlintSpec | undefined;
+  const flintData = props.flintData as Record<string, unknown>[] | undefined;
+  const gradient  = (props.gradient as 'aurora' | 'neon' | 'fire' | 'ocean') ?? 'aurora';
+  const height    = (props.height as number | undefined) ?? 300;
 
   // Holographic 3D mode
   if (props.holographic === true || props.style === 'holographic') {
-    const labels = data?.labels ?? [];
-    const values = (data?.datasets?.[0]?.data as number[]) ?? [];
+    const d = data as { labels: string[]; datasets: { data: number[] }[] } | undefined;
+    const labels = d?.labels ?? [];
+    const values = (d?.datasets?.[0]?.data as number[]) ?? [];
     return (
       <HolographicChart3D
         data={labels.map((label, i) => ({ label, value: values[i] ?? 0 }))}
@@ -394,13 +397,16 @@ function renderChart(props: Record<string, unknown>) {
     );
   }
 
-  // Aurora 2D mode — default for all charts
-  if (data?.labels && data?.datasets) {
-    const chartType = (type === 'area' ? 'area' : type === 'line' ? 'line' : type === 'pie' ? 'pie' : type === 'doughnut' ? 'doughnut' : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut';
+  const validTypes = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
+  const chartType = (validTypes.includes(type) ? type : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+
+  if (flint || data) {
     return (
       <AuroraChart
         type={chartType}
-        data={data as { labels: string[]; datasets: { label?: string; data: number[] }[] }}
+        data={(data ?? []) as import('./AuroraChart').AuroraChartData}
+        flint={flint}
+        flintData={flintData}
         title={title}
         height={height}
         gradient={gradient}

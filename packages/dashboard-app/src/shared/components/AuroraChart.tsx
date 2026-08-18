@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
+import { assembleECharts } from 'flint-chart';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -10,17 +11,69 @@ gsap.registerPlugin(ScrollTrigger);
 
 // ─── Types ─────────────────────────────────────────────────
 
-export interface AuroraChartData {
+// Flat array format (preferred — AntV/mcp-echarts style, easiest for LLM)
+export interface FlatDataPoint {
+  category: string;
+  value: number;
+  group?: string;
+}
+
+// Flint semantic spec (Microsoft Flint — highest quality output)
+export interface FlintSpec {
+  chartType: string;                                    // e.g. 'Bar Chart', 'Scatter Plot'
+  encodings: Record<string, { field: string } | string>;
+  semantic_types?: Record<string, string>;              // e.g. { estado: 'Country', ventas: 'Quantity' }
+  title?: string;
+  baseSize?: { width: number; height: number };
+}
+
+// Legacy Chart.js-style format (still supported for deterministic code)
+export interface LegacyChartData {
   labels: string[];
   datasets: Array<{ label?: string; data: number[] }>;
 }
 
+export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
+
 export interface AuroraChartProps {
   type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
   data: AuroraChartData;
+  flint?: FlintSpec;          // When present, Flint compiles the ECharts option directly
+  flintData?: Record<string, unknown>[];  // Raw rows for Flint assembly
   title?: string;
   height?: number;
   gradient?: 'aurora' | 'neon' | 'fire' | 'ocean';
+}
+
+// ─── Flat → Legacy normalizer ───────────────────────────────
+
+function normalizeFlatData(data: AuroraChartData): LegacyChartData {
+  // Already legacy format
+  if (!Array.isArray(data)) return data;
+  if (data.length === 0) return { labels: [], datasets: [{ data: [] }] };
+
+  const hasGroup = data.some(d => d.group != null);
+
+  if (!hasGroup) {
+    return {
+      labels: data.map(d => d.category),
+      datasets: [{ label: '', data: data.map(d => d.value) }],
+    };
+  }
+
+  // Grouped: pivot into multiple datasets
+  const groups = [...new Set(data.map(d => d.group!))];
+  const categories = [...new Set(data.map(d => d.category))];
+  return {
+    labels: categories,
+    datasets: groups.map(g => ({
+      label: g,
+      data: categories.map(cat => {
+        const point = data.find(d => d.category === cat && d.group === g);
+        return point?.value ?? 0;
+      }),
+    })),
+  };
 }
 
 // ─── Theme tokens from CSS vars ────────────────────────────
@@ -94,17 +147,43 @@ function rGrad(top: string, bot: string) {
   };
 }
 
+// ─── Flint compiler ────────────────────────────────────────
+
+function buildFlintOption(
+  spec: FlintSpec,
+  rows: Record<string, unknown>[],
+): EChartsOption | null {
+  try {
+    const result = assembleECharts({
+      data: { values: rows },
+      semantic_types: spec.semantic_types ?? {},
+      chart_spec: {
+        chartType: spec.chartType,
+        title: spec.title,
+        encodings: spec.encodings,
+        baseSize: spec.baseSize ?? { width: 600, height: 320 },
+      },
+    });
+    // assembleECharts returns { option, warnings } or the option directly
+    return (result as { option: EChartsOption }).option ?? (result as EChartsOption);
+  } catch (e) {
+    console.warn('[AuroraChart] Flint compile failed, falling back to Aurora:', e);
+    return null;
+  }
+}
+
 // ─── Option builders ────────────────────────────────────────
 
 type Tokens = ReturnType<typeof readTokens>;
 
-function barOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function barOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: tk.border } },
+      trigger: 'axis' as const,
+      axisPointer: { type: 'shadow' as const, shadowStyle: { color: tk.border } },
       backgroundColor: tk.surface,
       borderColor: tk.border,
       borderWidth: 1,
@@ -143,7 +222,8 @@ function barOption(data: AuroraChartData, title: string | undefined, palette: [s
   };
 }
 
-function lineOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isArea: boolean): EChartsOption {
+function lineOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isArea: boolean): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
@@ -189,7 +269,8 @@ function lineOption(data: AuroraChartData, title: string | undefined, palette: [
   };
 }
 
-function pieOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isDoughnut: boolean): EChartsOption {
+function pieOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isDoughnut: boolean): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
   return {
     backgroundColor: 'transparent',
@@ -236,7 +317,8 @@ function pieOption(data: AuroraChartData, title: string | undefined, palette: [s
 // data.datasets[0].data = flat array, data.datasets[1].data = y values
 // OR data.labels = x values, data.datasets[0].data = y values
 
-function scatterOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function scatterOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -276,7 +358,8 @@ function scatterOption(data: AuroraChartData, title: string | undefined, palette
 
 // ─── Radar ─────────────────────────────────────────────────
 
-function radarOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function radarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const maxVal = Math.max(...data.datasets.flatMap(d => d.data)) * 1.2;
   return {
     backgroundColor: 'transparent',
@@ -314,7 +397,8 @@ function radarOption(data: AuroraChartData, title: string | undefined, palette: 
 
 // ─── Funnel ────────────────────────────────────────────────
 
-function funnelOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function funnelOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
   const sorted = data.labels
     .map((l, i) => ({ name: l, value: ds.data[i] }))
@@ -353,7 +437,8 @@ function funnelOption(data: AuroraChartData, title: string | undefined, palette:
 // ─── Gauge ─────────────────────────────────────────────────
 // data.datasets[0].data[0] = value (0-100)
 
-function gaugeOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function gaugeOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const value = data.datasets[0]?.data[0] ?? 0;
   const [top, bot] = palette[0];
   return {
@@ -395,7 +480,8 @@ function gaugeOption(data: AuroraChartData, title: string | undefined, palette: 
 // ─── Heatmap ───────────────────────────────────────────────
 // data.labels = x axis, data.datasets[i].label = y axis label, data.datasets[i].data = values per x
 
-function heatmapOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function heatmapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const [top, bot] = palette[0];
   const yLabels = data.datasets.map(ds => ds.label ?? '');
   const heatData: [number, number, number][] = [];
@@ -442,7 +528,8 @@ function heatmapOption(data: AuroraChartData, title: string | undefined, palette
 // ─── Treemap ───────────────────────────────────────────────
 // data.labels = names, data.datasets[0].data = values
 
-function treemapOption(data: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function treemapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
   return {
     backgroundColor: 'transparent',
@@ -477,7 +564,7 @@ function treemapOption(data: AuroraChartData, title: string | undefined, palette
 // ─── Main Component ─────────────────────────────────────────
 
 export default function AuroraChart({
-  type, data, title, height = 300, gradient = 'aurora',
+  type, data, flint, flintData, title, height = 300, gradient = 'aurora',
 }: AuroraChartProps) {
   const palette    = (PALETTES[gradient] ?? PALETTES.aurora) as [string, string][];
   const tk         = useThemeTokens();
@@ -548,6 +635,12 @@ export default function AuroraChart({
   }, []);
 
   const getOption = (): EChartsOption => {
+    // Flint path: highest quality — semantic compiler
+    if (flint && flintData?.length) {
+      const flintOption = buildFlintOption(flint, flintData);
+      if (flintOption) return flintOption;
+    }
+    // Flat array / legacy path
     switch (type) {
       case 'bar':      return barOption(data, title, palette, tk!);
       case 'line':     return lineOption(data, title, palette, tk!, false);

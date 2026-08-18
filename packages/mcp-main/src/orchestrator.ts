@@ -269,13 +269,30 @@ function isRefinementIntent(intent: string): boolean {
 // ─── Component catalog ────────────────────────────────────────
 
 const COMPONENT_CATALOG = [
-  { name: 'StatCard', description: 'Metric card with title, large value, trend arrow, and icon' },
-  { name: 'KPIGrid', description: 'Grid of StatCards for key metrics' },
-  { name: 'Chart', description: 'Full Chart.js chart (bar, line, pie, doughnut, area)' },
-  { name: 'DataSummary', description: 'Styled data table with hover effects' },
-  { name: 'TransactionList', description: 'List of items with title, amount, date, status' },
-  { name: 'ProgressGroup', description: 'Card with multiple progress bars' },
-  { name: 'MiniChart', description: 'Compact sparkline chart inside a card' },
+  { name: 'StatCard', description: 'Metric card. Props: { title, value, subtitle?, trend?, trendDirection?: "up"|"down"|"neutral", icon? }' },
+  { name: 'KPIGrid', description: 'Grid of StatCards. Props: { items: StatCard[] }' },
+  {
+    name: 'Chart',
+    description: 'ECharts chart via AuroraChart. Props: { type, title?, data, height?, gradient?: "aurora"|"neon"|"fire"|"ocean" }',
+    chartTypes: {
+      bar:      'data: [{ category: string, value: number, group?: string }]  — group enables grouped bars',
+      line:     'data: [{ category: string, value: number, group?: string }]  — group enables multi-line',
+      area:     'data: [{ category: string, value: number, group?: string }]  — same as line with fill',
+      pie:      'data: [{ category: string, value: number }]  — NO group field',
+      doughnut: 'data: [{ category: string, value: number }]  — NO group field',
+      scatter:  'data: [{ category: string (x as string), value: number (y) }]',
+      radar:    'data: [{ category: string (axis name), value: number, group?: string (series) }]',
+      funnel:   'data: [{ category: string (stage), value: number }]  — sorted desc automatically',
+      gauge:    'data: [{ category: string (label), value: number (0-100) }]  — single item',
+      heatmap:  'data: [{ category: string (x-axis), value: number, group: string (y-axis row) }]',
+      treemap:  'data: [{ category: string (name), value: number (size) }]',
+    },
+    flintPath: 'PREFERRED for complex charts: instead of data[], use flint + flintData props. flint: { chartType: "Bar Chart"|"Line Chart"|"Scatter Plot"|"Pie Chart"|"Donut Chart"|"Area Chart"|"Heatmap"|"Treemap"|"Funnel Chart"|"Radar Chart", encodings: { x: { field: "estado" }, y: { field: "ventas" } }, semantic_types: { estado: "Country", ventas: "Quantity", fecha: "Year" }, title? }. flintData: raw records array from the dataset.',
+  },
+  { name: 'DataSummary', description: 'Styled table. Props: { title?, columns: [{key, label}][], rows: object[] }' },
+  { name: 'TransactionList', description: 'Item list. Props: { title?, items: [{title, subtitle?, amount, date?, status?: "positive"|"negative"|"neutral"}][] }' },
+  { name: 'ProgressGroup', description: 'Progress bars. Props: { title?, items: [{label, value: 0-100, color?}][] }' },
+  { name: 'MiniChart', description: 'Sparkline card. Props: { title, value, data: number[], color? }' },
 ];
 
 // ─── Orchestrator ─────────────────────────────────────────────
@@ -1283,54 +1300,37 @@ async function generateUIConfig(
 
   const systemPrompt = `Eres un experto en visualización de datos para Macropay, una empresa mexicana de ventas a crédito de productos como motos, celulares, bicicletas eléctricas, pantallas, tablets, consolas, audio y accesorios.
 
-Tu rol es generar dashboards claros, informativos y visualmente ricos para que los equipos de ventas, cobranza y dirección puedan tomar decisiones rápidas. El usuario final puede ser un gerente, un analista o un agente de Alexa que pide información en lenguaje natural.
-
 Contexto del negocio:
 - Los créditos tienen estatus: al_corriente (bueno), atrasado (riesgo), liquidado (completado), cancelado (perdido)
 - Los canales de venta son: tienda_fisica, en_linea, telefono
 - Las ventas se distribuyen en los 32 estados de México
 - Los montos están en pesos mexicanos (MXN)
-- Un crédito atrasado representa riesgo de cartera vencida
-- El monto_total_credito incluye intereses; precio_contado es el valor sin financiamiento
 
-Componentes disponibles para renderizar:
+COMPONENTES DISPONIBLES:
 ${COMPONENT_CATALOG.map(c => `- ${c.name}: ${c.description}`).join('\n')}
+
+FORMATO DE DATOS PARA CHART (OBLIGATORIO — flat array AntV-style):
+- bar/line/area:  data: [{ "category": "Jalisco", "value": 450 }, ...]  — añade "group" para series múltiples
+- pie/doughnut:   data: [{ "category": "Motos", "value": 120 }, ...]  — sin group
+- scatter:        data: [{ "category": "25", "value": 15000 }, ...]  — category=X, value=Y
+- radar:          data: [{ "category": "Ventas", "value": 80, "group": "2024" }, ...]  — category=eje, group=serie
+- funnel:         data: [{ "category": "Leads", "value": 1000 }, ...]  — orden desc automático
+- gauge:          data: [{ "category": "Morosidad", "value": 23 }]  — value 0-100, UN solo item
+- heatmap:        data: [{ "category": "Ene", "value": 45, "group": "Motos" }, ...]  — category=col, group=fila
+- treemap:        data: [{ "category": "Motos", "value": 1200 }, ...]  — value=tamaño del bloque
+
+NUNCA uses el formato legacy { labels: [], datasets: [] }. SIEMPRE usa flat array.
 
 UIConfig schema:
 {
   "title": "string",
-  "description": "string (opcional)",
   "layout": "vertical",
   "components": [{ "component": "NombreComponente", "props": { ... } }]
 }
 
-Props por componente:
-- KPIGrid: { items: [{ title, value, subtitle?, trend?, trendDirection?: "up"|"down"|"neutral", icon? }] }
-- Chart: { type: "bar"|"line"|"pie"|"doughnut", title?, data: { labels: [], datasets: [{ label, data: [], backgroundColor }] } }
-- DataSummary: { title?, columns: [{ key, label }], rows: [...] }
-- TransactionList: { title?, items: [{ title, subtitle?, amount, date?, status?: "positive"|"negative"|"neutral" }] }
-- ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
-- StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
-
-FILOSOFÍA DE VISUALIZACIÓN:
-Siempre genera dashboards RICOS y COMPLETOS. Más información es mejor que menos. El usuario quiere entender sus datos en profundidad, no solo ver un número. Cada dashboard debe contar una historia completa: qué pasó, dónde, cuánto, y cómo se distribuye. Nunca generes menos de 4 componentes para template executive, category o credit.
-
-REGLAS DE VISUALIZACIÓN (obligatorias):
-1. SIEMPRE incluye al menos un KPIGrid con 3-5 métricas de resumen (total registros, sumas, promedios)
-2. Si uniqueValues > 5 en el campo de agrupación → Chart bar. NUNCA un card por grupo
-3. Si uniqueValues <= 5 → ProgressGroup o pie/doughnut
-4. Para template "executive" o "category": KPIGrid + Chart doughnut + Chart bar
-5. Para template "credit": KPIGrid + ProgressGroup + Chart bar + TransactionList
-6. Para template "mixed": genera TODAS las visualizaciones pedidas (múltiples Charts + DataSummary si pidió tabla)
-7. Para template "chart": KPIGrid (resumen) + Chart(s) principal(es)
-8. Para template "table": KPIGrid (resumen) + DataSummary
-7. Usa aggregations.groupBy.data directamente para labels/values del Chart
-8. Usa aggregations.numericSummaries para los valores de KPIGrid
-9. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
-10. Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K", resto → "$1,234"
-
-COLORES para charts (USA ESTOS EXACTOS - tema ${parsedIntent.colorTheme ?? 'default'}):
-${JSON.stringify(colorPalette)}`;
+FILOSOFÍA: Genera dashboards RICOS. Mínimo 3 componentes. Usa aggregations.groupBy.data para los charts.
+Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K"
+Responde SOLO con el JSON del UIConfig, sin markdown.`;
 
   // Build chart instructions based on requested types
   const chartInstructions = parsedIntent.chartTypes.length > 1
@@ -1350,7 +1350,6 @@ Template sugerido: ${parsedIntent.template}
 GroupBy detectado: ${parsedIntent.groupBy ?? 'ninguno'}
 Métrica: ${parsedIntent.metric}${parsedIntent.metricField ? ` de ${parsedIntent.metricField}` : ''}
 Tipos de gráfica pedidos: ${parsedIntent.chartTypes.join(', ')}
-Tema de colores: ${parsedIntent.colorTheme ?? 'default'}
 ${parsedIntent.comparison ? `Comparación: ${parsedIntent.comparison.field} entre ${parsedIntent.comparison.values.join(' vs ')}` : ''}
 
 CONTEXTO DE LOS DATOS (${totalRecords} registros totales):
@@ -1359,35 +1358,12 @@ ${JSON.stringify(aggregations, null, 2)}
 Muestra de registros (${sampleRecords.length} de ${totalRecords}):
 ${JSON.stringify(sampleRecords, null, 2)}
 
-INSTRUCCIONES SEGÚN TEMPLATE:
-${ parsedIntent.template === 'executive' ? `Genera un dashboard COMPLETO con:
-1. KPIGrid: total ventas, monto total, promedio precio, tasa morosidad (si aplica)
-2. Chart bar: ventas/monto por estado (usa fieldSummaries.estado.topValues)
-3. Chart doughnut: distribución por estatus_credito (usa fieldSummaries.estatus_credito.topValues)
-4. Chart bar: ventas por canal_venta (usa fieldSummaries.canal_venta.topValues)
-5. TransactionList: últimas 6-8 operaciones de la muestra de registros
-Nunca generes menos de 4 componentes.` :
-parsedIntent.template === 'category' ? `Genera:
-1. KPIGrid: total ventas, monto total, promedio
-2. Chart doughnut: distribución por categoría
-3. Chart bar: monto total por categoría
-4. ProgressGroup: top categorías por cantidad` :
-parsedIntent.template === 'credit' ? `Genera:
-1. KPIGrid: totales por estatus, monto en riesgo
-2. ProgressGroup: distribución de estatus
-3. Chart bar: créditos atrasados por estado
-4. TransactionList: créditos con mayor riesgo` :
-parsedIntent.template === 'mixed' ? `Genera TODAS las visualizaciones pedidas (múltiples Charts + DataSummary si pidió tabla).` :
-parsedIntent.template === 'chart' ? `Genera:
-1. KPIGrid: 3 métricas de resumen
-2. ${chartInstructions}` :
-parsedIntent.template === 'table' ? `Genera:
-1. KPIGrid: 3 métricas de resumen
-2. DataSummary con las columnas más relevantes` :
-'Genera el dashboard más útil posible para este intent.'}
-${parsedIntent.comparison ? `Genera una visualización comparativa entre ${parsedIntent.comparison.values.join(' y ')}.` : ''}
-
-IMPORTANTE: Usa los datos reales de aggregations. Si fieldSummaries.estado.uniqueValues > 5, usa Chart bar para estado, nunca KPIGrid por estado.
+INSTRUCCIONES:
+1. Usa aggregations.groupBy.data para construir los charts: cada {label, value} → {category: label, value: value}
+2. Usa aggregations.fieldSummaries para distribuciones: cada topValue {value, count} → {category: value, value: count}
+3. Usa aggregations.numericSummaries para KPIGrid
+4. Mínimo 3 componentes. Siempre incluye KPIGrid.
+5. RECUERDA: data de Chart SIEMPRE es flat array [{category, value, group?}], NUNCA {labels, datasets}
 
 Genera el UIConfig JSON ahora.`;
 

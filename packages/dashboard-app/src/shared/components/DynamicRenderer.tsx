@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import AuroraChart from './AuroraChart';
 import ReactECharts from 'echarts-for-react';
@@ -96,9 +96,9 @@ function resolveIcon(icon: string): string {
 // ─── Composite: StatCard ───────────────────────────────────
 // Props: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
-function renderStatCard(props: Record<string, unknown>) {
+function StatCard({ props }: { props: Record<string, unknown> }) {
   const title = props.title as string;
-  const value = props.value as string;
+  const rawValue = props.value as string;
   const subtitle = props.subtitle as string | undefined;
   const trend = props.trend as string | undefined;
   const trendDirection = (props.trendDirection as string | undefined)
@@ -106,8 +106,32 @@ function renderStatCard(props: Record<string, unknown>) {
   const validTrend = trendDirection === 'up' || trendDirection === 'down' || trendDirection === 'neutral' ? trendDirection : undefined;
   const trendColor = validTrend === 'up' ? '#30d158' : validTrend === 'down' ? 'var(--danger)' : 'var(--text-tertiary)';
   const trendIcon = validTrend === 'up' ? '↑' : validTrend === 'down' ? '↓' : '';
-  // Clean trend text — remove if it's just the direction word
   const trendText = typeof trend === 'string' && !['up','down','neutral'].includes(trend.toLowerCase().trim()) ? trend : undefined;
+
+  // Enfoque 1: counter animation — extract numeric part
+  const valueRef = useRef<HTMLParagraphElement>(null);
+  const numMatch = rawValue.match(/([\d,\.]+)/);
+  const numericPart = numMatch ? parseFloat(numMatch[1].replace(/,/g, '')) : null;
+  const prefix = numMatch ? rawValue.slice(0, numMatch.index) : '';
+  const suffix = numMatch ? rawValue.slice((numMatch.index ?? 0) + numMatch[1].length) : '';
+
+  useEffect(() => {
+    if (!valueRef.current || numericPart === null) return;
+    const obj = { val: 0 };
+    const tween = gsap.to(obj, {
+      val: numericPart,
+      duration: 1.2,
+      ease: 'power2.out',
+      onUpdate: () => {
+        if (!valueRef.current) return;
+        const formatted = obj.val >= 1000
+          ? obj.val.toLocaleString('es-MX', { maximumFractionDigits: 0 })
+          : obj.val.toFixed(numericPart % 1 !== 0 ? 1 : 0);
+        valueRef.current.textContent = `${prefix}${formatted}${suffix}`;
+      },
+    });
+    return () => { tween.kill(); };
+  }, [rawValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{
@@ -121,13 +145,19 @@ function renderStatCard(props: Record<string, unknown>) {
           <span style={{ fontSize: '1.2rem' }}>{resolveIcon(props.icon)}</span>
         )}
       </div>
-      <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', marginTop: '0.5rem', color: 'var(--text)' }}>{value}</p>
+      <p ref={valueRef} style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', marginTop: '0.5rem', color: 'var(--text)' }}>
+        {rawValue}
+      </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
         {trendText && <span style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}>{trendIcon} {trendText}</span>}
         {subtitle && <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>{subtitle}</span>}
       </div>
     </div>
   );
+}
+
+function renderStatCard(props: Record<string, unknown>) {
+  return <StatCard props={props} />;
 }
 
 // ─── Composite: KPIGrid ────────────────────────────────────

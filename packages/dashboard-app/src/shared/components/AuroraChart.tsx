@@ -3,6 +3,10 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -478,18 +482,69 @@ export default function AuroraChart({
   const palette    = (PALETTES[gradient] ?? PALETTES.aurora) as [string, string][];
   const tk         = useThemeTokens();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const titleRef   = useRef<HTMLDivElement>(null);
+
+  // quickTo refs for smooth tilt with inertia
+  const rotY = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
+  const rotX = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    // Enfoque 3: GSAP quickTo tilt — much smoother than direct style mutation
+    rotY.current = gsap.quickTo(el, 'rotationY', { duration: 0.4, ease: 'power2.out' });
+    rotX.current = gsap.quickTo(el, 'rotationX', { duration: 0.4, ease: 'power2.out' });
+    gsap.set(el, { transformPerspective: 800, transformStyle: 'preserve-3d' });
+
+    // Enfoque 2: glow pulse on enter
+    const accentColor = (PALETTES[gradient] ?? PALETTES.aurora)[0][0];
+    ScrollTrigger.create({
+      trigger: el,
+      start: 'top 90%',
+      once: true,
+      onEnter: () => {
+        gsap.fromTo(
+          el,
+          { boxShadow: `0 0 0px 0px ${accentColor}00` },
+          {
+            boxShadow: `0 0 28px 4px ${accentColor}55`,
+            duration: 0.5,
+            ease: 'power2.out',
+            yoyo: true,
+            repeat: 1,
+            onComplete: () => gsap.set(el, { clearProps: 'boxShadow' }),
+          }
+        );
+      },
+    });
+
+    // Enfoque 4: title clip-path reveal
+    if (titleRef.current) {
+      gsap.fromTo(
+        titleRef.current,
+        { clipPath: 'inset(0 100% 0 0)', opacity: 0 },
+        { clipPath: 'inset(0 0% 0 0)', opacity: 1, duration: 0.6, ease: 'power3.out', delay: 0.1 }
+      );
+    }
+
+    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+  }, [gradient]);
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const el = wrapperRef.current;
-    if (!el) return;
+    if (!el || !rotY.current || !rotX.current) return;
     const r = el.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width  - 0.5) * 4;
-    const y = ((e.clientY - r.top)  / r.height - 0.5) * -3;
-    el.style.transform = `perspective(800px) rotateY(${x}deg) rotateX(${y}deg)`;
+    const x = ((e.clientX - r.left) / r.width  - 0.5) * 6;
+    const y = ((e.clientY - r.top)  / r.height - 0.5) * -4;
+    rotY.current(x);
+    rotX.current(y);
   }, []);
 
   const onMouseLeave = useCallback(() => {
-    if (wrapperRef.current) wrapperRef.current.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg)';
+    if (!rotY.current || !rotX.current) return;
+    rotY.current(0);
+    rotX.current(0);
   }, []);
 
   const getOption = (): EChartsOption => {
@@ -527,7 +582,7 @@ export default function AuroraChart({
       }}
     >
       {title && (
-        <div style={{
+        <div ref={titleRef} style={{
           padding: '0.9rem 1.1rem 0',
           fontSize: '0.82rem',
           fontWeight: 600,

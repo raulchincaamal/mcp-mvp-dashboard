@@ -7,7 +7,7 @@ Frontend del pipeline MCP — renderiza UIs dinamicas generadas por el pipeline 
 - **Framework**: Next.js 16 (App Router, Turbopack)
 - **React**: 19
 - **UI Library**: @macropaytd/lib-front-ui-components
-- **Charts**: Chart.js + react-chartjs-2
+- **Charts**: D3.js
 - **Styling**: Tailwind CSS 4
 - **State**: FIFO Orchestrator + Zustand (via @macropaytd/lib-front-fifo-zustand)
 - **i18n**: lib-front-i18n-module (es/en)
@@ -15,11 +15,11 @@ Frontend del pipeline MCP — renderiza UIs dinamicas generadas por el pipeline 
 
 ## Rutas
 
-| Ruta | Descripcion |
-|------|-------------|
-| `/` | Home page con navegacion al dashboard |
-| `/dashboard` | Dashboard estatico con charts de sample data |
-| `/dynamic` | UI Dinamica — genera interfaces desde intent + datos via mcp-main |
+| Ruta         | Descripcion                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `/`          | Home page con navegacion al dashboard                             |
+| `/dashboard` | Dashboard estatico con charts de sample data                      |
+| `/dynamic`   | UI Dinamica — genera interfaces desde intent + datos via mcp-main |
 
 ## Arquitectura de carpetas
 
@@ -59,17 +59,17 @@ Componente central que mapea `UIConfig` JSON a componentes React reales.
 
 ### Componentes soportados
 
-| Componente | Tipo | Descripcion |
-|------------|------|-------------|
-| `StatCard` | Composite | Metric con valor, tendencia, icono |
-| `KPIGrid` | Composite | Grid responsivo de StatCards |
-| `ProgressBar` | Composite | Barra con label y porcentaje |
-| `ProgressGroup` | Composite | Card con multiples barras |
-| `TransactionList` | Composite | Lista de items con monto/fecha |
-| `MiniChart` | Composite | Sparkline compacto |
-| `DataSummary` | Composite | Tabla estilizada |
-| `Chart` | Chart.js | Bar, Line, Pie, Doughnut, Area |
-| `Card`, `Text`, `Badge`, `Button`, `Input` | @macropaytd | Componentes base |
+| Componente                                 | Tipo        | Descripcion                                                  |
+| ------------------------------------------ | ----------- | ------------------------------------------------------------ |
+| `StatCard`                                 | Composite   | Metric con valor, tendencia, icono                           |
+| `KPIGrid`                                  | Composite   | Grid responsivo de StatCards                                 |
+| `ProgressBar`                              | Composite   | Barra con label y porcentaje                                 |
+| `ProgressGroup`                            | Composite   | Card con multiples barras                                    |
+| `TransactionList`                          | Composite   | Lista de items con monto/fecha                               |
+| `MiniChart`                                | Composite   | Sparkline compacto                                           |
+| `DataSummary`                              | Composite   | Tabla estilizada                                             |
+| `Chart`                                    | D3.js       | Bar, Line, Pie, Doughnut, Area, Bollinger, Candlestick, etc. |
+| `Card`, `Text`, `Badge`, `Button`, `Input` | @macropaytd | Componentes base                                             |
 
 ### Flujo de datos
 
@@ -81,8 +81,8 @@ Usuario escribe intent → fetch POST /api/generate-ui → mcp-main procesa → 
 
 ### Variables de entorno
 
-| Variable | Default | Descripcion |
-|----------|---------|-------------|
+| Variable                   | Default                 | Descripcion          |
+| -------------------------- | ----------------------- | -------------------- |
 | `NEXT_PUBLIC_MCP_MAIN_URL` | `http://localhost:4000` | URL del API mcp-main |
 
 ### Prerequisitos
@@ -99,6 +99,7 @@ npm run start    # Serve produccion build
 ```
 
 Desde la raiz del monorepo:
+
 ```bash
 npm run dev:dashboard
 ```
@@ -108,7 +109,9 @@ npm run dev:dashboard
 Locales en `public/locales/{es,en}/common.json`. Idioma default: español.
 
 Claves principales:
+
 - `nav.*` — navegacion sidebar
 - `home.*` — pagina home
 - `dashboard.*` — pagina dashboard
 - `dynamic.*` — pagina UI dinamica
+

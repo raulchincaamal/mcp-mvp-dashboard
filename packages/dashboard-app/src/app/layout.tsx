@@ -1,25 +1,37 @@
-import "@macropaytd/lib-front-ui-components/styles.css";
-import "./globals.css";
-import { Providers } from "./providers";
-import SmoothScroll from "@/shared/components/SmoothScroll";
+import '@macropaytd/lib-front-ui-components/styles.css';
+import './globals.css';
+import { Providers } from './providers';
 
 export const metadata = {
-  title: "MCP Dashboard",
-  description: "Dashboard generado por MCP pipeline — datos transformados en configs Chart.js",
+  title: 'MCP Dashboard',
+  description:
+    'Dashboard generado por MCP pipeline — datos transformados en visualizaciones D3.js',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="es" data-theme="light" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
           (function() {
             var t = localStorage.getItem('mcp-theme');
             if (t) document.documentElement.setAttribute('data-theme', t);
           })()
-        `}} />
+        `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"

@@ -11,12 +11,13 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "start": "node --env-file=.env dist/index.js",
+    "start": "node dist/index.js",
     "start:http": "node --env-file=.env dist/index.js",
     "start:mcp": "node --env-file=.env dist/index.js --mcp"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1105.0",
+    "@fastify/cors": "^11.3.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "fastify": "^5.3.3",
     "ioredis": "^5.3.2",

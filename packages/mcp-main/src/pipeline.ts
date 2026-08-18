@@ -197,7 +197,7 @@ function parseComponentsFromContext(
     {
       name: 'Chart',
       description:
-        'Full Chart.js chart in a card (bar, line, pie, doughnut, area)',
+        'D3 chart in a card (bar, line, pie, doughnut, area, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race)',
     },
   ];
 
@@ -219,4 +219,3 @@ function parseComponentsFromContext(
 
   return knownComponents;
 }
-

@@ -1,27 +1,5 @@
 # Progress — MCP MVP Dashboard
 
-## Nova Pro Integration Status
-
-### Fase 1: Validación ✅ COMPLETADA
-- Model ID `amazon.nova-pro-v1:0` validado en us-east-1
-- Latencia promedio: ~10s (2 llamadas Bedrock secuenciales)
-- Intent parsing en español: funciona correctamente
-- UIConfig generation: JSON válido y rico
-- Features validados: groupBy, chartTypes, topBottom, trendAnalysis, correlation, drillDown
-- Arquitectura actual: orquestación manual (NO usa tool use nativo)
-
-### Fase 2: Tool Use Nativo ✅ IMPLEMENTADO
-- Nuevo archivo: `orchestrator-tooluse.ts`
-- Variable de entorno: `USE_TOOL_USE=true` para activar
-- Tools definidos: `query_data`, `generate_dashboard`
-- Loop dinámico: Nova Pro decide cuándo usar herramientas
-- Pendiente: validación de latencia y calidad de respuestas
-
-### Fase 3: Optimización (PENDIENTE)
-- Streaming para mejor UX
-- Métricas de observabilidad
-- Comparación de rendimiento entre modos
-
 ## What Works
 - Full pipeline: intent → Bedrock tool-use loop → query_data → generate_ui → UIConfig → render
 - All 6 UIConfig templates (executive, category, credit, table, cards, chart)

@@ -37,12 +37,12 @@ Pipeline de generacion dinamica de dashboards usando Model Context Protocol (MCP
 
 ## Packages
 
-| Package                  | Descripcion                                           | Tecnologia                                 |
-| ------------------------ | ----------------------------------------------------- | ------------------------------------------ |
-| `packages/mcp-gcp-mock`  | MCP Server — fuente de datos mock (simula GCP/SAP)    | Node.js, MCP SDK, JSON fixtures            |
-| `packages/mcp-ui`        | MCP Server — transforma datos en configs de UI/Charts | Node.js, MCP SDK, Chart.js schema          |
-| `packages/mcp-main`      | Orquestador HTTP — pipeline manager + LLM interpreter | Fastify, AWS Bedrock, MCP Client           |
-| `packages/dashboard-app` | Frontend — renderiza UIs dinamicas desde JSON configs | Next.js 16, React 19, Chart.js, Tailwind 4 |
+| Package                  | Descripcion                                           | Tecnologia                              |
+| ------------------------ | ----------------------------------------------------- | --------------------------------------- |
+| `packages/mcp-gcp-mock`  | MCP Server — fuente de datos mock (simula GCP/SAP)    | Node.js, MCP SDK, JSON fixtures         |
+| `packages/mcp-ui`        | MCP Server — transforma datos en configs de UI/Charts | Node.js, MCP SDK, D3 schema             |
+| `packages/mcp-main`      | Orquestador HTTP — pipeline manager + LLM interpreter | Fastify, AWS Bedrock, MCP Client        |
+| `packages/dashboard-app` | Frontend — renderiza UIs dinamicas desde JSON configs | Next.js 16, React 19, D3.js, Tailwind 4 |
 
 ## Requisitos
 
@@ -154,16 +154,16 @@ node packages/mcp-gcp-mock/scripts/generate-ventas.mjs
 
 El `DynamicRenderer` soporta estos componentes:
 
-| Componente                        | Descripcion                                       |
-| --------------------------------- | ------------------------------------------------- |
-| `StatCard`                        | Metric card con valor grande, tendencia y icono   |
-| `KPIGrid`                         | Grid responsivo de StatCards                      |
-| `ProgressGroup`                   | Card con barras de progreso                       |
-| `TransactionList`                 | Lista de items con monto, fecha y status          |
-| `MiniChart`                       | Sparkline compacto dentro de una card             |
-| `DataSummary`                     | Tabla estilizada con hover effects                |
-| `Chart`                           | Grafica Chart.js (bar, line, pie, doughnut, area) |
-| `Card`, `Text`, `Badge`, `Button` | Componentes base @macropaytd                      |
+| Componente                        | Descripcion                                     |
+| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `StatCard`                        | Metric card con valor grande, tendencia y icono |
+| `KPIGrid`                         | Grid responsivo de StatCards                    |
+| `ProgressGroup`                   | Card con barras de progreso                     |
+| `TransactionList`                 | Lista de items con monto, fecha y status        |
+| `MiniChart`                       | Sparkline compacto dentro de una card           |
+| `DataSummary`                     | Tabla estilizada con hover effects              |
+| `Chart`                           | D3.js                                           | Bar, Line, Pie, Doughnut, Area, Bollinger, Stacked Area, Diverging Bar, Radial, Candlestick, Hierarchical, Bar Race |
+| `Card`, `Text`, `Badge`, `Button` | Componentes base @macropaytd                    |
 
 ## Templates Inteligentes
 

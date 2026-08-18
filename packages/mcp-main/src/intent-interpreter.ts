@@ -16,8 +16,34 @@ export interface ParsedIntent {
   groupBy: string | null;
   metric: 'count' | 'sum' | 'avg' | 'max' | 'min';
   metricField: string | null;
-  chartType: 'bar' | 'line' | 'pie' | 'doughnut' | 'area' | null;
-  template: 'executive' | 'category' | 'credit' | 'table' | 'cards' | 'chart';
+  chartType:
+    | 'bar'
+    | 'line'
+    | 'pie'
+    | 'doughnut'
+    | 'area'
+    | 'bollinger'
+    | 'stacked-area'
+    | 'diverging-bar'
+    | 'radial-stacked-bar'
+    | 'candlestick'
+    | 'hierarchical-bar'
+    | 'bar-race'
+    | null;
+  template:
+    | 'executive'
+    | 'category'
+    | 'credit'
+    | 'table'
+    | 'cards'
+    | 'chart'
+    | 'bollinger'
+    | 'stacked-area'
+    | 'diverging-bar'
+    | 'radial-stacked-bar'
+    | 'candlestick'
+    | 'hierarchical-bar'
+    | 'bar-race';
   limit: number | null;
   title: string | null;
 }
@@ -54,8 +80,8 @@ Responde SOLO con un JSON válido (sin markdown, sin explicación) con esta estr
   "groupBy": null,        // campo para agrupar. Ej: "estado", "categoria", "canal_venta"
   "metric": "count",      // count = contar registros, sum/avg/max/min = operación sobre metricField
   "metricField": null,    // campo numérico para sum/avg/max/min. Ej: "precio_contado", "monto_total_credito"
-  "chartType": null,      // bar, line, pie, doughnut, area, o null si no es gráfica
-  "template": "executive",// executive, category, credit, table, cards, chart
+  "chartType": null,      // bar, line, pie, doughnut, area, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race, o null si no es gráfica
+  "template": "executive",// executive, category, credit, table, cards, chart, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race
   "limit": null,          // número de registros máximo, null = sin límite específico
   "title": null           // título sugerido para el dashboard, o null
 }
@@ -71,6 +97,13 @@ Reglas:
 - Si mencionan "gráfica" o "chart": template = "chart"
 - Si mencionan "crédito" o "estatus": template = "credit"
 - Si mencionan "categoría" o "por categoría": template = "category"
+- Si mencionan "bollinger", "bandas", "volatilidad": template = "bollinger", chartType = "bollinger"
+- Si mencionan "área apilada", "composición", "stacked area": template = "stacked-area", chartType = "stacked-area"
+- Si mencionan "divergente", "a favor/en contra", "positivo/negativo", "likert": template = "diverging-bar", chartType = "diverging-bar"
+- Si mencionan "radial", "polar", "circular": template = "radial-stacked-bar", chartType = "radial-stacked-bar"
+- Si mencionan "candlestick", "velas", "OHLC", "apertura y cierre": template = "candlestick", chartType = "candlestick"
+- Si mencionan "jerárquico", "drill-down", "desglose", "niveles": template = "hierarchical-bar", chartType = "hierarchical-bar"
+- Si mencionan "carrera", "race", "animación de barras", "evolución temporal", "ranking en el tiempo": template = "bar-race", chartType = "bar-race"
 - Si mencionan un número (últimas 10, top 20): ponlo en limit
 - La fecha actual es ${new Date().toISOString().split('T')[0]}`;
 
@@ -135,4 +168,3 @@ export async function interpretIntent(intent: string): Promise<ParsedIntent> {
     };
   }
 }
-

@@ -120,5 +120,5 @@ Componentes ricos que `generate_ui` puede producir:
 | `TransactionList` | `title?, items: {title, subtitle?, amount, date?, status?}[]`                | Lista de transacciones           |
 | `MiniChart`       | `title, value, data: number[], color?`                                       | Sparkline compacto               |
 | `DataSummary`     | `title?, columns: {key, label}[], rows: Record[]`                            | Tabla estilizada                 |
-| `Chart`           | `type, title?, data: {labels, datasets}, options?`                           | Chart.js completo                |
+| `Chart`           | `type, title?, data: {labels, datasets}, options?`                           | D3.js chart (multiple types)     |
 

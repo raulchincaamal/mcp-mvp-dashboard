@@ -1,5 +1,16 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import AuroraChart from './AuroraChart';
+import ReactECharts from 'echarts-for-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
+
+const HolographicChart3D = dynamic(() => import('./HolographicChart3D'), { ssr: false });
+
 import {
   Button,
   Input,
@@ -187,9 +198,9 @@ function resolveIcon(icon: string): string {
 // ─── Composite: StatCard ───────────────────────────────────
 // Props: { title, value, subtitle?, trend?, trendDirection?, icon? }
 
-function renderStatCard(props: Record<string, unknown>) {
+function StatCard({ props }: { props: Record<string, unknown> }) {
   const title = props.title as string;
-  const value = props.value as string;
+  const rawValue = props.value as string;
   const subtitle = props.subtitle as string | undefined;
   const trend = props.trend as string | undefined;
   const trendDirection = (props.trendDirection as string | undefined)
@@ -284,6 +295,10 @@ function renderStatCard(props: Record<string, unknown>) {
   );
 }
 
+function renderStatCard(props: Record<string, unknown>) {
+  return <StatCard props={props} />;
+}
+
 // ─── Composite: KPIGrid ────────────────────────────────────
 // Props: { items: Array<{ title, value, subtitle?, trend?, trendDirection? }> }
 
@@ -308,9 +323,7 @@ function renderKPIGrid(props: Record<string, unknown>) {
       }}
     >
       {items.map((item, i) => (
-        <div key={i}>
-          {renderStatCard(item as unknown as Record<string, unknown>)}
-        </div>
+        <div key={i}>{renderStatCard(item as unknown as Record<string, unknown>)}</div>
       ))}
     </div>
   );
@@ -538,8 +551,8 @@ function renderTransactionList(props: Record<string, unknown>) {
 function renderMiniChart(props: Record<string, unknown>) {
   const title = props.title as string;
   const value = props.value as string;
-  const data = props.data as number[];
-  const color = (props.color as string) || '#4F46E5';
+  const data  = props.data as number[];
+  const color = (props.color as string) || '#818cf8';
 
   if (!data || data.length === 0) return null;
 

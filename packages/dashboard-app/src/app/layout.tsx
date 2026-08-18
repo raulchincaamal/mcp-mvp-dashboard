@@ -38,7 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
-        <Providers>{children}</Providers>
+        <Providers><SmoothScroll>{children}</SmoothScroll></Providers>
       </body>
     </html>
   );

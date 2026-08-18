@@ -929,15 +929,7 @@ function buildCategoryTemplate(
     numericFields[0];
 
   if (!categoryField || !valueField) {
-    return buildExecutiveTemplate(
-      records,
-      [],
-      numericFields,
-      stringFields,
-      intent,
-      title,
-      columns,
-    );
+    return buildExecutiveTemplate(records, [], numericFields, stringFields, intent, title, columns);
   }
 
   // Aggregate by category

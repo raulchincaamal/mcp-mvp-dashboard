@@ -137,7 +137,7 @@ export async function runMockFlow(rawQuery: string) {
   await delay(1400);
   observatory.transition('REVEAL', { insights: buildMockInsights() });
 
-  await delay(600);
+  await delay(1200);
   observatory.transition('PRESENTATION');
 }
 

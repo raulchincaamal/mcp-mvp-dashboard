@@ -233,7 +233,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
       axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
+      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },

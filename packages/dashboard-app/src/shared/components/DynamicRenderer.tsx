@@ -781,36 +781,31 @@ function ScrollDrivenChart({ type, data, title, height = 320, index = 0 }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
-    gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+    gsap.set(el, { opacity: 0, y: 30, scale: 0.97 });
 
     const trigger = ScrollTrigger.create({
       trigger: el,
-      start: 'top 88%',
+      start: 'top 92%',
+      once: true,
       onEnter: () => {
-        if (hasAnimated.current) return;
-        hasAnimated.current = true;
-        setMounted(true); // mount ECharts only when visible → triggers its own animation
-        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: 'power3.out', delay: index * 0.08 });
-      },
-      onEnterBack: () => {
-        if (!hasAnimated.current) {
-          hasAnimated.current = true;
-          setMounted(true);
-          gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out' });
-        }
-      },
-      onLeaveBack: () => {
-        hasAnimated.current = false;
-        setMounted(false);
-        gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+        setMounted(true);
+        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'power3.out', delay: index * 0.06 });
       },
     });
+
+    // If already in viewport (no scroll needed), trigger manually after a tick
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight * 0.92) {
+      setTimeout(() => {
+        setMounted(true);
+        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'power3.out', delay: index * 0.06 });
+      }, 50);
+    }
 
     return () => trigger.kill();
   }, [index]);

@@ -45,6 +45,7 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
   useEffect(() => {
     if (phase !== 'chart' && phase !== 'complete') return;
     if (!chartRef.current || chartInstance.current) return;
+    if (!insight.chartOptions) return; // stat card only — no chart
 
     const instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
     chartInstance.current = instance;
@@ -78,6 +79,8 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
   const showContent = phase === 'content' || phase === 'chart' || phase === 'complete';
   const showChart = phase === 'chart' || phase === 'complete';
 
+  const isStatCard = !insight.chartOptions;
+
   return (
     <div
       ref={containerRef}
@@ -96,11 +99,12 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
-          gap: 16,
+          gap: isStatCard ? 8 : 16,
+          justifyContent: isStatCard ? 'center' : undefined,
         }}>
           <div style={{
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: isStatCard ? 'center' : 'flex-start',
             justifyContent: 'space-between',
             gap: 16,
             opacity: showContent ? 1 : 0,
@@ -131,9 +135,9 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
             {insight.metric && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p style={{
-                  fontSize: insight.isPrimary ? 32 : 24,
+                  fontSize: isStatCard ? (insight.isPrimary ? 40 : 32) : (insight.isPrimary ? 32 : 24),
                   fontWeight: 700,
-                  color: 'var(--text)',
+                  color: 'var(--primary)',
                   margin: 0,
                   letterSpacing: '-0.02em',
                   lineHeight: 1,
@@ -144,7 +148,8 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
                   <p style={{
                     fontSize: 10,
                     color: 'var(--text-tertiary)',
-                    margin: '4px 0 0',
+                    margin: '6px 0 0',
+                    textAlign: 'right',
                   }}>
                     {insight.metricLabel}
                   </p>
@@ -153,15 +158,17 @@ export default function InsightCard({ insight, cursor, index, visible, onRevealC
             )}
           </div>
 
-          <div
-            ref={chartRef}
-            style={{
-              flex: 1,
-              minHeight: insight.isPrimary ? 220 : 160,
-              opacity: showChart ? 1 : 0,
-              transition: 'opacity 0.5s ease',
-            }}
-          />
+          {!isStatCard && (
+            <div
+              ref={chartRef}
+              style={{
+                flex: 1,
+                minHeight: insight.isPrimary ? 220 : 160,
+                opacity: showChart ? 1 : 0,
+                transition: 'opacity 0.5s ease',
+              }}
+            />
+          )}
         </div>
       </GlassPanel>
     </div>

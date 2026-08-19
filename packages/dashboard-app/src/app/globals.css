@@ -134,8 +134,8 @@
   --border-color: rgba(200, 210, 230, 0.1);
   --border-strong: rgba(200, 210, 230, 0.2);
   --text: #e6ecf4;
-  --text-secondary: rgba(210, 220, 240, 0.82);
-  --text-tertiary: rgba(170, 185, 210, 0.5);
+  --text-secondary: rgba(210, 220, 240, 0.9);
+  --text-tertiary: rgba(170, 185, 210, 0.7);
   --sidebar-bg: #1e2128;
   --navbar-bg: rgba(30, 33, 40, 0.9);
   --sidebar-surface: rgba(255, 255, 255, 0.05);

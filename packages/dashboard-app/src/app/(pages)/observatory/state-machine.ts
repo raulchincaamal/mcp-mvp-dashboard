@@ -120,11 +120,12 @@ const AURORA_COLORS = ['#c084fc', '#818cf8', '#67e8f9', '#60a5fa', '#f9a8d4', '#
 function getAxisStyle(isDark: boolean) {
   return {
     axisLabel: { 
-      color: isDark ? 'rgba(230,236,244,0.7)' : 'rgba(13,21,37,0.7)', 
-      fontSize: 10,
+      color: isDark ? 'rgba(230,236,244,0.8)' : 'rgba(13,21,37,0.75)', 
+      fontSize: 12,
+      fontFamily: 'Space Grotesk, sans-serif',
     },
-    axisLine: { lineStyle: { color: isDark ? 'rgba(230,236,244,0.2)' : 'rgba(13,21,37,0.2)' } },
-    splitLine: { lineStyle: { color: isDark ? 'rgba(230,236,244,0.1)' : 'rgba(13,21,37,0.1)' } },
+    axisLine: { lineStyle: { color: isDark ? 'rgba(230,236,244,0.15)' : 'rgba(13,21,37,0.15)' } },
+    splitLine: { lineStyle: { color: isDark ? 'rgba(230,236,244,0.07)' : 'rgba(13,21,37,0.07)', type: 'dashed' } },
   };
 }
 
@@ -143,7 +144,7 @@ function getLegendStyle(isDark: boolean) {
 }
 
 function getLabelColor(isDark: boolean) {
-  return isDark ? 'rgba(230,236,244,0.8)' : 'rgba(13,21,37,0.8)';
+  return isDark ? 'rgba(230,236,244,0.9)' : 'rgba(13,21,37,0.85)';
 }
 
 function colorFor(i: number) {
@@ -194,47 +195,83 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       let chartOptions: Record<string, unknown> = {};
 
       if (type === 'pie' || type === 'doughnut') {
+        const total = values.reduce((a, b) => a + b, 0);
         chartOptions = {
-          tooltip: { trigger: 'item', ...TOOLTIP_STYLE, formatter: '{b}: {c} ({d}%)' },
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'item',
+            ...TOOLTIP_STYLE,
+            textStyle: { ...TOOLTIP_STYLE.textStyle, fontSize: 13 },
+            formatter: (p: { name: string; value: number; percent: number }) =>
+              `${p.name}<br/><b>${p.value.toLocaleString('es-MX')}</b> (${p.percent.toFixed(1)}%)`,
+          },
+          legend: {
+            orient: 'vertical',
+            right: 12,
+            top: 'middle',
+            itemWidth: 12,
+            itemHeight: 12,
+            itemGap: 14,
+            textStyle: {
+              color: getLabelColor(isDark),
+              fontSize: 13,
+              fontFamily: 'Space Grotesk, sans-serif',
+            },
+            formatter: (name: string) => {
+              const i = labels.indexOf(name);
+              const v = values[i] ?? 0;
+              const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
+              return `${name}  ${pct}%`;
+            },
+          },
           series: [{
             type: 'pie',
-            radius: type === 'doughnut' ? ['30%', '60%'] : '55%',
-            center: ['50%', '50%'],
-            data: labels.map((name, i) => ({ value: values[i] ?? 0, name, itemStyle: { color: colorFor(i) } })),
-            label: { 
-              show: true, 
-              position: 'outside',
-              formatter: (p: { name: string; percent: number }) => p.name.length > 10 ? p.name.slice(0,10) + '..' : p.name,
-              fontSize: 9,
-              color: getLabelColor(isDark),
+            radius: type === 'doughnut' ? ['38%', '68%'] : ['0%', '65%'],
+            center: ['36%', '50%'],
+            itemStyle: { borderRadius: 5, borderColor: 'transparent', borderWidth: 2 },
+            data: labels.map((name, i) => ({
+              value: values[i] ?? 0,
+              name,
+              itemStyle: { color: colorFor(i) },
+            })),
+            label: { show: false },
+            labelLine: { show: false },
+            emphasis: {
+              scale: true,
+              scaleSize: 8,
+              label: {
+                show: true,
+                fontSize: 15,
+                fontWeight: 700,
+                color: getLabelColor(isDark),
+                formatter: '{b}\n{d}%',
+              },
             },
-            labelLine: { show: true, length: 6, length2: 4 },
-            emphasis: { scale: true, scaleSize: 4 },
           }],
         };
       } else if (type === 'line' || type === 'area') {
         chartOptions = {
-          grid: { top: 20, right: 12, bottom: 28, left: 40 },
+          grid: { top: 24, right: 20, bottom: 36, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
             data: labels, 
             ...AXIS_STYLE, 
             splitLine: { show: false },
-            axisLabel: { ...AXIS_STYLE.axisLabel, rotate: labels.length > 6 ? 30 : 0, fontSize: 9 },
+            axisLabel: { ...AXIS_STYLE.axisLabel, rotate: labels.length > 8 ? 35 : 0 },
           },
           yAxis: { type: 'value', ...AXIS_STYLE },
-          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, textStyle: { ...TOOLTIP_STYLE.textStyle, fontSize: 13 } },
           series: [{
-            type: 'line', data: values, smooth: true, symbol: 'circle', symbolSize: 4,
-            lineStyle: { color: colorFor(0), width: 2 },
+            type: 'line', data: values, smooth: true, symbol: 'circle', symbolSize: 6,
+            lineStyle: { color: colorFor(0), width: 3 },
             itemStyle: { color: colorFor(0) },
-            ...(type === 'area' ? { areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: colorFor(0) + '40' }, { offset: 1, color: colorFor(0) + '05' }] } } } : {}),
+            ...(type === 'area' ? { areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: colorFor(0) + '50' }, { offset: 1, color: colorFor(0) + '05' }] } } } : {}),
           }],
         };
       } else {
         // bar - vertical
         chartOptions = {
-          grid: { top: 12, right: 12, bottom: 36, left: 40 },
+          grid: { top: 16, right: 16, bottom: 40, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
             data: labels, 
@@ -242,23 +279,20 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
             axisTick: { show: false }, 
             axisLabel: { 
               ...AXIS_STYLE.axisLabel, 
-              rotate: labels.length > 5 ? 35 : 0,
-              fontSize: 9,
+              rotate: labels.length > 6 ? 35 : 0,
               interval: 0,
             } 
           },
           yAxis: { type: 'value', ...AXIS_STYLE },
-          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, textStyle: { ...TOOLTIP_STYLE.textStyle, fontSize: 13 } },
           series: [{
             type: 'bar',
             data: values.map((v, i) => ({ 
               value: v, 
-              itemStyle: { 
-                color: colorFor(i),
-                borderRadius: [3, 3, 0, 0],
-              } 
+              itemStyle: { color: colorFor(i), borderRadius: [4, 4, 0, 0] } 
             })),
-            barMaxWidth: 28,
+            barMaxWidth: 48,
+            barCategoryGap: '35%',
           }],
         };
       }
@@ -293,38 +327,73 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── ProgressGroup → horizontal bar chart ───────────────────────────────
+    // ── ProgressGroup → barras horizontales con labels y porcentaje ────────
     if (component === 'ProgressGroup') {
-      const items: { label?: string; value?: number; max?: number }[] = props.items ?? [];
-      const labels = items.map(it => it.label ?? '').slice(0, 5);
-      const values = items.map(it => it.value ?? 0).slice(0, 5);
+      const items: { label?: string; value?: number }[] = props.items ?? [];
+      const pgItems = items.slice(0, 8);
+      const pgLabels = pgItems.map(it => it.label ?? '');
+      const pgValues = pgItems.map(it => Math.min(100, Math.max(0, it.value ?? 0)));
+      const barH = Math.max(18, Math.min(32, Math.floor(260 / pgItems.length)));
       insights.push({
         id: `progress-${idx}`,
         title: props.title ?? 'Progress',
         chartType: 'bar',
         chartOptions: {
-          grid: { top: 8, right: 50, bottom: 8, left: 8, containLabel: true },
-          xAxis: { type: 'value', ...AXIS_STYLE, show: false },
-          yAxis: { 
-            type: 'category', 
-            data: labels, 
-            ...AXIS_STYLE, 
+          backgroundColor: 'transparent',
+          grid: { top: 4, right: 52, bottom: 4, left: 4, containLabel: true },
+          xAxis: { type: 'value', max: 100, show: false },
+          yAxis: {
+            type: 'category',
+            data: pgLabels,
             axisTick: { show: false },
             axisLine: { show: false },
+            axisLabel: {
+              color: getLabelColor(isDark),
+              fontSize: 13,
+              fontFamily: 'Space Grotesk, sans-serif',
+              width: 200,
+              overflow: 'truncate',
+            },
           },
-          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
-          series: [{
-            type: 'bar',
-            data: values.map((v, i) => ({
-              value: v,
+          tooltip: {
+            trigger: 'axis',
+            ...TOOLTIP_STYLE,
+            formatter: (params: { name: string; value: number }[]) =>
+              `${params[0].name}: <b>${params[0].value}%</b>`,
+          },
+          series: [
+            // Background track
+            {
+              type: 'bar',
+              data: pgLabels.map(() => 100),
+              barWidth: barH,
               itemStyle: {
-                color: colorFor(i),
-                borderRadius: [0, 4, 4, 0],
+                color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                borderRadius: [0, barH, barH, 0],
               },
-            })),
-            barWidth: 12,
-            label: { show: true, position: 'right', fontSize: 9, color: getLabelColor(isDark) },
-          }],
+              silent: true,
+              z: 1,
+            },
+            // Value bar
+            {
+              type: 'bar',
+              data: pgValues.map((v, i) => ({
+                value: v,
+                itemStyle: { color: colorFor(i), borderRadius: [0, barH, barH, 0] },
+              })),
+              barWidth: barH,
+              barGap: '-100%',
+              z: 2,
+              label: {
+                show: true,
+                position: 'right',
+                fontSize: 13,
+                fontWeight: 600,
+                color: getLabelColor(isDark),
+                formatter: (p: { value: number }) => `${p.value}%`,
+              },
+            },
+          ],
         },
       });
       continue;
@@ -349,14 +418,14 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         title: props.title ?? 'Transactions',
         chartType: 'bar',
         chartOptions: {
-          grid: { top: 8, right: 70, bottom: 8, left: 8, containLabel: true },
+          grid: { top: 8, right: 90, bottom: 8, left: 8, containLabel: true },
           xAxis: { type: 'value', ...AXIS_STYLE, show: false },
           yAxis: {
             type: 'category',
             data: txLabels,
-            ...AXIS_STYLE,
             axisTick: { show: false },
             axisLine: { show: false },
+            axisLabel: { color: getLabelColor(isDark), fontSize: 13, fontFamily: 'Space Grotesk, sans-serif' },
           },
           tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
           series: [{
@@ -365,9 +434,10 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
               value: v,
               itemStyle: { color: colorFor(i), borderRadius: [0, 4, 4, 0] },
             })),
-            barWidth: 12,
+            barWidth: 18,
             label: {
-              show: true, position: 'right', fontSize: 9,
+              show: true, position: 'right', fontSize: 13,
+              fontWeight: 600,
               color: getLabelColor(isDark),
               formatter: (p: { value: number }) => {
                 const v = p.value;

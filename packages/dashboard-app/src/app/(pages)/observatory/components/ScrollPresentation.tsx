@@ -272,13 +272,7 @@ function PresentationMode({ insights, cursor, query, onReset, currentSlide, tota
       {/* Insight slides */}
       {insights.map((insight, i) => (
         <Slide key={insight.id} isActive={currentSlide === i + 1}>
-          <InsightContent 
-            insight={insight} 
-            cursor={cursor} 
-            index={i} 
-            total={insights.length}
-            isActive={currentSlide === i + 1}
-          />
+          <InsightContent insight={insight} cursor={cursor} index={i} total={insights.length} />
         </Slide>
       ))}
 
@@ -297,9 +291,9 @@ function Slide({ isActive, children }: { isActive: boolean; children: React.Reac
     if (!ref.current) return;
     gsap.to(ref.current, {
       opacity: isActive ? 1 : 0,
-      scale: isActive ? 1 : 0.95,
-      y: isActive ? 0 : 30,
-      duration: 0.6,
+      scale: isActive ? 1 : 0.97,
+      y: isActive ? 0 : 20,
+      duration: 0.55,
       ease: 'power3.out',
       pointerEvents: isActive ? 'auto' : 'none',
     });
@@ -312,10 +306,12 @@ function Slide({ isActive, children }: { isActive: boolean; children: React.Reac
         position: 'absolute',
         inset: 0,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 40,
+        padding: '24px 48px 72px',
         opacity: 0,
+        overflow: 'hidden',
       }}
     >
       {children}
@@ -398,78 +394,102 @@ function EndContent({ cursor, onReset }: { cursor: CursorState; onReset: () => v
   );
 }
 
-function InsightContent({ insight, cursor, index, total, isActive }: {
+function InsightContent({ insight, cursor, index, total }: {
   insight: InsightData;
   cursor: CursorState;
   index: number;
   total: number;
-  isActive?: boolean;
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
   const isStatCard = !insight.chartOptions;
 
   useEffect(() => {
-    if (!isActive || !chartRef.current || isStatCard) return;
-    // Already initialized — just resize
-    if (chartInstance.current) {
-      setTimeout(() => chartInstance.current?.resize(), 50);
-      return;
-    }
-    // First time becoming active — init ECharts after GSAP transition (~600ms)
-    const t = setTimeout(() => {
-      if (!chartRef.current) return;
-      const instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-      chartInstance.current = instance;
+    if (isStatCard) return;
+    const el = document.getElementById(`insight-chart-${insight.id}`);
+    if (!el) return;
+
+    let instance: echarts.ECharts | null = null;
+    let ro: ResizeObserver | null = null;
+    let initialized = false;
+
+    function tryInit() {
+      if (initialized || !el || el.clientHeight < 50) return;
+      initialized = true;
+      instance = echarts.init(el, null, { renderer: 'canvas' });
       instance.setOption({
         ...insight.chartOptions,
         backgroundColor: 'transparent',
         animation: true,
         animationDuration: 900,
+        animationEasing: 'cubicOut',
       } as echarts.EChartsOption);
       instance.resize();
-      const ro = new ResizeObserver(() => instance.resize());
-      ro.observe(chartRef.current);
-    }, 650);
-    return () => clearTimeout(t);
-  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+      // Keep ResizeObserver for window resizes after init
+      ro = new ResizeObserver(() => instance?.resize());
+      ro.observe(el);
+    }
 
-  // Cleanup on unmount
-  useEffect(() => {
+    // Poll until the slide is visible and the div has real height
+    const poll = setInterval(() => {
+      if (el.clientHeight >= 50) {
+        clearInterval(poll);
+        tryInit();
+      }
+    }, 50);
+
     return () => {
-      chartInstance.current?.dispose();
-      chartInstance.current = null;
+      clearInterval(poll);
+      ro?.disconnect();
+      instance?.dispose();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ width: '100%', maxWidth: 850 }}>
-      <GlassPanel cursor={cursor} depth={0.2} glowOnHover={false}>
-        <div style={{ padding: '36px 44px' }}>
+    <div style={{
+      width: '100%',
+      maxWidth: isStatCard ? 600 : 1100,
+      marginLeft: 'auto',
+      marginRight: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+      ...(isStatCard ? {} : { flex: 1, minHeight: 0, alignSelf: 'stretch' }),
+    }}>
+      <GlassPanel
+        cursor={cursor}
+        depth={0.2}
+        glowOnHover={false}
+        style={isStatCard ? {} : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+      >
+        <div style={{
+          padding: isStatCard ? '48px 56px' : '28px 40px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          ...(isStatCard ? {} : { flex: 1, minHeight: 0 }),
+        }}>
+
+          {/* Counter */}
           <p style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
-            letterSpacing: '0.12em',
+            letterSpacing: '0.14em',
             color: 'var(--text-tertiary)',
-            marginBottom: 16,
+            marginBottom: 14,
+            textTransform: 'uppercase',
           }}>
             {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
           </p>
 
+          {/* Header row */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: isStatCard ? 'center' : 'flex-start',
-            gap: 24,
-            marginBottom: isStatCard ? 0 : 28,
+            gap: 32,
+            marginBottom: isStatCard ? 0 : 20,
+            flexShrink: 0,
           }}>
             <div>
-              <h2 style={{
-                fontSize: 24,
-                fontWeight: 700,
-                color: 'var(--text)',
-                margin: 0,
-              }}>
+              <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em' }}>
                 {insight.title}
               </h2>
               {insight.subtitle && (
@@ -481,16 +501,17 @@ function InsightContent({ insight, cursor, index, total, isActive }: {
             {insight.metric && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <p style={{
-                  fontSize: isStatCard ? 64 : 40,
+                  fontSize: isStatCard ? 72 : 44,
                   fontWeight: 700,
                   color: 'var(--primary)',
                   margin: 0,
                   lineHeight: 1,
+                  letterSpacing: '-0.03em',
                 }}>
                   {insight.metric}
                 </p>
                 {insight.metricLabel && (
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
                     {insight.metricLabel}
                   </p>
                 )}
@@ -498,7 +519,14 @@ function InsightContent({ insight, cursor, index, total, isActive }: {
             )}
           </div>
 
-          {!isStatCard && <div ref={chartRef} style={{ height: 300 }} />}
+          {/* Chart — takes all remaining space */}
+          {!isStatCard && (
+            <div
+              id={`insight-chart-${insight.id}`}
+              ref={chartRef}
+              style={{ flex: 1, minHeight: 0 }}
+            />
+          )}
         </div>
       </GlassPanel>
     </div>
@@ -814,23 +842,35 @@ function GridCard({ insight, cursor, onClick }: {
   const isStatCard = !insight.chartOptions;
 
   useEffect(() => {
-    if (!chartRef.current || isStatCard) return;
+    if (isStatCard || !cardRef.current) return;
     let instance: echarts.ECharts | null = null;
     let ro: ResizeObserver | null = null;
-    const t = setTimeout(() => {
-      if (!chartRef.current) return;
-      instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-      instance.setOption({
-        ...insight.chartOptions,
-        backgroundColor: 'transparent',
-        animation: true,
-        animationDuration: 600,
-      } as echarts.EChartsOption);
-      ro = new ResizeObserver(() => instance?.resize());
-      ro.observe(chartRef.current);
-    }, 600);
+    let rafId: number;
+
+    // Poll until card is visible (GSAP stagger sets opacity > 0)
+    function waitForVisible() {
+      const el = cardRef.current;
+      if (!el) return;
+      const opacity = parseFloat(getComputedStyle(el).opacity);
+      if (opacity > 0.5 && chartRef.current && !instance) {
+        instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
+        instance.setOption({
+          ...insight.chartOptions,
+          backgroundColor: 'transparent',
+          animation: true,
+          animationDuration: 600,
+        } as echarts.EChartsOption);
+        instance.resize();
+        ro = new ResizeObserver(() => instance?.resize());
+        ro.observe(chartRef.current);
+      } else if (!instance) {
+        rafId = requestAnimationFrame(waitForVisible);
+      }
+    }
+    rafId = requestAnimationFrame(waitForVisible);
+
     return () => {
-      clearTimeout(t);
+      cancelAnimationFrame(rafId);
       ro?.disconnect();
       instance?.dispose();
     };
@@ -912,7 +952,12 @@ function GridCard({ insight, cursor, onClick }: {
               </div>
             )}
           </div>
-          {!isStatCard && <div ref={chartRef} style={{ height: insight.isPrimary ? 200 : 140 }} />}
+          {!isStatCard && (
+            <div
+              ref={chartRef}
+              style={{ height: insight.isPrimary ? 220 : (insight.chartType === 'pie' ? 180 : 150) }}
+            />
+          )}
         </div>
         
         {/* Expand hint on hover */}

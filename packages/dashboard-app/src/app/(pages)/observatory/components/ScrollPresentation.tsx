@@ -2,11 +2,17 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import * as echarts from 'echarts';
 import GlassPanel from './GlassPanel';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
+
+gsap.registerPlugin(ScrollTrigger);
+
+// Aurora color palette
+const AURORA_COLORS = ['#c084fc', '#818cf8', '#67e8f9', '#60a5fa', '#f9a8d4', '#6ee7b7'];
 
 interface Props {
   insights: InsightData[];
@@ -464,38 +470,84 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
   total: number;
   isActive: boolean;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [chartReady, setChartReady] = useState(false);
+  const prevActive = useRef(false);
 
+  // Aurora animation when slide becomes active
   useEffect(() => {
-    if (!isActive || !chartRef.current || chartInstance.current) return;
+    const container = containerRef.current;
+    const glow = glowRef.current;
+    if (!container || !glow) return;
 
-    // Small delay for smooth appearance
-    const timer = setTimeout(() => {
-      if (!chartRef.current) return;
-      const instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-      chartInstance.current = instance;
-      instance.setOption({
-        ...insight.chartOptions,
-        backgroundColor: 'transparent',
-        animation: true,
-        animationDuration: 1000,
-      } as echarts.EChartsOption);
-      setChartReady(true);
+    const color = AURORA_COLORS[index % AURORA_COLORS.length];
 
-      const ro = new ResizeObserver(() => instance.resize());
-      ro.observe(chartRef.current);
-    }, 300);
+    if (isActive && !prevActive.current) {
+      // Entering: Aurora reveal
+      gsap.timeline()
+        .fromTo(glow,
+          { opacity: 0, scale: 0.8 },
+          { opacity: 0.6, scale: 1.15, duration: 0.5, ease: 'power2.out' }
+        )
+        .to(glow, { opacity: 0, scale: 1, duration: 0.6, ease: 'power2.inOut' });
 
+      gsap.fromTo(container,
+        { opacity: 0.3, scale: 0.95, y: 30, rotateX: 8 },
+        { opacity: 1, scale: 1, y: 0, rotateX: 0, duration: 0.7, ease: 'power3.out' }
+      );
+
+      // Border shimmer
+      gsap.fromTo(container,
+        { boxShadow: `0 0 0px 0px ${color}00` },
+        {
+          boxShadow: `0 0 40px 12px ${color}55`,
+          duration: 0.5,
+          delay: 0.2,
+          ease: 'power2.out',
+          yoyo: true,
+          repeat: 1,
+          onComplete: () => gsap.set(container, { clearProps: 'boxShadow' }),
+        }
+      );
+    } else if (!isActive && prevActive.current) {
+      // Leaving: fade out
+      gsap.to(container, {
+        opacity: 0.3,
+        scale: 0.95,
+        duration: 0.4,
+        ease: 'power2.in',
+      });
+    }
+
+    prevActive.current = isActive;
+  }, [isActive, index]);
+
+  // Chart initialization — mount immediately, don't wait for isActive
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
+    chartInstance.current = instance;
+    instance.setOption({
+      ...insight.chartOptions,
+      backgroundColor: 'transparent',
+      animation: true,
+      animationDuration: 1000,
+    } as echarts.EChartsOption);
+    setChartReady(true);
+    const ro = new ResizeObserver(() => instance.resize());
+    ro.observe(chartRef.current);
     return () => {
-      clearTimeout(timer);
-      if (chartInstance.current) {
-        chartInstance.current.dispose();
-        chartInstance.current = null;
-      }
+      ro.disconnect();
+      instance.dispose();
+      chartInstance.current = null;
     };
-  }, [isActive, insight.chartOptions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const glowColor = AURORA_COLORS[index % AURORA_COLORS.length];
 
   return (
     <div style={{
@@ -504,79 +556,103 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
       justifyContent: 'center',
       height: '100%',
       padding: '50px 40px',
+      perspective: '1200px',
     }}>
       <div style={{ 
+        position: 'relative',
         width: '100%', 
         maxWidth: insight.isPrimary ? 900 : 750,
-        opacity: isActive ? 1 : 0.3,
-        transform: isActive ? 'scale(1)' : 'scale(0.95)',
-        transition: 'all 0.5s ease',
       }}>
-        <GlassPanel cursor={cursor} depth={0.5}>
-          <div style={{ padding: insight.isPrimary ? '36px 44px' : '28px 36px' }}>
-            <p style={{
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: '0.14em',
-              color: 'var(--text-tertiary)',
-              margin: '0 0 14px',
-            }}>
-              {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
-            </p>
+        {/* Aurora glow layer */}
+        <div
+          ref={glowRef}
+          style={{
+            position: 'absolute',
+            inset: -30,
+            background: `radial-gradient(ellipse at 50% 30%, ${glowColor}44 0%, transparent 65%)`,
+            borderRadius: 'var(--radius)',
+            pointerEvents: 'none',
+            zIndex: -1,
+            filter: 'blur(25px)',
+            opacity: 0,
+          }}
+        />
+        <div
+          ref={containerRef}
+          style={{
+            transformStyle: 'preserve-3d',
+            willChange: 'transform, opacity',
+            borderRadius: 'var(--radius)',
+            opacity: isActive ? 1 : 0.3,
+            transform: isActive ? 'scale(1)' : 'scale(0.95)',
+          }}
+        >
+          <GlassPanel cursor={cursor} depth={0.5}>
+            <div style={{ padding: insight.isPrimary ? '36px 44px' : '28px 36px' }}>
+              <p style={{
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.14em',
+                color: 'var(--text-tertiary)',
+                margin: '0 0 14px',
+              }}>
+                {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+              </p>
 
-            <div style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 20,
-              marginBottom: 28,
-            }}>
-              <div>
-                <h2 style={{
-                  fontSize: insight.isPrimary ? 26 : 20,
-                  fontWeight: 700,
-                  color: 'var(--text)',
-                  margin: 0,
-                }}>
-                  {insight.title}
-                </h2>
-                {insight.subtitle && (
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '6px 0 0' }}>
-                    {insight.subtitle}
-                  </p>
-                )}
-              </div>
-
-              {insight.metric && (
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{
-                    fontSize: insight.isPrimary ? 42 : 32,
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 20,
+                marginBottom: 28,
+              }}>
+                <div>
+                  <h2 style={{
+                    fontSize: insight.isPrimary ? 26 : 20,
                     fontWeight: 700,
-                    color: 'var(--primary)',
+                    color: 'var(--text)',
                     margin: 0,
-                    lineHeight: 1,
                   }}>
-                    {insight.metric}
-                  </p>
-                  {insight.metricLabel && (
-                    <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '6px 0 0' }}>
-                      {insight.metricLabel}
+                    {insight.title}
+                  </h2>
+                  {insight.subtitle && (
+                    <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '6px 0 0' }}>
+                      {insight.subtitle}
                     </p>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div 
-              ref={chartRef} 
-              style={{ 
-                height: insight.isPrimary ? 320 : 260,
-                opacity: chartReady ? 1 : 0,
-                transition: 'opacity 0.5s ease',
-              }} 
-            />
-          </div>
-        </GlassPanel>
+                {insight.metric && (
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{
+                      fontSize: insight.isPrimary ? 42 : 32,
+                      fontWeight: 700,
+                      color: 'var(--primary)',
+                      margin: 0,
+                      lineHeight: 1,
+                    }}>
+                      {insight.metric}
+                    </p>
+                    {insight.metricLabel && (
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '6px 0 0' }}>
+                        {insight.metricLabel}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div 
+                ref={chartRef} 
+                style={{ 
+                  height: insight.isPrimary ? 320 : 260,
+                  opacity: chartReady ? 1 : 0,
+                  transition: 'opacity 0.5s ease',
+                }} 
+              />
+            </div>
+          </GlassPanel>
+        </div>
       </div>
     </div>
   );
@@ -592,107 +668,205 @@ function GridCard({ insight, cursor, index }: {
   index: number;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
-  const [visible, setVisible] = useState(false);
+  const hasAnimated = useRef(false);
 
+  // Aurora reveal animation with ScrollTrigger
   useEffect(() => {
-    if (!cardRef.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setVisible(entry.isIntersecting),
-      { threshold: 0.15 }
-    );
-    observer.observe(cardRef.current);
-    return () => observer.disconnect();
-  }, []);
+    const card = cardRef.current;
+    const glow = glowRef.current;
+    if (!card || !glow) return;
 
+    const color = AURORA_COLORS[index % AURORA_COLORS.length];
+
+    // Initial state
+    gsap.set(card, { opacity: 0, y: 60, scale: 0.92, rotateX: 10 });
+    gsap.set(glow, { opacity: 0, scale: 0.7 });
+
+    const trigger = ScrollTrigger.create({
+      trigger: card,
+      start: 'top 88%',
+      end: 'top 20%',
+      onEnter: () => {
+        if (hasAnimated.current) return;
+        hasAnimated.current = true;
+
+        const delay = index * 0.1;
+
+        // Aurora glow burst
+        gsap.timeline()
+          .to(glow, {
+            opacity: 0.7,
+            scale: 1.2,
+            duration: 0.5,
+            delay,
+            ease: 'power2.out',
+          })
+          .to(glow, {
+            opacity: 0,
+            scale: 1,
+            duration: 0.7,
+            ease: 'power2.inOut',
+          });
+
+        // Card reveal with 3D effect
+        gsap.to(card, {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          rotateX: 0,
+          duration: 0.8,
+          delay,
+          ease: 'power3.out',
+        });
+
+        // Border shimmer
+        gsap.fromTo(card,
+          { boxShadow: `0 0 0px 0px ${color}00` },
+          {
+            boxShadow: `0 0 35px 10px ${color}55`,
+            duration: 0.5,
+            delay: delay + 0.25,
+            ease: 'power2.out',
+            yoyo: true,
+            repeat: 1,
+            onComplete: () => gsap.set(card, { clearProps: 'boxShadow' }),
+          }
+        );
+      },
+      onEnterBack: () => {
+        if (!hasAnimated.current) {
+          hasAnimated.current = true;
+          gsap.to(card, {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            rotateX: 0,
+            duration: 0.5,
+            ease: 'power2.out',
+          });
+        }
+      },
+      onLeaveBack: () => {
+        hasAnimated.current = false;
+        gsap.to(card, {
+          opacity: 0,
+          y: 60,
+          scale: 0.92,
+          rotateX: 10,
+          duration: 0.4,
+          ease: 'power2.in',
+        });
+      },
+    });
+
+    return () => trigger.kill();
+  }, [index]);
+
+  // Chart initialization — mount immediately
   useEffect(() => {
-    if (!visible || !chartRef.current || chartInstance.current) return;
-
+    if (!chartRef.current) return;
     const instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
     chartInstance.current = instance;
     instance.setOption({
       ...insight.chartOptions,
       backgroundColor: 'transparent',
       animation: true,
-      animationDuration: 700,
+      animationDuration: 800,
     } as echarts.EChartsOption);
-
     const ro = new ResizeObserver(() => instance.resize());
     ro.observe(chartRef.current);
-
     return () => {
       ro.disconnect();
       instance.dispose();
       chartInstance.current = null;
     };
-  }, [visible, insight.chartOptions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    if (!cardRef.current || !visible) return;
-    gsap.fromTo(cardRef.current,
-      { opacity: 0, y: 25 },
-      { opacity: 1, y: 0, duration: 0.45, delay: index * 0.08, ease: 'power3.out' }
-    );
-  }, [visible, index]);
+  const glowColor = AURORA_COLORS[index % AURORA_COLORS.length];
 
   return (
     <div
-      ref={cardRef}
       style={{
-        opacity: 0,
+        position: 'relative',
+        perspective: '1200px',
         gridColumn: insight.isPrimary ? '1 / -1' : undefined,
       }}
     >
-      <GlassPanel cursor={cursor} depth={0.4} style={{ height: '100%' }}>
-        <div style={{ padding: '22px 26px' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 14,
-            marginBottom: 18,
-          }}>
-            <div>
-              <p style={{
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: 'var(--primary)',
-                margin: 0,
-              }}>
-                {insight.title}
-              </p>
-              {insight.subtitle && (
-                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '3px 0 0' }}>
-                  {insight.subtitle}
-                </p>
-              )}
-            </div>
-            {insight.metric && (
-              <div style={{ textAlign: 'right' }}>
+      {/* Aurora glow layer */}
+      <div
+        ref={glowRef}
+        style={{
+          position: 'absolute',
+          inset: -25,
+          background: `radial-gradient(ellipse at 50% 30%, ${glowColor}44 0%, transparent 65%)`,
+          borderRadius: 'var(--radius)',
+          pointerEvents: 'none',
+          zIndex: -1,
+          filter: 'blur(20px)',
+        }}
+      />
+      <div
+        ref={cardRef}
+        style={{
+          transformStyle: 'preserve-3d',
+          willChange: 'transform, opacity',
+          borderRadius: 'var(--radius)',
+        }}
+      >
+        <GlassPanel cursor={cursor} depth={0.4} style={{ height: '100%' }}>
+          <div style={{ padding: '22px 26px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 14,
+              marginBottom: 18,
+            }}>
+              <div>
                 <p style={{
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: 'var(--text)',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: 'var(--primary)',
                   margin: 0,
-                  lineHeight: 1,
                 }}>
-                  {insight.metric}
+                  {insight.title}
                 </p>
-                {insight.metricLabel && (
-                  <p style={{ fontSize: 9, color: 'var(--text-tertiary)', margin: '3px 0 0' }}>
-                    {insight.metricLabel}
+                {insight.subtitle && (
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '3px 0 0' }}>
+                    {insight.subtitle}
                   </p>
                 )}
               </div>
-            )}
-          </div>
+              {insight.metric && (
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{
+                    fontSize: 24,
+                    fontWeight: 700,
+                    color: 'var(--text)',
+                    margin: 0,
+                    lineHeight: 1,
+                  }}>
+                    {insight.metric}
+                  </p>
+                  {insight.metricLabel && (
+                    <p style={{ fontSize: 9, color: 'var(--text-tertiary)', margin: '3px 0 0' }}>
+                      {insight.metricLabel}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
-          <div ref={chartRef} style={{ height: insight.isPrimary ? 260 : 190 }} />
-        </div>
-      </GlassPanel>
+            <div ref={chartRef} style={{ height: insight.isPrimary ? 260 : 190 }} />
+          </div>
+        </GlassPanel>
+      </div>
     </div>
   );
 }

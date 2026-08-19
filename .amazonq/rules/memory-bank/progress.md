@@ -25,6 +25,12 @@
 - Conversational parser: 32 estados, relative dates, question patterns, Alexa-style intents
 - ProgressGroup: per-item colors (not monochromatic)
 - Multiple dataset bar charts: contrasting colors (skip 4 positions in palette)
+- **NEW: Aurora theme ECharts** — AuroraChart component with gradient palettes (aurora, neon, fire, ocean)
+- **NEW: Smooth loading → presentation transition** — GSAP timeline animations in ResultPresentation
+- **NEW: Scroll-driven chart building** — ScrollDrivenChart component with ScrollTrigger scrub
+- **NEW: Premium font** — Space Grotesk (tech/modern aesthetic)
+- **NEW: Barba.js page transitions** — BarbaWrapper component with GSAP fade/slide
+- **NEW: Lenis smooth scroll** — SmoothScroll wrapper for buttery scrolling
 
 ## What's Pending / Not Built
 - Phase 2: API Gateway + Event Bus
@@ -43,8 +49,11 @@
 | `packages/mcp-gcp-mock/scripts/generate-ventas.mjs` | Dataset generator (run to refresh data) |
 | `packages/mcp-gcp-mock/data/ventas-credito.json` | 5,000 mock sales records (2024–2026) |
 | `packages/mcp-ui/src/tools/generate-ui.ts` | All 6 templates + smart pivot + color logic |
-| `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React, staggered animations, empty state |
+| `packages/dashboard-app/src/shared/components/DynamicRenderer.tsx` | UIConfig → React, staggered animations, empty state, **ScrollDrivenChart** |
+| `packages/dashboard-app/src/shared/components/AuroraChart.tsx` | **ECharts with Aurora theme** + Flint compiler |
+| `packages/dashboard-app/src/shared/components/BarbaWrapper.tsx` | **NEW: Page transitions with GSAP** |
+| `packages/dashboard-app/src/shared/components/SmoothScroll.tsx` | Lenis smooth scroll wrapper |
 | `packages/dashboard-app/src/shared/components/Navbar.tsx` | Top navbar (replaced Sidebar.tsx) |
-| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic — full UX with all states |
-| `packages/dashboard-app/src/app/layout.tsx` | suppressHydrationWarning, inline theme script |
-| `packages/dashboard-app/src/app/globals.css` | Design tokens + keyframes |
+| `packages/dashboard-app/src/app/(pages)/dynamic/page.tsx` | /dynamic — full UX with all states + **ResultPresentation** |
+| `packages/dashboard-app/src/app/layout.tsx` | suppressHydrationWarning, inline theme script, **Space Grotesk font** |
+| `packages/dashboard-app/src/app/globals.css` | Design tokens + keyframes + **Space Grotesk** |

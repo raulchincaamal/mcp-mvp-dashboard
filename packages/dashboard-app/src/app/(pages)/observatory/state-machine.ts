@@ -110,8 +110,208 @@ class ObservatoryStateMachine {
 // Singleton — import this anywhere
 export const observatory = new ObservatoryStateMachine();
 
-// ── Mock flow for development ──────────────────────────────────────────────
-// Call runMockFlow("Dame diagramas de ventas de motos") to simulate the full pipeline
+// ── Real pipeline flow ────────────────────────────────────────────────────
+
+const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
+
+const AURORA_COLORS = ['#c084fc', '#818cf8', '#67e8f9', '#60a5fa', '#f9a8d4', '#6ee7b7'];
+
+const AXIS_STYLE = {
+  axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+  splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+};
+
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(10,14,30,0.85)',
+  borderColor: 'rgba(73,164,216,0.3)',
+  textStyle: { color: '#e4eeff' },
+};
+
+function colorFor(i: number) {
+  return AURORA_COLORS[i % AURORA_COLORS.length];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function uiConfigToInsights(uiConfig: any): InsightData[] {
+  const components: unknown[] = uiConfig?.components ?? [];
+  const insights: InsightData[] = [];
+
+  for (const comp of components) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = comp as any;
+    const component: string = c.component ?? '';
+    const props = c.props ?? {};
+    const idx = insights.length;
+
+    // ── Chart ──────────────────────────────────────────────────────────────
+    if (component === 'Chart') {
+      const type: string = props.type ?? 'bar';
+      const rawData = props.data;
+
+      // Normalize: backend returns array [{category,value}] OR {labels,datasets}
+      let labels: string[] = [];
+      let values: number[] = [];
+
+      if (Array.isArray(rawData)) {
+        // [{category, value, label, count, ...}]
+        labels = rawData.map((d: Record<string, unknown>) =>
+          String(d.category ?? d.label ?? d.name ?? d.estado ?? d.key ?? ''));
+        values = rawData.map((d: Record<string, unknown>) =>
+          Number(d.value ?? d.count ?? d.total ?? d.cantidad ?? 0));
+      } else if (rawData?.labels) {
+        labels = rawData.labels;
+        values = rawData.datasets?.[0]?.data ?? [];
+      }
+
+      let chartOptions: Record<string, unknown> = {};
+
+      if (type === 'pie' || type === 'doughnut') {
+        chartOptions = {
+          tooltip: { trigger: 'item', ...TOOLTIP_STYLE, formatter: '{b}: {c} ({d}%)' },
+          legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: 'rgba(255,255,255,0.5)', fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
+          series: [{
+            type: 'pie',
+            radius: type === 'doughnut' ? ['45%', '72%'] : '65%',
+            center: ['45%', '52%'],
+            data: labels.map((name, i) => ({ value: values[i] ?? 0, name, itemStyle: { color: colorFor(i) } })),
+            label: { show: false },
+            emphasis: { scale: true, scaleSize: 6 },
+          }],
+        };
+      } else if (type === 'line' || type === 'area') {
+        chartOptions = {
+          grid: { top: 24, right: 16, bottom: 32, left: 48 },
+          xAxis: { type: 'category', data: labels, ...AXIS_STYLE, splitLine: { show: false } },
+          yAxis: { type: 'value', ...AXIS_STYLE },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          series: [{
+            type: 'line', data: values, smooth: true, symbol: 'none',
+            lineStyle: { color: colorFor(0), width: 2.5 },
+            ...(type === 'area' ? { areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: colorFor(0) + '55' }, { offset: 1, color: colorFor(0) + '05' }] } } } : {}),
+          }],
+        };
+      } else {
+        // bar
+        chartOptions = {
+          grid: { top: 16, right: 8, bottom: 40, left: 8, containLabel: true },
+          xAxis: { type: 'category', data: labels, ...AXIS_STYLE, axisTick: { show: false }, axisLabel: { ...AXIS_STYLE.axisLabel, rotate: labels.length > 8 ? 30 : 0 } },
+          yAxis: { type: 'value', ...AXIS_STYLE },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          series: [{
+            type: 'bar',
+            data: values.map((v, i) => ({ value: v, itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: colorFor(i) }, { offset: 1, color: colorFor(i) + '55' }] }, borderRadius: [4, 4, 0, 0] } })),
+            barMaxWidth: 36,
+          }],
+        };
+      }
+
+      const eType = (type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar';
+      insights.push({
+        id: `chart-${idx}`,
+        title: props.title ?? uiConfig.title ?? 'Chart',
+        subtitle: props.subtitle ?? undefined,
+        chartType: eType as InsightData['chartType'],
+        isPrimary: idx === 0,
+        chartOptions,
+      });
+      continue;
+    }
+
+    // ── KPIGrid → gauge por card ────────────────────────────────────────────
+    if (component === 'KPIGrid') {
+      // backend uses items OR cards
+      const cards: { title?: string; value?: string | number; trend?: string; subtitle?: string }[] =
+        props.items ?? props.cards ?? [];
+      for (const card of cards.slice(0, 4)) {
+        const numVal = parseFloat(String(card.value ?? 0).replace(/[^0-9.]/g, '')) || 0;
+        const ci = insights.length;
+        insights.push({
+          id: `kpi-${ci}`,
+          title: card.title ?? 'KPI',
+          metric: String(card.value ?? '—'),
+          metricLabel: card.subtitle ?? card.trend ?? undefined,
+          chartType: 'gauge',
+          chartOptions: {
+            series: [{
+              type: 'gauge', radius: '85%', startAngle: 200, endAngle: -20,
+              min: 0, max: numVal * 1.5 || 100, splitNumber: 4,
+              axisLine: { lineStyle: { width: 10, color: [[1, colorFor(ci)]] } },
+              pointer: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false },
+              detail: { valueAnimation: true, formatter: String(card.value ?? '—'), color: colorFor(ci), fontSize: 22, fontWeight: 700, offsetCenter: [0, '10%'] },
+              data: [{ value: numVal, name: card.title ?? '' }],
+              title: { offsetCenter: [0, '40%'], color: 'rgba(255,255,255,0.5)', fontSize: 11 },
+            }],
+          },
+        });
+      }
+      continue;
+    }
+
+    // ── ProgressGroup → horizontal bar chart ───────────────────────────────
+    if (component === 'ProgressGroup') {
+      const items: { label?: string; value?: number; max?: number }[] = props.items ?? [];
+      const labels = items.map(it => it.label ?? '');
+      const values = items.map(it => it.value ?? 0);
+      insights.push({
+        id: `progress-${idx}`,
+        title: props.title ?? 'Progress',
+        chartType: 'bar',
+        chartOptions: {
+          grid: { top: 8, right: 8, bottom: 8, left: 8, containLabel: true },
+          xAxis: { type: 'value', ...AXIS_STYLE },
+          yAxis: { type: 'category', data: labels, ...AXIS_STYLE, axisTick: { show: false } },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          series: [{
+            type: 'bar',
+            data: values.map((v, i) => ({
+              value: v,
+              itemStyle: {
+                color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: colorFor(i) + '55' }, { offset: 1, color: colorFor(i) }] },
+                borderRadius: [0, 4, 4, 0],
+              },
+            })),
+            barMaxWidth: 20,
+          }],
+        },
+      });
+      continue;
+    }
+
+    // ── TransactionList → table-style bar ──────────────────────────────────
+    if (component === 'TransactionList') {
+      const items: { label?: string; amount?: number | string; status?: string }[] = (props.items ?? []).slice(0, 8);
+      if (items.length === 0) continue;
+      const labels = items.map(it => it.label ?? '');
+      const values = items.map(it => parseFloat(String(it.amount ?? 0).replace(/[^0-9.]/g, '')) || 0);
+      insights.push({
+        id: `txn-${idx}`,
+        title: props.title ?? 'Transactions',
+        chartType: 'bar',
+        chartOptions: {
+          grid: { top: 8, right: 8, bottom: 8, left: 8, containLabel: true },
+          xAxis: { type: 'value', ...AXIS_STYLE },
+          yAxis: { type: 'category', data: labels, ...AXIS_STYLE, axisTick: { show: false } },
+          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+          series: [{
+            type: 'bar',
+            data: values.map((v, i) => ({
+              value: v,
+              itemStyle: {
+                color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: colorFor(i) + '44' }, { offset: 1, color: colorFor(i) }] },
+                borderRadius: [0, 4, 4, 0],
+              },
+            })),
+            barMaxWidth: 18,
+          }],
+        },
+      });
+      continue;
+    }
+  }
+
+  return insights;
+}
 
 export async function runMockFlow(rawQuery: string) {
   const keywords = rawQuery
@@ -121,141 +321,37 @@ export async function runMockFlow(rawQuery: string) {
     .filter(w => w.length > 3)
     .slice(0, 4);
 
-  observatory.transition('QUERY_RECEIVED', {
-    query: { raw: rawQuery, keywords },
-  });
-
-  await delay(1800);
+  observatory.transition('QUERY_RECEIVED', { query: { raw: rawQuery, keywords } });
+  await delay(600);
   observatory.transition('ANALYZING');
-
-  await delay(1600);
+  await delay(800);
   observatory.transition('FETCHING_DATA');
 
-  await delay(2000);
+  let uiConfig: unknown;
+  try {
+    const res = await fetch(`${API_URL}/api/generate-ui`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    uiConfig = json.data ?? json;
+  } catch (err) {
+    observatory.setError(String(err));
+    observatory.transition('IDLE');
+    return;
+  }
+
   observatory.transition('GENERATING_VISUALIZATIONS');
+  await delay(600);
 
-  await delay(1400);
-  observatory.transition('REVEAL', { insights: buildMockInsights() });
-
-  await delay(1200);
+  const insights = uiConfigToInsights(uiConfig);
+  observatory.transition('REVEAL', { insights });
+  await delay(900);
   observatory.transition('PRESENTATION');
 }
 
 function delay(ms: number) {
   return new Promise(r => setTimeout(r, ms));
-}
-
-function buildMockInsights(): InsightData[] {
-  return [
-    {
-      id: 'sales-trend',
-      title: 'Motorcycle Sales',
-      subtitle: 'Monthly trend 2024–2026',
-      metric: '+24.8%',
-      metricLabel: 'vs last period',
-      chartType: 'line',
-      isPrimary: true,
-      chartOptions: {
-        animation: true,
-        grid: { top: 24, right: 16, bottom: 32, left: 48 },
-        xAxis: {
-          type: 'category',
-          data: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-          axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
-          axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
-          splitLine: { show: false },
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
-          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
-        },
-        series: [{
-          type: 'line',
-          data: [42, 58, 71, 65, 89, 103, 118, 134, 127, 142, 156, 171],
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { color: '#49a4d8', width: 2.5 },
-          areaStyle: {
-            color: {
-              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(73,164,216,0.35)' },
-                { offset: 1, color: 'rgba(73,164,216,0.02)' },
-              ],
-            },
-          },
-        }],
-        tooltip: { trigger: 'axis', backgroundColor: 'rgba(10,14,30,0.85)', borderColor: 'rgba(73,164,216,0.3)', textStyle: { color: '#e4eeff' } },
-      },
-    },
-    {
-      id: 'by-model',
-      title: 'By Model',
-      subtitle: 'Units sold',
-      chartType: 'bar',
-      chartOptions: {
-        animation: true,
-        grid: { top: 16, right: 8, bottom: 40, left: 8, containLabel: true },
-        xAxis: { type: 'category', data: ['BDS Castoro', 'Veloci Rubak', 'Dinamo TX', 'Breakstorm', 'Edge60'], axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, rotate: 20 }, axisLine: { show: false }, axisTick: { show: false } },
-        yAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-        series: [{
-          type: 'bar',
-          data: [312, 287, 241, 198, 163],
-          barMaxWidth: 32,
-          itemStyle: {
-            color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#49a4d8' }, { offset: 1, color: 'rgba(73,164,216,0.3)' }] },
-            borderRadius: [4, 4, 0, 0],
-          },
-        }],
-        tooltip: { trigger: 'axis', backgroundColor: 'rgba(10,14,30,0.85)', borderColor: 'rgba(73,164,216,0.3)', textStyle: { color: '#e4eeff' } },
-      },
-    },
-    {
-      id: 'by-region',
-      title: 'By Region',
-      subtitle: 'Top 5 states',
-      chartType: 'bar',
-      chartOptions: {
-        animation: true,
-        grid: { top: 8, right: 8, bottom: 8, left: 8, containLabel: true },
-        xAxis: { type: 'value', axisLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-        yAxis: { type: 'category', data: ['Sinaloa', 'Nuevo León', 'Durango', 'Jalisco', 'CDMX'], axisLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11 }, axisLine: { show: false }, axisTick: { show: false } },
-        series: [{
-          type: 'bar',
-          data: [87, 76, 71, 68, 62],
-          barMaxWidth: 20,
-          itemStyle: {
-            color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: 'rgba(73,164,216,0.3)' }, { offset: 1, color: '#49a4d8' }] },
-            borderRadius: [0, 4, 4, 0],
-          },
-        }],
-        tooltip: { trigger: 'axis', backgroundColor: 'rgba(10,14,30,0.85)', borderColor: 'rgba(73,164,216,0.3)', textStyle: { color: '#e4eeff' } },
-      },
-    },
-    {
-      id: 'credit-status',
-      title: 'Credit Status',
-      subtitle: 'Portfolio health',
-      chartType: 'pie',
-      chartOptions: {
-        animation: true,
-        series: [{
-          type: 'pie',
-          radius: ['45%', '72%'],
-          center: ['50%', '52%'],
-          data: [
-            { value: 1187, name: 'Al corriente', itemStyle: { color: '#30d158' } },
-            { value: 2444, name: 'Liquidado', itemStyle: { color: '#49a4d8' } },
-            { value: 856, name: 'Atrasado', itemStyle: { color: '#ff9f0a' } },
-            { value: 513, name: 'Cancelado', itemStyle: { color: '#ff453a' } },
-          ],
-          label: { show: false },
-          emphasis: { scale: true, scaleSize: 6 },
-        }],
-        tooltip: { trigger: 'item', backgroundColor: 'rgba(10,14,30,0.85)', borderColor: 'rgba(73,164,216,0.3)', textStyle: { color: '#e4eeff' }, formatter: '{b}: {c} ({d}%)' },
-        legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: 'rgba(255,255,255,0.5)', fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
-      },
-    },
-  ];
 }

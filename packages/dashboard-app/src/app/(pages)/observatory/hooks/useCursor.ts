@@ -23,7 +23,7 @@ export function useCursor() {
   const last = useRef({ x: 0, y: 0, t: Date.now() });
   const target = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const raf = useRef<number>(0);
-  const timeout = useRef<ReturnType<typeof setTimeout>>();
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tick = () => {
     const t = target.current;

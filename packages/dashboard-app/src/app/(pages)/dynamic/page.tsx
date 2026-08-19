@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import gsap from 'gsap';
 import DynamicRenderer, {
   type UIConfig,
 } from '@/shared/components/DynamicRenderer';
@@ -39,6 +40,194 @@ const LOADING_MESSAGES = [
   'Generando el dashboard...',
 ];
 
+// Smooth transition component for results
+function ResultPresentation({
+  uiConfig,
+  chatOpen,
+  setChatOpen,
+  setUiConfig,
+  setIntent,
+  inputRef,
+}: {
+  uiConfig: UIConfig;
+  chatOpen: boolean;
+  setChatOpen: (fn: (o: boolean) => boolean) => void;
+  setUiConfig: (c: UIConfig | null) => void;
+  setIntent: (s: string) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const header = headerRef.current;
+    const content = contentRef.current;
+    if (!container || !header || !content) return;
+
+    // Smooth entrance animation
+    const tl = gsap.timeline();
+    tl.fromTo(container,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.3, ease: 'power2.out' }
+    )
+    .fromTo(header,
+      { opacity: 0, y: -20, scale: 0.98 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' },
+      '-=0.1'
+    )
+    .fromTo(content,
+      { opacity: 0, y: 30, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'power3.out' },
+      '-=0.3'
+    );
+
+    return () => { tl.kill(); };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', opacity: 0 }}
+    >
+      <div
+        ref={headerRef}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div>
+          <h2
+            style={{
+              fontSize: '1.4rem',
+              fontWeight: 700,
+              letterSpacing: '-0.4px',
+              background:
+                'linear-gradient(135deg, var(--text) 0%, var(--primary) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            {uiConfig.title}
+          </h2>
+          {uiConfig.description && (
+            <p
+              style={{
+                color: 'var(--text-tertiary)',
+                fontSize: '0.85rem',
+                marginTop: '0.2rem',
+              }}
+            >
+              {uiConfig.description}
+            </p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+          <button
+            onClick={() => setChatOpen((o) => !o)}
+            style={{
+              background: chatOpen
+                ? 'var(--primary-light)'
+                : 'var(--surface)',
+              border: `1px solid ${chatOpen ? 'var(--primary)' : 'var(--border-color)'}`,
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.4rem 0.875rem',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              color: chatOpen ? 'var(--primary)' : 'var(--text-tertiary)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all var(--t-fast) var(--ease-out-expo)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+            onMouseEnter={(e) => {
+              if (!chatOpen) {
+                e.currentTarget.style.background = 'var(--surface-2)';
+                e.currentTarget.style.color = 'var(--text)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!chatOpen) {
+                e.currentTarget.style.background = 'var(--surface)';
+                e.currentTarget.style.color = 'var(--text-tertiary)';
+              }
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transition:
+                  'transform var(--t-normal) var(--ease-spring)',
+                transform: chatOpen ? 'rotate(0deg)' : 'rotate(180deg)',
+              }}
+            >
+              ↑
+            </span>
+            {chatOpen ? 'Ocultar' : 'Chat'}
+          </button>
+          <button
+            onClick={() => {
+              // Smooth exit animation before clearing
+              const container = containerRef.current;
+              if (container) {
+                gsap.to(container, {
+                  opacity: 0,
+                  y: -20,
+                  scale: 0.98,
+                  duration: 0.3,
+                  ease: 'power2.in',
+                  onComplete: () => {
+                    setUiConfig(null);
+                    setIntent('');
+                    setChatOpen(() => true);
+                    inputRef.current?.focus();
+                  },
+                });
+              } else {
+                setUiConfig(null);
+                setIntent('');
+                setChatOpen(() => true);
+                inputRef.current?.focus();
+              }
+            }}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.4rem 0.875rem',
+              fontSize: '0.8rem',
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+              transition: 'all var(--t-fast) var(--ease-out-expo)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--surface-2)';
+              e.currentTarget.style.color = 'var(--text)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--surface)';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
+          >
+            ‹ Nuevo
+          </button>
+        </div>
+      </div>
+      <div ref={contentRef}>
+        <DynamicRenderer config={uiConfig} animated />
+      </div>
+    </div>
+  );
+}
+
 export default function DynamicPage() {
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,6 +244,7 @@ export default function DynamicPage() {
   const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const resultContainerRef = useRef<HTMLDivElement>(null);
   // Use refs for values needed inside polling closure
   const pollingHashRef = useRef<string | null>(null);
 
@@ -733,124 +923,15 @@ export default function DynamicPage() {
 
         {/* Result */}
         {uiConfig && !loading && (
-          <div
+          <ResultPresentation
             key={resultKey}
-            style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                animation: 'fadeSlideDown 0.4s var(--ease-out-expo) both',
-              }}
-            >
-              <div>
-                <h2
-                  style={{
-                    fontSize: '1.4rem',
-                    fontWeight: 700,
-                    letterSpacing: '-0.4px',
-                    background:
-                      'linear-gradient(135deg, var(--text) 0%, var(--primary) 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
-                  {uiConfig.title}
-                </h2>
-                {uiConfig.description && (
-                  <p
-                    style={{
-                      color: 'var(--text-tertiary)',
-                      fontSize: '0.85rem',
-                      marginTop: '0.2rem',
-                    }}
-                  >
-                    {uiConfig.description}
-                  </p>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                <button
-                  onClick={() => setChatOpen((o) => !o)}
-                  style={{
-                    background: chatOpen
-                      ? 'var(--primary-light)'
-                      : 'var(--surface)',
-                    border: `1px solid ${chatOpen ? 'var(--primary)' : 'var(--border-color)'}`,
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '0.4rem 0.875rem',
-                    fontSize: '0.8rem',
-                    fontWeight: 500,
-                    color: chatOpen ? 'var(--primary)' : 'var(--text-tertiary)',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'all var(--t-fast) var(--ease-out-expo)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!chatOpen) {
-                      e.currentTarget.style.background = 'var(--surface-2)';
-                      e.currentTarget.style.color = 'var(--text)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!chatOpen) {
-                      e.currentTarget.style.background = 'var(--surface)';
-                      e.currentTarget.style.color = 'var(--text-tertiary)';
-                    }
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      transition:
-                        'transform var(--t-normal) var(--ease-spring)',
-                      transform: chatOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-                    }}
-                  >
-                    ↑
-                  </span>
-                  {chatOpen ? 'Ocultar' : 'Chat'}
-                </button>
-                <button
-                  onClick={() => {
-                    setUiConfig(null);
-                    setIntent('');
-                    setChatOpen(true);
-                    inputRef.current?.focus();
-                  }}
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '0.4rem 0.875rem',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-tertiary)',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontWeight: 500,
-                    transition: 'all var(--t-fast) var(--ease-out-expo)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--surface-2)';
-                    e.currentTarget.style.color = 'var(--text)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--surface)';
-                    e.currentTarget.style.color = 'var(--text-tertiary)';
-                  }}
-                >
-                  ‹ Nuevo
-                </button>
-              </div>
-            </div>
-            <DynamicRenderer key={resultKey} config={uiConfig} animated />
-          </div>
+            uiConfig={uiConfig}
+            chatOpen={chatOpen}
+            setChatOpen={setChatOpen}
+            setUiConfig={setUiConfig}
+            setIntent={setIntent}
+            inputRef={inputRef}
+          />
         )}
       </div>
 

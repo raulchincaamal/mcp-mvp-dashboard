@@ -31,6 +31,9 @@
 - **NEW: Premium font** — Space Grotesk (tech/modern aesthetic)
 - **NEW: Barba.js page transitions** — BarbaWrapper component with GSAP fade/slide
 - **NEW: Lenis smooth scroll** — SmoothScroll wrapper for buttery scrolling
+- **FIXED: Observatory glow bugs** — Removed aurora glow layers and boxShadow shimmer animations
+- **FIXED: Observatory hover issues** — GlassPanel glowOnHover disabled on charts, subtle border highlight instead
+- **IMPROVED: Observatory animations** — Varied entry directions (left/right/top/diagonal), multiple easings (back, elastic, power)
 
 ## What's Pending / Not Built
 - Phase 2: API Gateway + Event Bus

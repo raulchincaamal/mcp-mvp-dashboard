@@ -59,7 +59,7 @@ export default function GlassPanel({
     });
   }, [cursor.normalizedX, cursor.normalizedY, depth, isNear, distance, cursor.x, cursor.y]);
 
-  const glowIntensity = isNear ? Math.max(0, (350 - distance) / 350) : 0;
+  const glowIntensity = glowOnHover && isNear ? Math.max(0, (350 - distance) / 350) * 0.4 : 0;
 
   return (
     <div
@@ -71,10 +71,11 @@ export default function GlassPanel({
         WebkitBackdropFilter: 'var(--surface-blur)',
         border: `1px solid var(--border-color)`,
         borderRadius: 'var(--radius)',
-        boxShadow: glowOnHover && glowIntensity > 0
-          ? `var(--shadow), 0 0 ${20 + glowIntensity * 40}px var(--primary-light)`
+        boxShadow: glowIntensity > 0
+          ? `var(--shadow), 0 0 ${12 + glowIntensity * 20}px rgba(73, 164, 216, ${glowIntensity * 0.15})`
           : 'var(--shadow)',
-        transition: 'box-shadow 0.3s ease',
+        transition: 'box-shadow 0.4s ease, border-color 0.3s ease',
+        borderColor: glowIntensity > 0.2 ? 'var(--primary)' : undefined,
         willChange: 'transform',
         ...style,
       }}

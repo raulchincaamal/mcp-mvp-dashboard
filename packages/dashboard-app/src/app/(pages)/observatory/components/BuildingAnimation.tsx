@@ -37,20 +37,19 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
     if (!chartRef.current) return;
     
     if (buildPhase >= 4) {
-      // Chart building phase - pulse effect
+      // Chart building phase - subtle border highlight
       gsap.to(chartRef.current, {
-        boxShadow: '0 0 40px var(--primary-light)',
-        duration: 0.5,
+        borderColor: 'var(--primary)',
+        duration: 0.4,
         ease: 'power2.out',
       });
     }
     
     if (buildPhase === 5) {
-      // Reveal phase - expand and glow
+      // Reveal phase - subtle scale
       gsap.to(chartRef.current, {
-        scale: 1.02,
-        boxShadow: '0 0 60px var(--primary-light)',
-        duration: 0.8,
+        scale: 1.01,
+        duration: 0.6,
         ease: 'power2.out',
       });
     }
@@ -193,7 +192,6 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
                   transform: 'scaleY(0)',
                   transformOrigin: 'bottom',
                   animation: `barGrow 0.5s ease-out ${0.3 + i * 0.08}s forwards`,
-                  boxShadow: '0 0 15px var(--primary-light)',
                 }}
               />
             ))}
@@ -213,14 +211,15 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
           }} />
         )}
 
-        {/* Success glow overlay */}
+        {/* Success overlay */}
         {buildPhase === 5 && (
           <div style={{
             position: 'absolute',
             inset: 0,
-            background: 'radial-gradient(circle at center, var(--primary-light) 0%, transparent 70%)',
+            background: 'linear-gradient(135deg, var(--primary-light) 0%, transparent 60%)',
             opacity: 0,
-            animation: 'glowPulse 1s ease-out forwards',
+            animation: 'successFade 0.8s ease-out forwards',
+            borderRadius: 'inherit',
           }} />
         )}
       </div>
@@ -284,8 +283,13 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
         }
         @keyframes glowPulse {
           0% { opacity: 0; }
-          50% { opacity: 0.6; }
-          100% { opacity: 0.3; }
+          50% { opacity: 0.4; }
+          100% { opacity: 0.2; }
+        }
+        @keyframes successFade {
+          0% { opacity: 0; }
+          50% { opacity: 0.3; }
+          100% { opacity: 0.15; }
         }
       `}</style>
     </div>

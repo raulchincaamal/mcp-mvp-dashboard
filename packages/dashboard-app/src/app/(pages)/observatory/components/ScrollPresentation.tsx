@@ -11,9 +11,6 @@ import type { InsightData } from '../state-machine';
 
 gsap.registerPlugin(ScrollTrigger);
 
-// Aurora color palette
-const AURORA_COLORS = ['#c084fc', '#818cf8', '#67e8f9', '#60a5fa', '#f9a8d4', '#6ee7b7'];
-
 interface Props {
   insights: InsightData[];
   cursor: CursorState;
@@ -129,43 +126,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
         >
           {/* Header slide */}
           <SlideWrapper ref={(el) => { if (el) slidesRef.current[0] = el; }}>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              padding: 40,
-            }}>
-              <p style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.16em',
-                textTransform: 'uppercase',
-                color: 'var(--primary)',
-                margin: '0 0 12px',
-              }}>
-                Executive Intelligence
-              </p>
-              <h1 style={{
-                fontSize: 38,
-                fontWeight: 700,
-                color: 'var(--text)',
-                margin: 0,
-                textAlign: 'center',
-                letterSpacing: '-0.02em',
-                maxWidth: 650,
-              }}>
-                {query}
-              </h1>
-              <p style={{
-                fontSize: 15,
-                color: 'var(--text-tertiary)',
-                margin: '14px 0 0',
-              }}>
-                {insights.length} insights generated
-              </p>
-            </div>
+            <HeaderSlide 
+              query={query} 
+              insightCount={insights.length} 
+              isActive={currentSlide === 0} 
+            />
           </SlideWrapper>
 
           {/* Insight slides */}
@@ -186,50 +151,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
 
           {/* End slide */}
           <SlideWrapper ref={(el) => { if (el) slidesRef.current[totalSlides - 1] = el; }}>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              padding: 40,
-              gap: 20,
-            }}>
-              <p style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.16em',
-                textTransform: 'uppercase',
-                color: 'var(--text-tertiary)',
-              }}>
-                Analysis Complete
-              </p>
-              <h2 style={{
-                fontSize: 28,
-                fontWeight: 700,
-                color: 'var(--text)',
-                margin: 0,
-              }}>
-                Ready for your next question
-              </h2>
-              <GlassPanel cursor={cursor} depth={0.3}>
-                <button
-                  onClick={onReset}
-                  style={{
-                    padding: '14px 28px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--primary)',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  New Query
-                </button>
-              </GlassPanel>
-            </div>
+            <EndSlide 
+              cursor={cursor} 
+              onReset={onReset} 
+              isActive={currentSlide === totalSlides - 1} 
+            />
           </SlideWrapper>
         </div>
       ) : (
@@ -357,6 +283,173 @@ const SlideWrapper = ({ children, ref }: { children: React.ReactNode; ref?: Reac
   </div>
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HEADER SLIDE - Animated intro
+// ═══════════════════════════════════════════════════════════════════════════
+
+function HeaderSlide({ query, insightCount, isActive }: { 
+  query: string | null; 
+  insightCount: number; 
+  isActive: boolean;
+}) {
+  const labelRef = useRef<HTMLParagraphElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const countRef = useRef<HTMLParagraphElement>(null);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (!isActive || hasAnimated.current) return;
+    hasAnimated.current = true;
+
+    const tl = gsap.timeline();
+    
+    tl.fromTo(labelRef.current,
+      { opacity: 0, y: 20, scale: 0.9 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' }
+    );
+    tl.fromTo(titleRef.current,
+      { opacity: 0, y: 40, rotateX: 15 },
+      { opacity: 1, y: 0, rotateX: 0, duration: 0.8, ease: 'power3.out' },
+      '-=0.3'
+    );
+    tl.fromTo(countRef.current,
+      { opacity: 0, scale: 0.8 },
+      { opacity: 1, scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.6)' },
+      '-=0.4'
+    );
+  }, [isActive]);
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+      padding: 40,
+      perspective: '1000px',
+    }}>
+      <p ref={labelRef} style={{
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+        color: 'var(--primary)',
+        margin: '0 0 12px',
+        opacity: 0,
+      }}>
+        Executive Intelligence
+      </p>
+      <h1 ref={titleRef} style={{
+        fontSize: 38,
+        fontWeight: 700,
+        color: 'var(--text)',
+        margin: 0,
+        textAlign: 'center',
+        letterSpacing: '-0.02em',
+        maxWidth: 650,
+        opacity: 0,
+        transformStyle: 'preserve-3d',
+      }}>
+        {query}
+      </h1>
+      <p ref={countRef} style={{
+        fontSize: 15,
+        color: 'var(--text-tertiary)',
+        margin: '14px 0 0',
+        opacity: 0,
+      }}>
+        {insightCount} insights generated
+      </p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// END SLIDE - Animated outro
+// ═══════════════════════════════════════════════════════════════════════════
+
+function EndSlide({ cursor, onReset, isActive }: { 
+  cursor: CursorState; 
+  onReset: () => void; 
+  isActive: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (!isActive || hasAnimated.current || !containerRef.current) return;
+    hasAnimated.current = true;
+
+    const children = containerRef.current.children;
+    gsap.fromTo(children,
+      { opacity: 0, y: 30, scale: 0.95 },
+      { 
+        opacity: 1, 
+        y: 0, 
+        scale: 1, 
+        duration: 0.6, 
+        stagger: 0.12, 
+        ease: 'back.out(1.3)',
+      }
+    );
+  }, [isActive]);
+
+  return (
+    <div 
+      ref={containerRef}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: 40,
+        gap: 20,
+      }}
+    >
+      <p style={{
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+        color: 'var(--text-tertiary)',
+        opacity: 0,
+      }}>
+        Analysis Complete
+      </p>
+      <h2 style={{
+        fontSize: 28,
+        fontWeight: 700,
+        color: 'var(--text)',
+        margin: 0,
+        opacity: 0,
+      }}>
+        Ready for your next question
+      </h2>
+      <div style={{ opacity: 0 }}>
+        <GlassPanel cursor={cursor} depth={0.3}>
+          <button
+            onClick={onReset}
+            style={{
+              padding: '14px 28px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--primary)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            New Query
+          </button>
+        </GlassPanel>
+      </div>
+    </div>
+  );
+}
+
 function ToggleButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -463,6 +556,16 @@ function GridMode({ insights, cursor, query, onReset }: Props) {
 // INSIGHT SLIDE
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Animation patterns for variety
+const SLIDE_ANIMATIONS = [
+  { x: 0, y: 60, rotateX: 12, rotateY: 0 },      // bottom
+  { x: -80, y: 20, rotateX: 0, rotateY: -8 },   // left
+  { x: 80, y: 20, rotateX: 0, rotateY: 8 },     // right
+  { x: 0, y: -50, rotateX: -10, rotateY: 0 },   // top
+  { x: -60, y: 40, rotateX: 6, rotateY: -6 },   // diagonal-left
+  { x: 60, y: 40, rotateX: 6, rotateY: 6 },     // diagonal-right
+];
+
 function InsightSlide({ insight, cursor, index, total, isActive }: {
   insight: InsightData;
   cursor: CursorState;
@@ -471,59 +574,52 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
   isActive: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [chartReady, setChartReady] = useState(false);
   const prevActive = useRef(false);
 
-  // Aurora animation when slide becomes active
+  // Dynamic animation based on index
+  const anim = SLIDE_ANIMATIONS[index % SLIDE_ANIMATIONS.length];
+
   useEffect(() => {
     const container = containerRef.current;
-    const glow = glowRef.current;
-    if (!container || !glow) return;
-
-    const color = AURORA_COLORS[index % AURORA_COLORS.length];
+    if (!container) return;
 
     if (isActive && !prevActive.current) {
-      // Entering: Aurora reveal
-      gsap.timeline()
-        .fromTo(glow,
-          { opacity: 0, scale: 0.8 },
-          { opacity: 0.6, scale: 1.15, duration: 0.5, ease: 'power2.out' }
-        )
-        .to(glow, { opacity: 0, scale: 1, duration: 0.6, ease: 'power2.inOut' });
-
+      // Entering with varied animation
       gsap.fromTo(container,
-        { opacity: 0.3, scale: 0.95, y: 30, rotateX: 8 },
-        { opacity: 1, scale: 1, y: 0, rotateX: 0, duration: 0.7, ease: 'power3.out' }
-      );
-
-      // Border shimmer
-      gsap.fromTo(container,
-        { boxShadow: `0 0 0px 0px ${color}00` },
-        {
-          boxShadow: `0 0 40px 12px ${color}55`,
-          duration: 0.5,
-          delay: 0.2,
-          ease: 'power2.out',
-          yoyo: true,
-          repeat: 1,
-          onComplete: () => gsap.set(container, { clearProps: 'boxShadow' }),
+        { 
+          opacity: 0, 
+          scale: 0.92, 
+          x: anim.x, 
+          y: anim.y, 
+          rotateX: anim.rotateX, 
+          rotateY: anim.rotateY,
+        },
+        { 
+          opacity: 1, 
+          scale: 1, 
+          x: 0, 
+          y: 0, 
+          rotateX: 0, 
+          rotateY: 0, 
+          duration: 0.8, 
+          ease: 'power3.out',
         }
       );
     } else if (!isActive && prevActive.current) {
-      // Leaving: fade out
+      // Leaving
       gsap.to(container, {
-        opacity: 0.3,
-        scale: 0.95,
+        opacity: 0.2,
+        scale: 0.94,
         duration: 0.4,
         ease: 'power2.in',
       });
     }
 
     prevActive.current = isActive;
-  }, [isActive, index]);
+  }, [isActive, anim]);
 
   // Chart initialization — mount immediately, don't wait for isActive
   useEffect(() => {
@@ -547,8 +643,6 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const glowColor = AURORA_COLORS[index % AURORA_COLORS.length];
-
   return (
     <div style={{
       display: 'flex',
@@ -563,31 +657,16 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
         width: '100%', 
         maxWidth: insight.isPrimary ? 900 : 750,
       }}>
-        {/* Aurora glow layer */}
-        <div
-          ref={glowRef}
-          style={{
-            position: 'absolute',
-            inset: -30,
-            background: `radial-gradient(ellipse at 50% 30%, ${glowColor}44 0%, transparent 65%)`,
-            borderRadius: 'var(--radius)',
-            pointerEvents: 'none',
-            zIndex: -1,
-            filter: 'blur(25px)',
-            opacity: 0,
-          }}
-        />
         <div
           ref={containerRef}
           style={{
             transformStyle: 'preserve-3d',
             willChange: 'transform, opacity',
             borderRadius: 'var(--radius)',
-            opacity: isActive ? 1 : 0.3,
-            transform: isActive ? 'scale(1)' : 'scale(0.95)',
+            opacity: isActive ? 1 : 0.2,
           }}
         >
-          <GlassPanel cursor={cursor} depth={0.5}>
+          <GlassPanel cursor={cursor} depth={0.4} glowOnHover={false}>
             <div style={{ padding: insight.isPrimary ? '36px 44px' : '28px 36px' }}>
               <p style={{
                 fontSize: 10,
@@ -662,88 +741,85 @@ function InsightSlide({ insight, cursor, index, total, isActive }: {
 // GRID CARD
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Grid animation patterns - more dynamic variety
+const GRID_ANIMATIONS = [
+  { x: 0, y: 80, rotate: 0, scale: 0.85 },        // bottom pop
+  { x: -100, y: 30, rotate: -3, scale: 0.9 },    // slide left
+  { x: 100, y: 30, rotate: 3, scale: 0.9 },      // slide right
+  { x: 0, y: 0, rotate: 0, scale: 0.6 },         // zoom in
+  { x: -60, y: 60, rotate: -2, scale: 0.88 },    // diagonal left
+  { x: 60, y: 60, rotate: 2, scale: 0.88 },      // diagonal right
+  { x: 0, y: -60, rotate: 0, scale: 0.9 },       // drop down
+  { x: 0, y: 40, rotate: 0, scale: 1.1 },        // shrink in
+];
+
+const EASINGS = [
+  'power3.out',
+  'back.out(1.4)',
+  'elastic.out(1, 0.5)',
+  'power4.out',
+];
+
 function GridCard({ insight, cursor, index }: {
   insight: InsightData;
   cursor: CursorState;
   index: number;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const hasAnimated = useRef(false);
 
-  // Aurora reveal animation with ScrollTrigger
+  // Pick animation based on index for variety
+  const anim = GRID_ANIMATIONS[index % GRID_ANIMATIONS.length];
+  const easing = EASINGS[index % EASINGS.length];
+
   useEffect(() => {
     const card = cardRef.current;
-    const glow = glowRef.current;
-    if (!card || !glow) return;
+    if (!card) return;
 
-    const color = AURORA_COLORS[index % AURORA_COLORS.length];
-
-    // Initial state
-    gsap.set(card, { opacity: 0, y: 60, scale: 0.92, rotateX: 10 });
-    gsap.set(glow, { opacity: 0, scale: 0.7 });
+    // Initial state with varied starting position
+    gsap.set(card, { 
+      opacity: 0, 
+      x: anim.x, 
+      y: anim.y, 
+      scale: anim.scale, 
+      rotate: anim.rotate,
+    });
 
     const trigger = ScrollTrigger.create({
       trigger: card,
-      start: 'top 88%',
-      end: 'top 20%',
+      start: 'top 90%',
+      end: 'top 30%',
       onEnter: () => {
         if (hasAnimated.current) return;
         hasAnimated.current = true;
 
-        const delay = index * 0.1;
+        // Staggered delay based on position
+        const row = Math.floor(index / 2);
+        const col = index % 2;
+        const delay = row * 0.12 + col * 0.06;
 
-        // Aurora glow burst
-        gsap.timeline()
-          .to(glow, {
-            opacity: 0.7,
-            scale: 1.2,
-            duration: 0.5,
-            delay,
-            ease: 'power2.out',
-          })
-          .to(glow, {
-            opacity: 0,
-            scale: 1,
-            duration: 0.7,
-            ease: 'power2.inOut',
-          });
-
-        // Card reveal with 3D effect
         gsap.to(card, {
           opacity: 1,
+          x: 0,
           y: 0,
           scale: 1,
-          rotateX: 0,
-          duration: 0.8,
+          rotate: 0,
+          duration: 0.7 + Math.random() * 0.2,
           delay,
-          ease: 'power3.out',
+          ease: easing,
         });
-
-        // Border shimmer
-        gsap.fromTo(card,
-          { boxShadow: `0 0 0px 0px ${color}00` },
-          {
-            boxShadow: `0 0 35px 10px ${color}55`,
-            duration: 0.5,
-            delay: delay + 0.25,
-            ease: 'power2.out',
-            yoyo: true,
-            repeat: 1,
-            onComplete: () => gsap.set(card, { clearProps: 'boxShadow' }),
-          }
-        );
       },
       onEnterBack: () => {
         if (!hasAnimated.current) {
           hasAnimated.current = true;
           gsap.to(card, {
             opacity: 1,
+            x: 0,
             y: 0,
             scale: 1,
-            rotateX: 0,
+            rotate: 0,
             duration: 0.5,
             ease: 'power2.out',
           });
@@ -753,17 +829,18 @@ function GridCard({ insight, cursor, index }: {
         hasAnimated.current = false;
         gsap.to(card, {
           opacity: 0,
-          y: 60,
-          scale: 0.92,
-          rotateX: 10,
-          duration: 0.4,
+          x: anim.x * 0.5,
+          y: anim.y * 0.5,
+          scale: anim.scale,
+          rotate: anim.rotate * 0.5,
+          duration: 0.35,
           ease: 'power2.in',
         });
       },
     });
 
     return () => trigger.kill();
-  }, [index]);
+  }, [index, anim, easing]);
 
   // Chart initialization — mount immediately
   useEffect(() => {
@@ -786,8 +863,6 @@ function GridCard({ insight, cursor, index }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const glowColor = AURORA_COLORS[index % AURORA_COLORS.length];
-
   return (
     <div
       style={{
@@ -796,19 +871,6 @@ function GridCard({ insight, cursor, index }: {
         gridColumn: insight.isPrimary ? '1 / -1' : undefined,
       }}
     >
-      {/* Aurora glow layer */}
-      <div
-        ref={glowRef}
-        style={{
-          position: 'absolute',
-          inset: -25,
-          background: `radial-gradient(ellipse at 50% 30%, ${glowColor}44 0%, transparent 65%)`,
-          borderRadius: 'var(--radius)',
-          pointerEvents: 'none',
-          zIndex: -1,
-          filter: 'blur(20px)',
-        }}
-      />
       <div
         ref={cardRef}
         style={{
@@ -817,7 +879,7 @@ function GridCard({ insight, cursor, index }: {
           borderRadius: 'var(--radius)',
         }}
       >
-        <GlassPanel cursor={cursor} depth={0.4} style={{ height: '100%' }}>
+        <GlassPanel cursor={cursor} depth={0.3} glowOnHover={false} style={{ height: '100%' }}>
           <div style={{ padding: '22px 26px' }}>
             <div style={{
               display: 'flex',

@@ -23,6 +23,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
   const presentationRef = useRef<HTMLDivElement>(null);
   const gridRef2        = useRef<HTMLDivElement>(null);
   const isTransitioning = useRef(false);
+  const gridCardRefs    = useRef<(HTMLDivElement | null)[]>([]);
 
   // Init: presentation visible, grid hidden
   useEffect(() => {
@@ -39,6 +40,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
     if (!outEl || !inEl) { setViewMode(next); isTransitioning.current = false; return; }
 
     gsap.set(inEl, { visibility: 'visible', opacity: 0, y: next === 'presentation' ? 60 : -60, scale: 0.96, pointerEvents: 'none' });
+
+    // Si entramos al grid, ocultar cards antes de que el wrapper sea visible
+    if (next === 'grid') {
+      gridCardRefs.current.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
+    }
 
     const tl = gsap.timeline({
       onComplete: () => {
@@ -128,7 +134,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
           pointerEvents: 'none',
         }}
       >
-        <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} />
+        <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} />
       </div>
 
       {/* Controls */}
@@ -554,9 +560,8 @@ function getBentoSpan(i: number, insight: InsightData): { col: string; row: stri
 
 const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
 
-function GridMode({ insights, cursor, query, onReset, visible }: Props & { visible: boolean }) {
+function GridMode({ insights, cursor, query, onReset, visible, cardRefs }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]> }) {
   const gridRef  = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [expandedInsight, setExpandedInsight] = useState<InsightData | null>(null);
   const hasAnimated = useRef(false);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { gsap } from 'gsap';
 import { cursorRef } from '../hooks/useCursor';
 import type { ObservatoryState } from '../state-machine';
@@ -19,42 +19,44 @@ const STATE_CONFIG: Record<ObservatoryState, { scale: number; glow: number; puls
   PRESENTATION:              { scale: 0.4,  glow: 0.10, pulse: 0.010 },
 };
 
-export default function CoreLight({ state }: Props) {
+const CoreLight = memo(function CoreLight({ state }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef     = useRef<HTMLDivElement>(null);
   const hoverGlowRef = useRef<HTMLDivElement>(null);
   const frameRef     = useRef(0);
   const baseScale    = useRef(STATE_CONFIG[state].scale);
+  const stateRef     = useRef(state);
 
-  // State-driven scale
+  // Keep stateRef in sync without re-rendering
   useEffect(() => {
+    stateRef.current = state;
     const cfg = STATE_CONFIG[state];
     baseScale.current = cfg.scale;
     gsap.to(containerRef.current, {
-      scale:   cfg.scale,
+      scale: cfg.scale,
       opacity: state === 'PRESENTATION' ? 0 : 1,
       duration: 0.8,
       ease: 'power3.out',
     });
   }, [state]);
 
-  // Breathing — reads cursorRef directly, no prop dependency
+  // Single persistent RAF — never restarts
   useEffect(() => {
     let raf: number;
     const animate = () => {
       frameRef.current++;
-      const cfg = STATE_CONFIG[state];
+      const cfg = STATE_CONFIG[stateRef.current];
       const t = frameRef.current * cfg.pulse;
       if (innerRef.current) {
         const breathe = 1 + Math.sin(t) * 0.12;
-        const cursorInfluence = 1 + cursorRef.current.speed * 0.003;
+        const cursorInfluence = 1 + Math.min(cursorRef.current.speed * 0.003, 0.08);
         innerRef.current.style.transform = `scale(${breathe * cursorInfluence})`;
       }
       raf = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(raf);
-  }, [state]);
+  }, []); // empty deps — runs once, reads stateRef
 
   const cfg = STATE_CONFIG[state];
 
@@ -121,4 +123,6 @@ export default function CoreLight({ state }: Props) {
       `}</style>
     </div>
   );
-}
+});
+
+export default CoreLight;

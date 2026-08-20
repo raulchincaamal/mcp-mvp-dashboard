@@ -1,56 +1,52 @@
 'use client';
 
-import type { CursorState } from '../hooks/useCursor';
+import { useEffect, useRef } from 'react';
+import { cursorRef } from '../hooks/useCursor';
 
-interface Props {
-  cursor: CursorState;
-}
+export default function CursorLight() {
+  const spotRef  = useRef<HTMLDivElement>(null);
+  const coreRef  = useRef<HTMLDivElement>(null);
 
-export default function CursorLight({ cursor }: Props) {
-  const baseIntensity = 0.15;
-  const speedBoost = Math.min(cursor.speed * 0.003, 0.1);
-  const intensity = baseIntensity + speedBoost;
-  const size = 450;
+  useEffect(() => {
+    let raf: number;
+    const SIZE = 450;
+    const loop = () => {
+      const c = cursorRef.current;
+      const base = 0.15;
+      const boost = Math.min(c.speed * 0.003, 0.1);
+      const intensity = base + boost;
+
+      if (spotRef.current) {
+        spotRef.current.style.left = `${c.x - SIZE / 2}px`;
+        spotRef.current.style.top  = `${c.y - SIZE / 2}px`;
+        spotRef.current.style.background = `radial-gradient(circle,
+          rgba(73,164,216,${intensity}) 0%,
+          rgba(73,164,216,${intensity * 0.3}) 30%,
+          transparent 60%)`;
+      }
+      if (coreRef.current) {
+        coreRef.current.style.left = `${c.x - 80}px`;
+        coreRef.current.style.top  = `${c.y - 80}px`;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <>
-      {/* Main spotlight */}
-      <div
-        style={{
-          position: 'fixed',
-          left: cursor.x - size / 2,
-          top: cursor.y - size / 2,
-          width: size,
-          height: size,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, 
-            color-mix(in srgb, var(--primary) ${intensity * 100}%, transparent) 0%, 
-            color-mix(in srgb, var(--primary) ${intensity * 30}%, transparent) 30%, 
-            transparent 60%)`,
-          pointerEvents: 'none',
-          zIndex: 1,
-          willChange: 'left, top',
-          mixBlendMode: 'screen',
-        }}
-      />
-      {/* Inner bright core */}
-      <div
-        style={{
-          position: 'fixed',
-          left: cursor.x - 80,
-          top: cursor.y - 80,
-          width: 160,
-          height: 160,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, 
-            color-mix(in srgb, var(--text) ${intensity * 50}%, transparent) 0%, 
-            transparent 50%)`,
-          pointerEvents: 'none',
-          zIndex: 1,
-          willChange: 'left, top',
-          mixBlendMode: 'screen',
-        }}
-      />
+      <div ref={spotRef} style={{
+        position: 'fixed', width: 450, height: 450,
+        borderRadius: '50%', pointerEvents: 'none',
+        zIndex: 1, willChange: 'left, top', mixBlendMode: 'screen',
+      }} />
+      <div ref={coreRef} style={{
+        position: 'fixed', width: 160, height: 160,
+        borderRadius: '50%', pointerEvents: 'none',
+        zIndex: 1, willChange: 'left, top', mixBlendMode: 'screen',
+        background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 50%)',
+      }} />
     </>
   );
 }

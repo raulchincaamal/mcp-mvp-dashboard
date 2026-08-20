@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "predev": "node scripts/kill-port.js",
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev:mcp-main\" \"npm run dev:dashboard\"",
     "dev:dashboard": "npm run dev --workspace=packages/dashboard-app",
     "dev:mcp-main": "npm run start:http --workspace=packages/mcp-main",

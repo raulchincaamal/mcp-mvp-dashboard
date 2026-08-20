@@ -1,263 +1,318 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
+import * as THREE from 'three';
+import { gsap } from 'gsap';
 import type { CursorState } from '../hooks/useCursor';
 
 interface Props {
   cursor: CursorState;
-  centerElement?: HTMLElement | null; // Reference to CoreLight container
+  centerElement?: HTMLElement | null;
+  onCategoryClick?: (label: string, rect: DOMRect) => void;
 }
 
-interface OrbitingChart {
-  id: number;
-  type: 'bar' | 'line' | 'pie' | 'scatter';
-  angle: number;
-  radius: number;
-  speed: number;
-  size: number;
-}
+const CATEGORY_SVGS: Record<string, string> = {
+  Motos: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="36" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
+    <path d="M12 34 L19 20 L28 20 L36 34" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+    <path d="M28 20 L32 14 L38 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <path d="M19 20 L24 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  Celulares: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14" y="6" width="20" height="36" rx="4" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="24" cy="38" r="2" fill="white" opacity="0.7"/>
+    <line x1="19" y1="12" x2="29" y2="12" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  </svg>`,
+  Bicicletas: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="32" r="8" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="36" cy="32" r="8" stroke="white" stroke-width="2.5" fill="none"/>
+    <path d="M12 32 L20 16 L28 16 L36 32" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+    <path d="M20 16 L24 32" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="24" cy="16" r="2.5" fill="white" opacity="0.8"/>
+  </svg>`,
+  Pantallas: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="10" width="36" height="24" rx="3" stroke="white" stroke-width="2.5" fill="none"/>
+    <line x1="18" y1="34" x2="30" y2="34" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <line x1="24" y1="34" x2="24" y2="40" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="40" x2="32" y2="40" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  Audio: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="24" r="10" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="24" cy="24" r="4" fill="white" opacity="0.8"/>
+    <path d="M24 14 C24 14 30 8 38 10" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <path d="M24 34 C24 34 30 40 38 38" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </svg>`,
+  Tablets: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="10" y="6" width="28" height="36" rx="4" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="24" cy="38" r="2" fill="white" opacity="0.7"/>
+    <rect x="15" y="12" width="18" height="20" rx="2" stroke="white" stroke-width="1.5" fill="none" opacity="0.5"/>
+  </svg>`,
+  Consolas: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="16" width="36" height="20" rx="8" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="32" cy="24" r="2.5" fill="white" opacity="0.8"/>
+    <circle cx="38" cy="24" r="2.5" fill="white" opacity="0.8"/>
+    <line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  Clima: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 28 C14 22 18 16 24 16 C30 16 34 20 34 26 C37 26 40 29 40 32 C40 35 37 38 34 38 L14 38 C10 38 8 35 8 32 C8 29 11 28 14 28Z" stroke="white" stroke-width="2.5" fill="none"/>
+    <path d="M18 42 L18 44 M24 42 L24 44 M30 42 L30 44" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  </svg>`,
+};
 
-const CHARTS: OrbitingChart[] = [
-  { id: 1, type: 'bar', angle: 0, radius: 220, speed: 0.0004, size: 70 },
-  { id: 2, type: 'line', angle: Math.PI * 0.5, radius: 260, speed: -0.0005, size: 90 },
-  { id: 3, type: 'pie', angle: Math.PI, radius: 200, speed: 0.0006, size: 60 },
-  { id: 4, type: 'scatter', angle: Math.PI * 1.5, radius: 280, speed: -0.0004, size: 80 },
-  { id: 5, type: 'bar', angle: Math.PI * 0.25, radius: 300, speed: 0.0003, size: 65 },
-  { id: 6, type: 'line', angle: Math.PI * 1.25, radius: 240, speed: -0.0003, size: 75 },
-];
+const N = 8;
+const CATEGORIES = ['Motos', 'Celulares', 'Bicicletas', 'Pantallas', 'Audio', 'Tablets', 'Consolas', 'Clima'];
 
-export default function AmbientBackground({ cursor, centerElement }: Props) {
-  const [positions, setPositions] = useState<{ x: number; y: number }[]>(
-    CHARTS.map(() => ({ x: 0, y: 0 }))
-  );
-  const [center, setCenter] = useState({ x: 0, y: 0 });
-  const anglesRef = useRef(CHARTS.map(c => c.angle));
-  const [windowSize, setWindowSize] = useState({ w: 1920, h: 1080 });
+// Elipse 3D — eje X horizontal, eje Y inclinado
+const RX   = 320;   // radio horizontal (pantalla)
+const RY   = 110;   // radio vertical antes de tilt
+const TILT = 0.38;  // radianes de inclinación del plano (≈22°)
 
-  // Track window size
+// Velocidad orbital: una vuelta completa cada ~40s
+const OMEGA = (2 * Math.PI) / (40 * 60); // rad/frame a 60fps
+
+// Separación angular uniforme: 2π/8 = 45°
+const DELTA_ANGLE = (2 * Math.PI) / N;
+
+const WIDGET_SIZE = 88;
+
+export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
+  const mountRef   = useRef<HTMLDivElement>(null);
+  const rafRef     = useRef<number>(0);
+  const widgetRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const angleRef   = useRef(0); // ángulo base — todos los widgets son base + i*DELTA_ANGLE
+  const lineGeosRef = useRef<THREE.BufferGeometry[]>([]);
+  const cursorRef  = useRef(cursor);
+
+  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
+
   useEffect(() => {
-    const update = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    const mount = mountRef.current;
+    if (!mount) return;
+
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+
+    const scene  = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 2000);
+    camera.position.set(0, 0, 650);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(W, H);
+    renderer.setClearColor(0x000000, 0);
+    mount.appendChild(renderer.domElement);
+
+    // ── Particles ──────────────────────────────────────────────────────────
+    const PC = 700;
+    const pPos = new Float32Array(PC * 3);
+    const pVel: { x: number; y: number }[] = [];
+    for (let i = 0; i < PC; i++) {
+      pPos[i * 3]     = (Math.random() - 0.5) * 1400;
+      pPos[i * 3 + 1] = (Math.random() - 0.5) * 900;
+      pPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
+      pVel.push({ x: (Math.random() - 0.5) * 0.12, y: (Math.random() - 0.5) * 0.12 });
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    scene.add(new THREE.Points(pGeo,
+      new THREE.PointsMaterial({ color: 0x8899ff, size: 1.6, transparent: true, opacity: 0.4 })
+    ));
+
+    // ── Particle connections ───────────────────────────────────────────────
+    const MAX_CONN = 500;
+    const connPos = new Float32Array(MAX_CONN * 6);
+    const connGeo = new THREE.BufferGeometry();
+    connGeo.setAttribute('position', new THREE.BufferAttribute(connPos, 3));
+    scene.add(new THREE.LineSegments(connGeo,
+      new THREE.LineBasicMaterial({ color: 0x4455bb, transparent: true, opacity: 0.15 })
+    ));
+
+    // ── Orbit ellipse guide ────────────────────────────────────────────────
+    const epts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 128; i++) {
+      const a = (i / 128) * Math.PI * 2;
+      epts.push(new THREE.Vector3(
+        RX * Math.cos(a),
+        RY * Math.sin(a) * Math.cos(TILT),
+        RY * Math.sin(a) * Math.sin(TILT),
+      ));
+    }
+    scene.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(epts),
+      new THREE.LineBasicMaterial({ color: 0x3355ff, transparent: true, opacity: 0.07 }),
+    ));
+
+    // ── Center→widget lines ────────────────────────────────────────────────
+    const lineGeos: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < N; i++) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      scene.add(new THREE.Line(geo,
+        new THREE.LineBasicMaterial({ color: 0x5577ff, transparent: true, opacity: 0.22 }),
+      ));
+      lineGeos.push(geo);
+    }
+    lineGeosRef.current = lineGeos;
+
+    // ── Resize ─────────────────────────────────────────────────────────────
+    const onResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', onResize);
+
+    // ── Loop ───────────────────────────────────────────────────────────────
+    const animate = () => {
+      rafRef.current = requestAnimationFrame(animate);
+      const cur = cursorRef.current;
+
+      // Camera follows cursor gently
+      camera.position.x += (cur.normalizedX * -25 - camera.position.x) * 0.04;
+      camera.position.y += (cur.normalizedY *  18 - camera.position.y) * 0.04;
+      camera.lookAt(0, 0, 0);
+
+      // Advance orbit angle
+      angleRef.current += OMEGA;
+
+      // Particles
+      const pp = pGeo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < PC; i++) {
+        let x = pp.getX(i) + pVel[i].x;
+        let y = pp.getY(i) + pVel[i].y;
+        if (x >  700) x = -700; if (x < -700) x =  700;
+        if (y >  450) y = -450; if (y < -450) y =  450;
+        pp.setXYZ(i, x, y, pp.getZ(i));
+      }
+      pp.needsUpdate = true;
+
+      // Particle connections
+      let ci = 0;
+      const cp = connGeo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < PC && ci < MAX_CONN; i++) {
+        for (let j = i + 1; j < PC && ci < MAX_CONN; j++) {
+          const dx = pp.getX(i) - pp.getX(j);
+          const dy = pp.getY(i) - pp.getY(j);
+          if (dx * dx + dy * dy < 85 * 85) {
+            cp.setXYZ(ci * 2,     pp.getX(i), pp.getY(i), pp.getZ(i));
+            cp.setXYZ(ci * 2 + 1, pp.getX(j), pp.getY(j), pp.getZ(j));
+            ci++;
+          }
+        }
+      }
+      for (let i = ci; i < MAX_CONN; i++) {
+        cp.setXYZ(i * 2, 0, 0, -9999); cp.setXYZ(i * 2 + 1, 0, 0, -9999);
+      }
+      cp.needsUpdate = true;
+
+      // Widgets — deterministic, uniform spacing, no overlap
+      for (let i = 0; i < N; i++) {
+        const a  = angleRef.current + i * DELTA_ANGLE;
+        const wx = RX * Math.cos(a);
+        const wy = RY * Math.sin(a) * Math.cos(TILT);
+        const wz = RY * Math.sin(a) * Math.sin(TILT);
+
+        // Project to screen
+        const v = new THREE.Vector3(wx, wy, wz);
+        v.project(camera);
+        const sx = ( v.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
+
+        // Depth: wz ranges from -RY to +RY → map to 0..1
+        const depth = (wz + RY) / (2 * RY);
+        const scale = 0.72 + depth * 0.38;
+
+        const el = widgetRefs.current[i];
+        if (el) {
+          el.style.left    = `${sx - WIDGET_SIZE / 2}px`;
+          el.style.top     = `${sy - WIDGET_SIZE / 2}px`;
+          el.style.zIndex  = String(Math.round(depth * 8) + 1);
+          el.style.opacity = String(0.5 + depth * 0.5);
+          // Only set base scale if GSAP isn't animating it
+          if (!el.dataset.hovered) {
+            el.style.transform = `scale(${scale})`;
+          }
+        }
+
+        // Update line
+        const lg = lineGeosRef.current[i];
+        if (lg) {
+          const lp = lg.attributes.position as THREE.BufferAttribute;
+          lp.setXYZ(0, 0, 0, 0);
+          lp.setXYZ(1, wx, wy, wz);
+          lp.needsUpdate = true;
+        }
+      }
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('resize', onResize);
+      renderer.dispose();
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+    };
   }, []);
 
-  // Track center element position
-  useEffect(() => {
-    if (!centerElement) {
-      // Default to screen center if no element provided
-      setCenter({ x: windowSize.w / 2, y: windowSize.h / 2 });
-      return;
-    }
-
-    const updateCenter = () => {
-      const rect = centerElement.getBoundingClientRect();
-      setCenter({
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      });
-    };
-
-    updateCenter();
-    const interval = setInterval(updateCenter, 100); // Update periodically
-    return () => clearInterval(interval);
-  }, [centerElement, windowSize]);
-
-  // Animate orbits
-  useEffect(() => {
-    let raf: number;
-    const animate = () => {
-      const offsetX = cursor.normalizedX * 20;
-      const offsetY = cursor.normalizedY * 15;
-
-      const newPositions = CHARTS.map((chart, i) => {
-        anglesRef.current[i] += chart.speed;
-        const angle = anglesRef.current[i];
-        return {
-          x: center.x + offsetX + Math.cos(angle) * chart.radius,
-          y: center.y + offsetY + Math.sin(angle) * chart.radius,
-        };
-      });
-
-      setPositions(newPositions);
-      raf = requestAnimationFrame(animate);
-    };
-
-    raf = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(raf);
-  }, [cursor.normalizedX, cursor.normalizedY, center]);
-
-  const adjustedCenter = {
-    x: center.x + cursor.normalizedX * 20,
-    y: center.y + cursor.normalizedY * 15,
-  };
-
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 0,
-      pointerEvents: 'none',
-      background: 'var(--bg)',
-      overflow: 'hidden',
-      transition: 'background 0.3s ease',
-    }}>
-      {/* Aurora layers */}
-      <div style={{
-        position: 'absolute', top: '5%', left: '25%', width: '60vw', height: '50vh',
-        background: 'radial-gradient(ellipse at center, var(--primary-light) 0%, transparent 70%)',
-        filter: 'blur(80px)', animation: 'float1 25s ease-in-out infinite', opacity: 0.5,
-      }} />
-      <div style={{
-        position: 'absolute', top: '35%', right: '15%', width: '50vw', height: '45vh',
-        background: 'radial-gradient(ellipse at center, rgba(120, 80, 180, 0.08) 0%, transparent 70%)',
-        filter: 'blur(100px)', animation: 'float2 30s ease-in-out infinite',
-      }} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
+      <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 
-      {/* Connection lines SVG */}
-      <svg
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-        viewBox={`0 0 ${windowSize.w} ${windowSize.h}`}
-      >
-        {/* Lines from center to each chart */}
-        {positions.map((pos, i) => (
-          <g key={CHARTS[i].id}>
-            {/* Connection line */}
-            <line
-              x1={adjustedCenter.x}
-              y1={adjustedCenter.y}
-              x2={pos.x}
-              y2={pos.y}
-              stroke="var(--primary)"
-              strokeWidth="1"
-              opacity="0.12"
-              strokeDasharray="6 6"
-            >
-              <animate
-                attributeName="stroke-dashoffset"
-                from="0"
-                to="12"
-                dur="1s"
-                repeatCount="indefinite"
-              />
-            </line>
-            {/* Node at chart position */}
-            <circle cx={pos.x} cy={pos.y} r="5" fill="var(--primary)" opacity="0.25" />
-            {/* Pulse ring */}
-            <circle cx={pos.x} cy={pos.y} r="5" fill="none" stroke="var(--primary)" strokeWidth="1" opacity="0.15">
-              <animate attributeName="r" from="5" to="25" dur="2s" repeatCount="indefinite" />
-              <animate attributeName="opacity" from="0.2" to="0" dur="2s" repeatCount="indefinite" />
-            </circle>
-          </g>
-        ))}
-      </svg>
-
-      {/* Orbiting charts */}
-      {CHARTS.map((chart, i) => (
+      {CATEGORIES.map((label, i) => (
         <div
-          key={chart.id}
+          key={label}
+          ref={el => { widgetRefs.current[i] = el; }}
           style={{
             position: 'absolute',
-            left: positions[i].x - chart.size / 2,
-            top: positions[i].y - chart.size / 2,
-            width: chart.size,
-            height: chart.size * 0.65,
-            opacity: 0.1,
+            width: WIDGET_SIZE, height: WIDGET_SIZE,
+            borderRadius: 18,
+            background: 'var(--surface)',
+            border: '1px solid var(--border-color)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 6,
+            cursor: 'pointer', pointerEvents: 'auto',
+            boxShadow: 'var(--shadow)',
+            userSelect: 'none',
+            willChange: 'transform, opacity',
+          }}
+          onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
+          onMouseEnter={e => {
+            const el = e.currentTarget;
+            el.dataset.hovered = '1';
+            el.style.borderColor = 'rgba(255,255,255,0.6)';
+            el.style.background  = 'var(--surface-2)';
+            el.style.boxShadow   = '0 0 28px rgba(255,255,255,0.18), var(--shadow)';
+            gsap.to(el, { scale: 1.18, duration: 0.3, ease: 'power2.out', overwrite: true });
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget;
+            delete el.dataset.hovered;
+            el.style.borderColor = 'var(--border-color)';
+            el.style.background  = 'var(--surface)';
+            el.style.boxShadow   = 'var(--shadow)';
+            gsap.to(el, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: true });
           }}
         >
-          {chart.type === 'bar' && <GhostBarChart />}
-          {chart.type === 'line' && <GhostLineChart />}
-          {chart.type === 'pie' && <GhostPieChart />}
-          {chart.type === 'scatter' && <GhostScatterChart />}
+          <div
+            style={{ width: 40, height: 40, opacity: 0.85 }}
+            dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
+          />
+          <span style={{
+            fontSize: 10, fontWeight: 600,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '0.07em', textTransform: 'uppercase',
+          }}>
+            {label}
+          </span>
         </div>
       ))}
-
-      {/* Grid */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `linear-gradient(var(--border-color) 1px, transparent 1px),
-          linear-gradient(90deg, var(--border-color) 1px, transparent 1px)`,
-        backgroundSize: '100px 100px', opacity: 0.15,
-      }} />
-
-      {/* Vignette */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'radial-gradient(ellipse at center, transparent 30%, var(--bg) 100%)',
-        opacity: 0.7,
-      }} />
-
-      <style>{`
-        @keyframes float1 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(25px, -20px) scale(1.05); }
-        }
-        @keyframes float2 {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(-35px, 25px); }
-        }
-      `}</style>
     </div>
-  );
-}
-
-function GhostBarChart() {
-  const bars = [0.4, 0.75, 0.5, 0.9, 0.6];
-  return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-end', gap: 3 }}>
-      {bars.map((h, i) => (
-        <div key={i} style={{
-          flex: 1, background: 'var(--primary)', borderRadius: 2,
-          height: `${h * 100}%`,
-          animation: `barPulse 3s ease-in-out ${i * 0.2}s infinite`,
-          transformOrigin: 'bottom',
-        }} />
-      ))}
-      <style>{`
-        @keyframes barPulse {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(0.7); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function GhostLineChart() {
-  return (
-    <svg width="100%" height="100%" viewBox="0 0 100 60" preserveAspectRatio="none">
-      <path
-        d="M0,50 Q20,40 30,30 T60,35 T100,20"
-        fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round"
-        strokeDasharray="150" strokeDashoffset="0"
-      >
-        <animate attributeName="stroke-dashoffset" from="0" to="300" dur="4s" repeatCount="indefinite" />
-      </path>
-    </svg>
-  );
-}
-
-function GhostPieChart() {
-  return (
-    <svg width="100%" height="100%" viewBox="0 0 60 60">
-      <circle cx="30" cy="30" r="22" fill="none" stroke="var(--primary)" strokeWidth="5"
-        strokeDasharray="45 20 30 45" strokeLinecap="round">
-        <animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="10s" repeatCount="indefinite" />
-      </circle>
-    </svg>
-  );
-}
-
-function GhostScatterChart() {
-  const points = [[20, 35], [35, 20], [50, 40], [65, 25], [80, 32]];
-  return (
-    <svg width="100%" height="100%" viewBox="0 0 100 60">
-      {points.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="4" fill="var(--primary)">
-          <animate attributeName="opacity" values="0.8;0.2;0.8" dur={`${1.5 + i * 0.3}s`} repeatCount="indefinite" />
-          <animate attributeName="r" values="4;2;4" dur={`${1.5 + i * 0.3}s`} repeatCount="indefinite" />
-        </circle>
-      ))}
-    </svg>
   );
 }

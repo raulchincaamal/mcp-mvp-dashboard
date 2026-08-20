@@ -24,8 +24,9 @@ export interface InsightData {
   metric?: string;
   metricLabel?: string;
   chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge';
-  chartOptions: Record<string, unknown> | null; // null = stat card only, no chart
+  chartOptions: Record<string, unknown> | null;
   isPrimary?: boolean;
+  listItems?: { title: string; subtitle?: string; amount: string; status?: 'positive' | 'negative' | 'neutral' }[];
 }
 
 export interface ObservatoryContext {
@@ -399,55 +400,21 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── TransactionList → horizontal bar ──────────────────────────────────
+    // ── TransactionList → insight con lista renderizada (no chart) ────────────
     if (component === 'TransactionList') {
-      const items: { title?: string; label?: string; amount?: number | string; status?: string }[] = (props.items ?? []).slice(0, 6);
+      const items: { title?: string; label?: string; amount?: number | string; subtitle?: string; date?: string; status?: string }[] = (props.items ?? []).slice(0, 8);
       if (items.length === 0) continue;
-      const txLabels = items.map(it => {
-        const l = String(it.title ?? it.label ?? '');
-        return l.length > 14 ? l.slice(0, 14) + '..' : l;
-      });
-      const txValues = items.map(it => {
-        const raw = String(it.amount ?? '0').replace(/[$,\s]/g, '');
-        if (raw.endsWith('K')) return parseFloat(raw) * 1000;
-        if (raw.endsWith('M')) return parseFloat(raw) * 1_000_000;
-        return parseFloat(raw) || 0;
-      });
       insights.push({
         id: `txn-${idx}`,
         title: props.title ?? 'Transactions',
         chartType: 'bar',
-        chartOptions: {
-          grid: { top: 8, right: 90, bottom: 8, left: 8, containLabel: true },
-          xAxis: { type: 'value', ...AXIS_STYLE, show: false },
-          yAxis: {
-            type: 'category',
-            data: txLabels,
-            axisTick: { show: false },
-            axisLine: { show: false },
-            axisLabel: { color: getLabelColor(isDark), fontSize: 13, fontFamily: 'Space Grotesk, sans-serif' },
-          },
-          tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
-          series: [{
-            type: 'bar',
-            data: txValues.map((v, i) => ({
-              value: v,
-              itemStyle: { color: colorFor(i), borderRadius: [0, 4, 4, 0] },
-            })),
-            barWidth: 18,
-            label: {
-              show: true, position: 'right', fontSize: 13,
-              fontWeight: 600,
-              color: getLabelColor(isDark),
-              formatter: (p: { value: number }) => {
-                const v = p.value;
-                if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-                if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-                return `$${v}`;
-              },
-            },
-          }],
-        },
+        chartOptions: null, // rendered as list, not chart
+        listItems: items.map(it => ({
+          title: String(it.title ?? it.label ?? ''),
+          subtitle: it.subtitle ?? it.date ?? undefined,
+          amount: String(it.amount ?? ''),
+          status: it.status as 'positive' | 'negative' | 'neutral' | undefined,
+        })),
       });
       continue;
     }

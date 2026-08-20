@@ -4,11 +4,29 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import type { McpClient } from './mcp-client.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
+import { selectChartType, CHART_DECISION_PROMPT } from './chart-decision.js';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION,
 });
 const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
+
+// ─── Estado normalization map (no-accent key → accented value) ───
+const ESTADO_MAP: Record<string, string> = {
+  'aguascalientes': 'Aguascalientes', 'baja california': 'Baja California',
+  'baja california sur': 'Baja California Sur', 'campeche': 'Campeche',
+  'chiapas': 'Chiapas', 'chihuahua': 'Chihuahua',
+  'ciudad de mexico': 'Ciudad de México', 'cdmx': 'Ciudad de México',
+  'coahuila': 'Coahuila', 'colima': 'Colima', 'durango': 'Durango',
+  'guanajuato': 'Guanajuato', 'guerrero': 'Guerrero', 'hidalgo': 'Hidalgo',
+  'jalisco': 'Jalisco', 'mexico': 'México', 'estado de mexico': 'México',
+  'edomex': 'México', 'michoacan': 'Michoacán', 'morelos': 'Morelos',
+  'nayarit': 'Nayarit', 'nuevo leon': 'Nuevo León', 'oaxaca': 'Oaxaca',
+  'puebla': 'Puebla', 'queretaro': 'Querétaro', 'quintana roo': 'Quintana Roo',
+  'san luis potosi': 'San Luis Potosí', 'sinaloa': 'Sinaloa', 'sonora': 'Sonora',
+  'tabasco': 'Tabasco', 'tamaulipas': 'Tamaulipas', 'tlaxcala': 'Tlaxcala',
+  'veracruz': 'Veracruz', 'yucatan': 'Yucatán', 'zacatecas': 'Zacatecas',
+};
 
 // ─── Component catalog ────────────────────────────────────────
 
@@ -46,27 +64,29 @@ export async function orchestrate(
 ): Promise<unknown> {
   const dataset = params.dataset ?? 'ventas-credito';
 
-  const cacheKey = generateCacheKey('ui', {
-    dataset,
-    intent: params.intent,
-    filters: params.filters,
-    limit: params.limit,
-  });
-  const cached = await cacheGet<unknown>(cacheKey);
-  if (cached) {
-    console.log('[orchestrator] cache hit');
-    return cached;
-  }
-
   const { gcpClient, uiClient } = await import('./mcp-client.js').then((m) =>
     m.createMcpClients(),
   );
 
   try {
-    // Step 1: Interpret intent with Bedrock → structured query
+    // Step 1: Interpret intent
     console.log(`[orchestrator] interpreting intent with model: ${MODEL_ID}`);
     const parsedIntent = await interpretIntent(params.intent);
     console.log('[orchestrator] parsed intent:', JSON.stringify(parsedIntent));
+
+    // Cache check (after interpretation so granularity is included in key)
+    const cacheKey = generateCacheKey('ui', {
+      dataset,
+      intent: params.intent,
+      filters: params.filters,
+      limit: params.limit,
+      granularity: (parsedIntent as Record<string, unknown>).granularity,
+    });
+    const cached = await cacheGet<unknown>(cacheKey);
+    if (cached) {
+      console.log('[orchestrator] cache hit');
+      return cached;
+    }
 
     // Step 2: Query real data
     const filters: Record<string, unknown> = {
@@ -76,7 +96,17 @@ export async function orchestrate(
     for (const [key, value] of Object.entries(filters)) {
       if (Array.isArray(value) && value.length >= 8) delete filters[key];
     }
-    const limit = params.limit ?? parsedIntent.limit ?? 100;
+
+    // Normalize estado filter: fix missing accents
+    if (typeof filters.estado === 'string') {
+      filters.estado = ESTADO_MAP[filters.estado.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] ?? filters.estado;
+    }
+    // Normalize estatus_credito
+    if (typeof filters.estatus_credito === 'string') {
+      const ec = filters.estatus_credito.toLowerCase().replace(/\s+/g, '_');
+      if (['al_corriente','atrasado','liquidado','cancelado'].includes(ec)) filters.estatus_credito = ec;
+    }
+    const limit = params.limit ?? parsedIntent.limit ?? 200;
 
     console.log(
       `[orchestrator] querying data — filters: ${JSON.stringify(filters)}, limit: ${limit}`,
@@ -129,7 +159,8 @@ async function interpretIntent(intent: string): Promise<{
     metricField: null,
     chartType: null,
     template: 'executive',
-    limit: 100,
+    limit: null,
+    granularity: null as string | null,
     title: null,
   };
 
@@ -152,15 +183,24 @@ Canales: tienda_fisica, en_linea, telefono.
 
 Reglas:
 - "por estado/categoría/mes/vendedor" → groupBy
+- "semanal/por semana/semanas" → groupBy:"fecha_venta", metricField según contexto
+- "mensual/por mes/meses" → groupBy:"fecha_venta"
 - categoría específica mencionada → filters.categoria
+- estado específico mencionado (Yucatán, CDMX, Jalisco, etc.) → filters.estado (nombre oficial con acento). Es un FILTRO, no la dimensión de análisis
+- categoría específica mencionada (Celulares, Motos, etc.) → filters.categoria. Es un FILTRO
 - "atrasado/liquidado/al corriente/cancelado" → filters.estatus_credito
 - "tabla/listado" → template:table
-- "gráfica/chart/tendencia" → template:chart
+- "gráfica/chart/tendencia/semanal/mensual" → template:chart
 - "crédito/estatus/pago/morosidad" → template:credit
 - "por categoría/análisis" → template:category
 - "resumen/dashboard/kpi/ejecutivo" → template:executive
 - número mencionado (últimas 10, top 20) → limit
-- genera un título descriptivo en español → title`,
+- genera un título descriptivo en español → title
+- DISTINCIÓN CLAVE: dimensión de análisis = lo que varía en el eje (groupBy). Filtro = limita el dataset pero no aparece en el eje
+  Ejemplo: "ventas semanales de celulares en Yucatán" → groupBy:fecha_venta, filters:{categoria:Celulares, estado:Yucatán}
+  Ejemplo: "ventas por estado" → groupBy:estado, filters:{}
+  Ejemplo: "ventas de motos por estado" → groupBy:estado, filters:{categoria:Motos}
+${CHART_DECISION_PROMPT}`,
           },
         ],
         messages: [{ role: 'user', content: [{ text: intent }] }],
@@ -174,7 +214,35 @@ Reglas:
       .text!.replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/i, '')
       .trim();
-    return { ...fallback, ...JSON.parse(clean) };
+    const parsed = { ...fallback, ...JSON.parse(clean) };
+
+    // Infer temporal granularity from intent
+    if (parsed.groupBy === 'fecha_venta' && !parsed.granularity) {
+      if (/\ba[ñn]o\b|anual|por\s+a[ñn]o/i.test(intent)) parsed.granularity = 'year';
+      else if (/\bmes\b|mensual|por\s+mes/i.test(intent)) parsed.granularity = 'month';
+      else if (/\bseman/i.test(intent)) parsed.granularity = 'week';
+      else parsed.granularity = 'month'; // default temporal
+    }
+
+    // Temporal intents need more records to show meaningful trends
+    if (parsed.groupBy === 'fecha_venta' && !parsed.limit) {
+      parsed.limit = 5000;
+    } else if (!parsed.limit) {
+      parsed.limit = 200;
+    }
+
+    // Force template:chart when groupBy is temporal
+    if (parsed.groupBy === 'fecha_venta') {
+      parsed.template = 'chart';
+    }
+
+    // Override chartType con modelo de decisión analítico
+    const decision = selectChartType(intent, parsed.groupBy, parsed.chartType);
+    if (!parsed.chartType || decision.confidence === 'high') {
+      parsed.chartType = decision.chartType;
+      console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`);
+    }
+    return parsed;
   } catch (err) {
     console.log(
       '[orchestrator] intent interpretation failed:',
@@ -352,8 +420,12 @@ ${
    frames: [{ label: "YYYY-MM", items: [{ name: "cat", value: N }] }], maxBars: 10`
                       : parsedIntent.template === 'chart'
                         ? `Genera:
-1. KPIGrid: 3 métricas de resumen
-2. Chart principal según groupBy detectado`
+1. KPIGrid: 3 métricas de resumen (total registros, monto total, promedio)
+2. Chart principal usando aggregations.groupBy.data para labels y values.
+   - Si granularity es "month" o "week" o "year" → usa type:"${parsedIntent.chartType ?? 'area'}" con eje X temporal
+   - labels = aggregations.groupBy.data[].label (ordenados cronológicamente)
+   - data = aggregations.groupBy.data[].value
+   NUNCA uses fieldSummaries.estado para una gráfica temporal.`
                         : parsedIntent.template === 'table'
                           ? `Genera:
 1. KPIGrid: 3 métricas de resumen
@@ -458,24 +530,51 @@ function computeAggregations(
   // ─── GroupBy aggregation (from parsed intent) ─────────────
   if (parsedIntent.groupBy) {
     const field = parsedIntent.groupBy;
+    const isDateField = field === 'fecha_venta';
+    const granularity = (parsedIntent as Record<string, unknown>).granularity as string | null;
     const groups: Record<string, number> = {};
+
     for (const record of records) {
-      const key = String(record[field] ?? 'N/A');
+      let key: string;
+      if (isDateField) {
+        const d = new Date(String(record[field] ?? ''));
+        if (!isNaN(d.getTime())) {
+          if (granularity === 'year') {
+            key = `${d.getFullYear()}`;
+          } else if (granularity === 'week') {
+            const jan4 = new Date(d.getFullYear(), 0, 4);
+            const weekNum = Math.ceil(((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7);
+            key = `${d.getFullYear()}-S${String(weekNum).padStart(2, '0')}`;
+          } else {
+            // month (default)
+            key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          }
+        } else {
+          key = String(record[field] ?? 'N/A');
+        }
+      } else {
+        key = String(record[field] ?? 'N/A');
+      }
+
       if (parsedIntent.metric === 'count') {
         groups[key] = (groups[key] ?? 0) + 1;
       } else if (parsedIntent.metricField) {
-        groups[key] =
-          (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
+        groups[key] = (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
+      } else {
+        groups[key] = (groups[key] ?? 0) + 1;
       }
     }
+
+    const sortedGroups = Object.entries(groups).sort(([a], [b]) =>
+      isDateField ? a.localeCompare(b) : groups[b] - groups[a],
+    );
+    const maxSlice = granularity === 'week' ? 52 : granularity === 'year' ? 10 : 36;
     agg.groupBy = {
       field,
+      granularity: granularity ?? (isDateField ? 'month' : 'value'),
       metric: parsedIntent.metric,
-      uniqueGroups: Object.keys(groups).length,
-      data: Object.entries(groups)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 15)
-        .map(([label, value]) => ({ label, value })),
+      uniqueGroups: sortedGroups.length,
+      data: sortedGroups.slice(0, maxSlice).map(([label, value]) => ({ label, value })),
     };
   }
 

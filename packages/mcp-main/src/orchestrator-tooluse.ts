@@ -14,6 +14,7 @@ import {
   type ToolResultContentBlock,
 } from '@aws-sdk/client-bedrock-runtime';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
+import { selectChartType, CHART_DECISION_PROMPT } from './chart-decision.js';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION,
@@ -217,16 +218,10 @@ function parseIntentLocally(intent: string): ParsedIntent {
     }
   }
 
-  // Detectar tipo de gráfica
-  if (/pastel|pie|circular/.test(intentLower)) {
-    result.chartType = 'pie';
-  } else if (/dona|donut|doughnut/.test(intentLower)) {
-    result.chartType = 'doughnut';
-  } else if (/linea|tendencia|evolucion/.test(intentLower)) {
-    result.chartType = 'line';
-  } else if (/barra|columna/.test(intentLower)) {
-    result.chartType = 'bar';
-  }
+  // Detectar tipo de gráfica con modelo de decisión analítico
+  const decision = selectChartType(intent, result.groupBy);
+  result.chartType = decision.chartType;
+  console.log(`[fallback] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`);
 
   // Detectar template
   if (/resumen|ejecutivo|dashboard|general|kpi/.test(intentLower)) {
@@ -605,10 +600,9 @@ REGLAS:
 - Para "tabla" o "listado": template="table"
 - Para "créditos" o "morosidad": template="credit"
 - Para "por categoría": template="category"
-- Detecta el tipo de gráfica: "pastel/pie" → pie, "dona/donut" → doughnut, "barras" → bar, "líneas" → line
 - Detecta filtros: "de motos" → filters.categoria="Motos", "en Jalisco" → filters.estado="Jalisco"
 - Detecta agrupación: "por estado" → groupBy="estado"
-
+${CHART_DECISION_PROMPT}
 Responde en español. Después de generar el dashboard, da una breve descripción de lo que muestra.`;
 
   const messages: Message[] = [

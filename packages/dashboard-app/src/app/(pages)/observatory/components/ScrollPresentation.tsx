@@ -401,10 +401,11 @@ function InsightContent({ insight, cursor, index, total }: {
   total: number;
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const isStatCard = !insight.chartOptions;
+  const isList = !!insight.listItems;
+  const isStatCard = !insight.chartOptions && !isList;
 
   useEffect(() => {
-    if (isStatCard) return;
+    if (!insight.chartOptions) return;
     const el = document.getElementById(`insight-chart-${insight.id}`);
     if (!el) return;
 
@@ -424,24 +425,15 @@ function InsightContent({ insight, cursor, index, total }: {
         animationEasing: 'cubicOut',
       } as echarts.EChartsOption);
       instance.resize();
-      // Keep ResizeObserver for window resizes after init
       ro = new ResizeObserver(() => instance?.resize());
       ro.observe(el);
     }
 
-    // Poll until the slide is visible and the div has real height
     const poll = setInterval(() => {
-      if (el.clientHeight >= 50) {
-        clearInterval(poll);
-        tryInit();
-      }
+      if (el.clientHeight >= 50) { clearInterval(poll); tryInit(); }
     }, 50);
 
-    return () => {
-      clearInterval(poll);
-      ro?.disconnect();
-      instance?.dispose();
-    };
+    return () => { clearInterval(poll); ro?.disconnect(); instance?.dispose(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -452,80 +444,73 @@ function InsightContent({ insight, cursor, index, total }: {
       marginRight: 'auto',
       display: 'flex',
       flexDirection: 'column',
-      ...(isStatCard ? {} : { flex: 1, minHeight: 0, alignSelf: 'stretch' }),
+      ...(isStatCard || isList ? {} : { flex: 1, minHeight: 0, alignSelf: 'stretch' }),
     }}>
       <GlassPanel
         cursor={cursor}
         depth={0.2}
         glowOnHover={false}
-        style={isStatCard ? {} : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        style={isStatCard || isList ? {} : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
         <div style={{
           padding: isStatCard ? '48px 56px' : '28px 40px 24px',
           display: 'flex',
           flexDirection: 'column',
-          ...(isStatCard ? {} : { flex: 1, minHeight: 0 }),
+          ...(isStatCard || isList ? {} : { flex: 1, minHeight: 0 }),
         }}>
-
-          {/* Counter */}
-          <p style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '0.14em',
-            color: 'var(--text-tertiary)',
-            marginBottom: 14,
-            textTransform: 'uppercase',
-          }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginBottom: 14, textTransform: 'uppercase' }}>
             {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
           </p>
 
-          {/* Header row */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: isStatCard ? 'center' : 'flex-start',
-            gap: 32,
-            marginBottom: isStatCard ? 0 : 20,
-            flexShrink: 0,
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isStatCard ? 'center' : 'flex-start', gap: 32, marginBottom: isStatCard ? 0 : 20, flexShrink: 0 }}>
             <div>
               <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em' }}>
                 {insight.title}
               </h2>
-              {insight.subtitle && (
-                <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                  {insight.subtitle}
-                </p>
-              )}
+              {insight.subtitle && <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 6 }}>{insight.subtitle}</p>}
             </div>
             {insight.metric && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{
-                  fontSize: isStatCard ? 72 : 44,
-                  fontWeight: 700,
-                  color: 'var(--primary)',
-                  margin: 0,
-                  lineHeight: 1,
-                  letterSpacing: '-0.03em',
-                }}>
+                <p style={{ fontSize: isStatCard ? 72 : 44, fontWeight: 700, color: 'var(--primary)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>
                   {insight.metric}
                 </p>
-                {insight.metricLabel && (
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                    {insight.metricLabel}
-                  </p>
-                )}
+                {insight.metricLabel && <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>{insight.metricLabel}</p>}
               </div>
             )}
           </div>
 
-          {/* Chart — takes all remaining space */}
-          {!isStatCard && (
-            <div
-              id={`insight-chart-${insight.id}`}
-              ref={chartRef}
-              style={{ flex: 1, minHeight: 0 }}
-            />
+          {/* Transaction list */}
+          {isList && insight.listItems && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginTop: 8 }}>
+              {insight.listItems.map((item, i) => {
+                const amountColor = item.status === 'positive' ? '#30d158' : item.status === 'negative' ? 'var(--danger)' : 'var(--text)';
+                return (
+                  <div key={i} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 0',
+                    borderBottom: i < insight.listItems!.length - 1 ? '1px solid var(--border-color)' : 'none',
+                    gap: 16,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.title}
+                      </p>
+                      {item.subtitle && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '3px 0 0' }}>{item.subtitle}</p>}
+                    </div>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: amountColor, margin: 0, flexShrink: 0 }}>
+                      {item.amount}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Chart */}
+          {insight.chartOptions && (
+            <div id={`insight-chart-${insight.id}`} ref={chartRef} style={{ flex: 1, minHeight: 0 }} />
           )}
         </div>
       </GlassPanel>
@@ -839,27 +824,20 @@ function GridCard({ insight, cursor, onClick }: {
   const chartRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const isStatCard = !insight.chartOptions;
+  const isStatCard = !insight.chartOptions && !insight.listItems;
+  const isList = !!insight.listItems;
 
   useEffect(() => {
-    if (isStatCard || !cardRef.current) return;
+    if (isStatCard || isList || !cardRef.current) return;
     let instance: echarts.ECharts | null = null;
     let ro: ResizeObserver | null = null;
     let rafId: number;
-
-    // Poll until card is visible (GSAP stagger sets opacity > 0)
     function waitForVisible() {
       const el = cardRef.current;
       if (!el) return;
-      const opacity = parseFloat(getComputedStyle(el).opacity);
-      if (opacity > 0.5 && chartRef.current && !instance) {
+      if (parseFloat(getComputedStyle(el).opacity) > 0.5 && chartRef.current && !instance) {
         instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-        instance.setOption({
-          ...insight.chartOptions,
-          backgroundColor: 'transparent',
-          animation: true,
-          animationDuration: 600,
-        } as echarts.EChartsOption);
+        instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 600 } as echarts.EChartsOption);
         instance.resize();
         ro = new ResizeObserver(() => instance?.resize());
         ro.observe(chartRef.current);
@@ -868,108 +846,60 @@ function GridCard({ insight, cursor, onClick }: {
       }
     }
     rafId = requestAnimationFrame(waitForVisible);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro?.disconnect();
-      instance?.dispose();
-    };
-  }, [insight.chartOptions, isStatCard]);
+    return () => { cancelAnimationFrame(rafId); ro?.disconnect(); instance?.dispose(); };
+  }, [insight.chartOptions, isStatCard, isList]);
 
   return (
-    <div 
+    <div
       data-card
       ref={cardRef}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={{ 
-        opacity: 0,
-        gridColumn: insight.isPrimary ? '1 / -1' : undefined,
-        cursor: 'pointer',
-        transform: isHovered ? 'scale(1.02)' : 'scale(1)',
-        transition: 'transform 0.2s ease',
-      }}
+      style={{ opacity: 0, gridColumn: insight.isPrimary ? '1 / -1' : undefined, cursor: 'pointer', transform: isHovered ? 'scale(1.02)' : 'scale(1)', transition: 'transform 0.2s ease' }}
     >
       <div style={{
-        background: 'var(--surface)',
-        borderRadius: 'var(--radius)',
+        background: 'var(--surface)', borderRadius: 'var(--radius)',
         border: `1px solid ${isHovered ? 'var(--primary)' : 'var(--border-color)'}`,
         boxShadow: isHovered ? 'var(--shadow-lg)' : 'var(--shadow)',
         transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-        height: '100%',
-        position: 'relative',
-        overflow: 'hidden',
+        height: '100%', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{ padding: '20px 24px' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: isStatCard ? 'center' : 'flex-start',
-            gap: 12,
-            marginBottom: isStatCard ? 0 : 14,
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isStatCard ? 'center' : 'flex-start', gap: 12, marginBottom: (isStatCard || isList) ? 0 : 14 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--primary)',
-                margin: 0,
-              }}>
+              <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', margin: 0 }}>
                 {insight.title}
               </p>
-              {insight.subtitle && (
-                <p style={{ 
-                  fontSize: 12, 
-                  color: 'var(--text-tertiary)', 
-                  margin: '4px 0 0',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {insight.subtitle}
-                </p>
-              )}
             </div>
             {insight.metric && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{
-                  fontSize: isStatCard ? 28 : 20,
-                  fontWeight: 700,
-                  color: 'var(--text)',
-                  margin: 0,
-                  lineHeight: 1,
-                }}>
+                <p style={{ fontSize: isStatCard ? 28 : 20, fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1 }}>
                   {insight.metric}
                 </p>
                 {isStatCard && insight.metricLabel && (
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
-                    {insight.metricLabel}
-                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>{insight.metricLabel}</p>
                 )}
               </div>
             )}
           </div>
-          {!isStatCard && (
-            <div
-              ref={chartRef}
-              style={{ height: insight.isPrimary ? 220 : (insight.chartType === 'pie' ? 180 : 150) }}
-            />
+
+          {isList && insight.listItems && (
+            <div style={{ marginTop: 12 }}>
+              {insight.listItems.slice(0, 5).map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--border-color)' : 'none', gap: 12 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{item.title}</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: item.status === 'positive' ? '#30d158' : item.status === 'negative' ? 'var(--danger)' : 'var(--text)', margin: 0, flexShrink: 0 }}>{item.amount}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!isStatCard && !isList && (
+            <div ref={chartRef} style={{ height: insight.isPrimary ? 220 : (insight.chartType === 'pie' ? 180 : 150) }} />
           )}
         </div>
-        
-        {/* Expand hint on hover */}
-        <div style={{
-          position: 'absolute',
-          bottom: 8,
-          right: 10,
-          fontSize: 9,
-          color: 'var(--text-tertiary)',
-          opacity: isHovered ? 0.8 : 0,
-          transition: 'opacity 0.2s ease',
-        }}>
+        <div style={{ position: 'absolute', bottom: 8, right: 10, fontSize: 9, color: 'var(--text-tertiary)', opacity: isHovered ? 0.8 : 0, transition: 'opacity 0.2s ease' }}>
           Click to expand
         </div>
       </div>

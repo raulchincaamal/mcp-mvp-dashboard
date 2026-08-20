@@ -771,7 +771,7 @@ const AURORA_TYPE_MAP: Record<string, 'bar' | 'line' | 'area' | 'pie' | 'doughnu
   treemap: 'treemap',
 };
 
-// Scroll-reveal wrapper for charts — lets ECharts run its own native animation
+// Scroll-reveal wrapper for charts
 function ScrollDrivenChart({ type, data, title, height = 320, index = 0 }: {
   type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
   data: { labels: string[]; datasets: { label?: string; data: number[] }[] };
@@ -783,35 +783,19 @@ function ScrollDrivenChart({ type, data, title, height = 320, index = 0 }: {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Mount immediately — AuroraChart handles its own animation
+    setMounted(true);
+
     const el = ref.current;
     if (!el) return;
-
-    gsap.set(el, { opacity: 0, y: 30, scale: 0.97 });
-
-    const trigger = ScrollTrigger.create({
-      trigger: el,
-      start: 'top 92%',
-      once: true,
-      onEnter: () => {
-        setMounted(true);
-        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'power3.out', delay: index * 0.06 });
-      },
-    });
-
-    // If already in viewport (no scroll needed), trigger manually after a tick
-    const rect = el.getBoundingClientRect();
-    if (rect.top < window.innerHeight * 0.92) {
-      setTimeout(() => {
-        setMounted(true);
-        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'power3.out', delay: index * 0.06 });
-      }, 50);
-    }
-
-    return () => trigger.kill();
+    gsap.fromTo(el,
+      { opacity: 0, y: 24, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'power3.out', delay: index * 0.06 }
+    );
   }, [index]);
 
   return (
-    <div ref={ref} style={{ willChange: 'transform, opacity' }}>
+    <div ref={ref} style={{ opacity: 0, willChange: 'transform, opacity' }}>
       {mounted && (
         <AuroraChart type={type} data={data} title={title} height={height} gradient="aurora" />
       )}

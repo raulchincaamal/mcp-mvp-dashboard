@@ -11,35 +11,38 @@ interface Props {
 
 const CATEGORY_SVGS: Record<string, string> = {
   Motos: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
-    <circle cx="36" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
-    <path d="M12 34 L19 20 L28 20 L36 34" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
-    <path d="M28 20 L32 14 L38 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    <path d="M19 20 L24 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="10" cy="34" r="6" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="38" cy="34" r="6" stroke="white" stroke-width="2.5" fill="none"/>
+    <path d="M16 34 L20 22 L28 22 L32 28 L38 28" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M20 22 L24 14 L30 14 L32 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M10 28 L16 34" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <path d="M30 14 L36 14 L38 18" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="22" y="18" width="8" height="5" rx="1" stroke="white" stroke-width="1.5" fill="none" opacity="0.6"/>
   </svg>`,
   Celulares: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="14" y="6" width="20" height="36" rx="4" stroke="white" stroke-width="2.5" fill="none"/>
     <circle cx="24" cy="38" r="2" fill="white" opacity="0.7"/>
     <line x1="19" y1="12" x2="29" y2="12" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
   </svg>`,
-  Bicicletas: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="32" r="8" stroke="white" stroke-width="2.5" fill="none"/>
-    <circle cx="36" cy="32" r="8" stroke="white" stroke-width="2.5" fill="none"/>
-    <path d="M12 32 L20 16 L28 16 L36 32" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
-    <path d="M20 16 L24 32" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="24" cy="16" r="2.5" fill="white" opacity="0.8"/>
+  'Bicicletas Eléctricas': `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
+    <circle cx="36" cy="34" r="7" stroke="white" stroke-width="2.5" fill="none"/>
+    <path d="M19 20 L12 34" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <path d="M19 20 L36 34" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <path d="M19 20 L26 14 L32 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="19" cy="20" r="2" fill="white" opacity="0.8"/>
+    <path d="M28 8 L32 8 L30 12 L34 12" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
   </svg>`,
-  Pantallas: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  'Pantallas/TV': `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="6" y="10" width="36" height="24" rx="3" stroke="white" stroke-width="2.5" fill="none"/>
     <line x1="18" y1="34" x2="30" y2="34" stroke="white" stroke-width="2" stroke-linecap="round"/>
     <line x1="24" y1="34" x2="24" y2="40" stroke="white" stroke-width="2" stroke-linecap="round"/>
     <line x1="16" y1="40" x2="32" y2="40" stroke="white" stroke-width="2" stroke-linecap="round"/>
   </svg>`,
   Audio: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="24" cy="24" r="10" stroke="white" stroke-width="2.5" fill="none"/>
-    <circle cx="24" cy="24" r="4" fill="white" opacity="0.8"/>
-    <path d="M24 14 C24 14 30 8 38 10" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-    <path d="M24 34 C24 34 30 40 38 38" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <path d="M10 24 C10 15 17 8 24 8 C31 8 38 15 38 24" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <rect x="7" y="24" width="7" height="11" rx="3" stroke="white" stroke-width="2.5" fill="none"/>
+    <rect x="34" y="24" width="7" height="11" rx="3" stroke="white" stroke-width="2.5" fill="none"/>
   </svg>`,
   Tablets: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="10" y="6" width="28" height="36" rx="4" stroke="white" stroke-width="2.5" fill="none"/>
@@ -53,25 +56,27 @@ const CATEGORY_SVGS: Record<string, string> = {
     <line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/>
     <line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/>
   </svg>`,
-  Clima: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M14 28 C14 22 18 16 24 16 C30 16 34 20 34 26 C37 26 40 29 40 32 C40 35 37 38 34 38 L14 38 C10 38 8 35 8 32 C8 29 11 28 14 28Z" stroke="white" stroke-width="2.5" fill="none"/>
-    <path d="M18 42 L18 44 M24 42 L24 44 M30 42 L30 44" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  'Climatización': `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="12" width="36" height="16" rx="4" stroke="white" stroke-width="2.5" fill="none"/>
+    <line x1="6" y1="20" x2="42" y2="20" stroke="white" stroke-width="1.5" opacity="0.4"/>
+    <path d="M12 28 L10 36 M18 28 L16 36 M24 28 L24 36 M30 28 L32 36 M36 28 L38 36" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+    <circle cx="35" cy="16" r="2.5" fill="white" opacity="0.8"/>
   </svg>`,
 };
 
 const N = 8;
-const CATEGORIES = ['Motos', 'Celulares', 'Bicicletas', 'Pantallas', 'Audio', 'Tablets', 'Consolas', 'Clima'];
+const CATEGORIES = ['Motos', 'Celulares', 'Bicicletas Eléctricas', 'Pantallas/TV', 'Audio', 'Tablets', 'Consolas', 'Climatización'];
 
 // Aurora accent per category
 const AURORA_COLORS: Record<string, string> = {
-  Motos:      '#7c6fff',
-  Celulares:  '#06b6d4',
-  Bicicletas: '#34d399',
-  Pantallas:  '#f472b6',
-  Audio:      '#fb923c',
-  Tablets:    '#a78bfa',
-  Consolas:   '#38bdf8',
-  Clima:      '#4ade80',
+  Motos:                  '#7c6fff',
+  Celulares:              '#06b6d4',
+  'Bicicletas Eléctricas': '#34d399',
+  'Pantallas/TV':         '#f472b6',
+  Audio:                  '#fb923c',
+  Tablets:                '#a78bfa',
+  Consolas:               '#38bdf8',
+  'Climatización':        '#4ade80',
 };
 
 // Elipse 3D — eje X horizontal, eje Y inclinado
@@ -345,10 +350,15 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           />
           {/* Label */}
           <span style={{
-            fontSize: 9, fontWeight: 700,
+            fontSize: 8, fontWeight: 700,
             color: 'rgba(255,255,255,0.45)',
-            letterSpacing: '0.09em', textTransform: 'uppercase',
+            letterSpacing: '0.06em', textTransform: 'uppercase',
             position: 'relative', zIndex: 1,
+            textAlign: 'center',
+            width: '100%',
+            padding: '0 4px',
+            lineHeight: 1.3,
+            display: 'block',
           }}>
             {label}
           </span>

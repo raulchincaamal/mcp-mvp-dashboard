@@ -34,6 +34,7 @@ export default function ObservatoryPage() {
   const [zoomQuery, setZoomQuery] = useState<string | null>(null);
   const [showPresentation, setShowPresentation] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
+  const [zoomKey, setZoomKey] = useState(0);
 
   const zoomOverlayRef = useRef<HTMLDivElement>(null);
   const buildingRef    = useRef<HTMLDivElement>(null);
@@ -90,7 +91,9 @@ export default function ObservatoryPage() {
 
     gsap.killTweensOf(el);
     gsap.killTweensOf(buildingRef.current);
-    gsap.set(buildingRef.current, { opacity: 0, scale: 0.95 });
+    gsap.set(buildingRef.current, { opacity: 0, scale: 0.95, clearProps: 'transform' });
+    // Forzar re-mount de BuildingAnimation reseteando el key
+    setZoomKey(k => k + 1);
     gsap.set(el, {
       display: 'flex',
       left: rect.left, top: rect.top,
@@ -287,7 +290,7 @@ export default function ObservatoryPage() {
         overflow: 'hidden', opacity: 0,
       }}>
         <div ref={buildingRef} style={{ opacity: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <BuildingAnimation state={ctx.state} query={zoomQuery ?? ''} statusMessage={ctx.statusMessage} />
+          <BuildingAnimation key={zoomKey} state={ctx.state} query={zoomQuery ?? ''} statusMessage={ctx.statusMessage} />
           {ctx.error && (
             <div style={{ marginTop: 16, padding: '12px 20px', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.3)', borderRadius: 10, maxWidth: 480, textAlign: 'center' }}>
               <p style={{ color: '#ff453a', fontSize: 13, margin: 0 }}>{ctx.error}</p>

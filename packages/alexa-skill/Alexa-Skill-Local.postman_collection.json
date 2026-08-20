@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "Alexa Skill - Local Testing",
+    "description": "Collection para probar la Alexa Skill localmente.\n\nInstrucciones:\n1. cd packages/alexa-skill && npm start\n2. Importa esta collection en Postman\n3. Ejecuta los requests para simular invocaciones de Alexa",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001",
+      "description": "URL base del servidor local"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Verifica que el servidor está corriendo."
+      },
+      "response": []
+    },
+    {
+      "name": "LaunchRequest (abrir skill)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": \"1.0\",\n  \"session\": {\n    \"new\": true,\n    \"sessionId\": \"session-001\",\n    \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n    \"user\": { \"userId\": \"test-user-001\" }\n  },\n  \"request\": {\n    \"type\": \"LaunchRequest\",\n    \"requestId\": \"request-001\",\n    \"timestamp\": \"2026-08-19T10:00:00Z\",\n    \"locale\": \"es-MX\"\n  },\n  \"context\": {\n    \"System\": {\n      \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n      \"user\": { \"userId\": \"test-user-001\" },\n      \"device\": { \"deviceId\": \"device-001\" }\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/alexa",
+          "host": ["{{base_url}}"],
+          "path": ["alexa"]
+        },
+        "description": "Simula cuando el usuario dice 'Alexa, abre macropay skill'"
+      },
+      "response": []
+    },
+    {
+      "name": "ConsultarVentasIntent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": \"1.0\",\n  \"session\": {\n    \"new\": false,\n    \"sessionId\": \"session-001\",\n    \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n    \"user\": { \"userId\": \"test-user-001\" }\n  },\n  \"request\": {\n    \"type\": \"IntentRequest\",\n    \"requestId\": \"request-002\",\n    \"timestamp\": \"2026-08-19T10:00:05Z\",\n    \"locale\": \"es-MX\",\n    \"intent\": {\n      \"name\": \"ConsultarVentasIntent\",\n      \"confirmationStatus\": \"NONE\"\n    }\n  },\n  \"context\": {\n    \"System\": {\n      \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n      \"user\": { \"userId\": \"test-user-001\" },\n      \"device\": { \"deviceId\": \"device-001\" }\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/alexa",
+          "host": ["{{base_url}}"],
+          "path": ["alexa"]
+        },
+        "description": "Simula cuando el usuario dice 'consultar ventas' o 'cuánto vendimos'"
+      },
+      "response": []
+    },
+    {
+      "name": "AuraMacropayIntent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": \"1.0\",\n  \"session\": {\n    \"new\": false,\n    \"sessionId\": \"session-001\",\n    \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n    \"user\": { \"userId\": \"test-user-001\" }\n  },\n  \"request\": {\n    \"type\": \"IntentRequest\",\n    \"requestId\": \"request-003\",\n    \"timestamp\": \"2026-08-19T10:00:10Z\",\n    \"locale\": \"es-MX\",\n    \"intent\": {\n      \"name\": \"AuraMacropayIntent\",\n      \"confirmationStatus\": \"NONE\"\n    }\n  },\n  \"context\": {\n    \"System\": {\n      \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n      \"user\": { \"userId\": \"test-user-001\" },\n      \"device\": { \"deviceId\": \"device-001\" }\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/alexa",
+          "host": ["{{base_url}}"],
+          "path": ["alexa"]
+        },
+        "description": "Simula cuando el usuario dice 'qué es el aura de macropay'"
+      },
+      "response": []
+    },
+    {
+      "name": "MapaVentasIntent",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": \"1.0\",\n  \"session\": {\n    \"new\": false,\n    \"sessionId\": \"session-001\",\n    \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n    \"user\": { \"userId\": \"test-user-001\" }\n  },\n  \"request\": {\n    \"type\": \"IntentRequest\",\n    \"requestId\": \"request-004\",\n    \"timestamp\": \"2026-08-19T10:00:15Z\",\n    \"locale\": \"es-MX\",\n    \"intent\": {\n      \"name\": \"MapaVentasIntent\",\n      \"confirmationStatus\": \"NONE\"\n    }\n  },\n  \"context\": {\n    \"System\": {\n      \"application\": { \"applicationId\": \"amzn1.ask.skill.test\" },\n      \"user\": { \"userId\": \"test-user-001\" },\n      \"device\": { \"deviceId\": \"device-001\" }\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/alexa",
+          "host": ["{{base_url}}"],
+          "path": ["alexa"]
+        },
+        "description": "Simula cuando el usuario dice 'mapa de ventas'"
+      },
+      "response": []
+    }
+  ]
+}

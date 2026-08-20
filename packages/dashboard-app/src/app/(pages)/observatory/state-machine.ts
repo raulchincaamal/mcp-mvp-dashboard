@@ -444,10 +444,21 @@ export async function runMockFlow(rawQuery: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[runMockFlow] HTTP ${res.status}:`, body);
+      if (res.status === 401) {
+        observatory.setError('AWS credentials expired. Please renew your SSO session.');
+      } else {
+        observatory.setError(`API error ${res.status}: ${body.slice(0, 120)}`);
+      }
+      observatory.transition('IDLE');
+      return;
+    }
     const json = await res.json();
     uiConfig = json.data ?? json;
   } catch (err) {
+    console.error('[runMockFlow] fetch error:', err);
     observatory.setError(String(err));
     observatory.transition('IDLE');
     return;

@@ -64,6 +64,18 @@ const CATEGORY_SVGS: Record<string, string> = {
 const N = 8;
 const CATEGORIES = ['Motos', 'Celulares', 'Bicicletas', 'Pantallas', 'Audio', 'Tablets', 'Consolas', 'Clima'];
 
+// Aurora accent per category
+const AURORA_COLORS: Record<string, string> = {
+  Motos:      '#7c6fff',
+  Celulares:  '#06b6d4',
+  Bicicletas: '#34d399',
+  Pantallas:  '#f472b6',
+  Audio:      '#fb923c',
+  Tablets:    '#a78bfa',
+  Consolas:   '#38bdf8',
+  Clima:      '#4ade80',
+};
+
 // Elipse 3D — eje X horizontal, eje Y inclinado
 const RX   = 320;   // radio horizontal (pantalla)
 const RY   = 110;   // radio vertical antes de tilt
@@ -75,7 +87,9 @@ const OMEGA = (2 * Math.PI) / (40 * 60); // rad/frame a 60fps
 // Separación angular uniforme: 2π/8 = 45°
 const DELTA_ANGLE = (2 * Math.PI) / N;
 
-const WIDGET_SIZE = 88;
+const WIDGET_SIZE = 96;
+const depthScales  = new Array(N).fill(1);
+const hoverScales  = new Array(N).fill(1); // GSAP tweens this, loop reads it
 
 export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
   const mountRef   = useRef<HTMLDivElement>(null);
@@ -220,9 +234,9 @@ export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
         const sx = ( v.x * 0.5 + 0.5) * window.innerWidth;
         const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
 
-        // Depth: wz ranges from -RY to +RY → map to 0..1
         const depth = (wz + RY) / (2 * RY);
-        const scale = 0.72 + depth * 0.38;
+        const baseScale = 0.72 + depth * 0.38;
+        depthScales[i] = baseScale;
 
         const el = widgetRefs.current[i];
         if (el) {
@@ -230,10 +244,8 @@ export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
           el.style.top     = `${sy - WIDGET_SIZE / 2}px`;
           el.style.zIndex  = String(Math.round(depth * 8) + 1);
           el.style.opacity = String(0.5 + depth * 0.5);
-          // Only set base scale if GSAP isn't animating it
-          if (!el.dataset.hovered) {
-            el.style.transform = `scale(${scale})`;
-          }
+          // Always apply: depth * hover multiplier — no conflict with GSAP
+          el.style.transform = `scale(${baseScale * hoverScales[i]})`;
         }
 
         // Update line
@@ -263,56 +275,92 @@ export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 
-      {CATEGORIES.map((label, i) => (
+      {CATEGORIES.map((label, i) => {
+        const accent = AURORA_COLORS[label];
+        return (
         <div
           key={label}
           ref={el => { widgetRefs.current[i] = el; }}
           style={{
             position: 'absolute',
             width: WIDGET_SIZE, height: WIDGET_SIZE,
-            borderRadius: 18,
-            background: 'var(--surface)',
-            border: '1px solid var(--border-color)',
-            backdropFilter: 'blur(14px)',
-            WebkitBackdropFilter: 'blur(14px)',
+            borderRadius: 20,
+            // Glassmorphism base
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: 6,
             cursor: 'pointer', pointerEvents: 'auto',
-            boxShadow: 'var(--shadow)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
             userSelect: 'none',
             willChange: 'transform, opacity',
+            overflow: 'hidden',
           }}
           onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
           onMouseEnter={e => {
             const el = e.currentTarget;
             el.dataset.hovered = '1';
-            el.style.borderColor = 'rgba(255,255,255,0.6)';
-            el.style.background  = 'var(--surface-2)';
-            el.style.boxShadow   = '0 0 28px rgba(255,255,255,0.18), var(--shadow)';
-            gsap.to(el, { scale: 1.18, duration: 0.3, ease: 'power2.out', overwrite: true });
+            gsap.to(hoverScales, { [i]: 1.15, duration: 0.7, ease: 'power2.inOut', overwrite: true });
+            const glow    = el.querySelector('.aurora-glow')    as HTMLElement;
+            const border  = el.querySelector('.aurora-border')  as HTMLElement;
+            const icon    = el.querySelector('.widget-icon')    as HTMLElement;
+            if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.6, ease: 'power2.inOut' });
+            if (border) gsap.to(border, { opacity: 1, duration: 0.6, ease: 'power2.inOut' });
+            if (icon)   gsap.to(icon,   { opacity: 1, scale: 1.08, duration: 0.6, ease: 'power2.inOut' });
           }}
           onMouseLeave={e => {
             const el = e.currentTarget;
             delete el.dataset.hovered;
-            el.style.borderColor = 'var(--border-color)';
-            el.style.background  = 'var(--surface)';
-            el.style.boxShadow   = 'var(--shadow)';
-            gsap.to(el, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: true });
+            gsap.to(hoverScales, { [i]: 1, duration: 0.8, ease: 'power2.inOut', overwrite: true });
+            const glow    = el.querySelector('.aurora-glow')    as HTMLElement;
+            const border  = el.querySelector('.aurora-border')  as HTMLElement;
+            const icon    = el.querySelector('.widget-icon')    as HTMLElement;
+            if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.8, ease: 'power2.inOut' });
+            if (border) gsap.to(border, { opacity: 0, duration: 0.8, ease: 'power2.inOut' });
+            if (icon)   gsap.to(icon,   { opacity: 0.85, scale: 1, duration: 0.6, ease: 'power2.inOut' });
           }}
         >
+          {/* Aurora glow layer — bottom radial */}
+          <div className="aurora-glow" style={{
+            position: 'absolute', inset: 0,
+            background: `radial-gradient(circle at 50% 120%, ${accent}45 0%, transparent 65%)`,
+            opacity: 0, pointerEvents: 'none', borderRadius: 'inherit',
+          }} />
+          {/* Aurora border glow — separate element, opacity tweened by GSAP */}
+          <div className="aurora-border" style={{
+            position: 'absolute', inset: -1,
+            borderRadius: 21,
+            border: `1px solid ${accent}`,
+            boxShadow: `0 0 18px ${accent}55, inset 0 0 12px ${accent}18`,
+            opacity: 0, pointerEvents: 'none',
+          }} />
+          {/* Top shimmer line */}
+          <div style={{
+            position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+            borderRadius: 1,
+            pointerEvents: 'none',
+          }} />
+          {/* SVG icon */}
           <div
-            style={{ width: 40, height: 40, opacity: 0.85 }}
+            className="widget-icon"
+            style={{ width: 40, height: 40, opacity: 0.85, position: 'relative', zIndex: 1 }}
             dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
           />
+          {/* Label */}
           <span style={{
-            fontSize: 10, fontWeight: 600,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '0.07em', textTransform: 'uppercase',
+            fontSize: 9, fontWeight: 700,
+            color: 'rgba(255,255,255,0.45)',
+            letterSpacing: '0.09em', textTransform: 'uppercase',
+            position: 'relative', zIndex: 1,
           }}>
             {label}
           </span>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

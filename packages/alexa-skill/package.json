@@ -5,13 +5,11 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsup",
-    "start": "node dist/local.js",
-    "dev": "tsx watch src/local.ts",
     "deploy": "npm run build && gcloud functions deploy alexaSkill --source dist --runtime nodejs18 --trigger-http --allow-unauthenticated --region us-central1 --entry-point alexaSkill"
   },
   "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
     "ask-sdk-core": "^2.7.0",
-    "ask-sdk-express-adapter": "^2.0.0",
     "express": "^4.18.0"
   },
   "devDependencies": {

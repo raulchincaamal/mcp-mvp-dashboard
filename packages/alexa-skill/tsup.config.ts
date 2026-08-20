@@ -1,11 +1,12 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/local.ts'],
+  entry: ['src/index.ts'],
   format: ['cjs'],
-  target: 'node18',
+  target: 'node22',
   outDir: 'dist',
   clean: true,
   sourcemap: true,
   splitting: false,
 });
+

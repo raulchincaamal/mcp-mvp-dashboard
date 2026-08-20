@@ -1,12 +1,16 @@
+import { http } from '@google-cloud/functions-framework';
 import { SkillBuilders } from 'ask-sdk-core';
-import { ExpressAdapter } from 'ask-sdk-express-adapter';
-import { Request, Response } from 'express';
 
 import { LaunchRequestHandler } from './handlers/launch';
 import { ConsultarVentasIntentHandler } from './handlers/consultar-ventas';
 import { AuraMacropayIntentHandler } from './handlers/aura-macropay';
 import { MapaVentasIntentHandler } from './handlers/mapa-ventas';
-import { HelpHandler, CancelStopHandler, SessionEndedHandler, ErrorHandler } from './handlers/common';
+import {
+  HelpHandler,
+  CancelStopHandler,
+  SessionEndedHandler,
+  ErrorHandler,
+} from './handlers/common';
 
 const skill = SkillBuilders.custom()
   .addRequestHandlers(
@@ -16,14 +20,20 @@ const skill = SkillBuilders.custom()
     MapaVentasIntentHandler,
     HelpHandler,
     CancelStopHandler,
-    SessionEndedHandler
+    SessionEndedHandler,
   )
   .addErrorHandlers(ErrorHandler)
   .create();
 
-const adapter = new ExpressAdapter(skill, false, false);
+// Cloud Run Functions (2nd gen) entry point
+// Invoca el skill directamente sin ExpressAdapter para evitar conflicto de parsers
+http('alexaSkill', async (req, res) => {
+  try {
+    const response = await skill.invoke(req.body);
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Skill invocation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
-// Cloud Function entry point
-export const alexaSkill = (req: Request, res: Response): void => {
-  adapter.handle(req, res);
-};

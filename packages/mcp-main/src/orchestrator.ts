@@ -11,22 +11,73 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 
+// ─── Normalize string: lowercase + strip accents ─────────────
+function stripAccents(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 // ─── Estado normalization map (no-accent key → accented value) ───
 const ESTADO_MAP: Record<string, string> = {
   'aguascalientes': 'Aguascalientes', 'baja california': 'Baja California',
   'baja california sur': 'Baja California Sur', 'campeche': 'Campeche',
   'chiapas': 'Chiapas', 'chihuahua': 'Chihuahua',
   'ciudad de mexico': 'Ciudad de México', 'cdmx': 'Ciudad de México',
-  'coahuila': 'Coahuila', 'colima': 'Colima', 'durango': 'Durango',
-  'guanajuato': 'Guanajuato', 'guerrero': 'Guerrero', 'hidalgo': 'Hidalgo',
-  'jalisco': 'Jalisco', 'mexico': 'México', 'estado de mexico': 'México',
-  'edomex': 'México', 'michoacan': 'Michoacán', 'morelos': 'Morelos',
-  'nayarit': 'Nayarit', 'nuevo leon': 'Nuevo León', 'oaxaca': 'Oaxaca',
-  'puebla': 'Puebla', 'queretaro': 'Querétaro', 'quintana roo': 'Quintana Roo',
-  'san luis potosi': 'San Luis Potosí', 'sinaloa': 'Sinaloa', 'sonora': 'Sonora',
-  'tabasco': 'Tabasco', 'tamaulipas': 'Tamaulipas', 'tlaxcala': 'Tlaxcala',
-  'veracruz': 'Veracruz', 'yucatan': 'Yucatán', 'zacatecas': 'Zacatecas',
+  'df': 'Ciudad de México', 'distrito federal': 'Ciudad de México',
+  'coahuila': 'Coahuila', 'coahuila de zaragoza': 'Coahuila', 'colima': 'Colima',
+  'durango': 'Durango', 'guanajuato': 'Guanajuato', 'guerrero': 'Guerrero',
+  'hidalgo': 'Hidalgo', 'jalisco': 'Jalisco', 'guadalajara': 'Jalisco',
+  'mexico': 'México', 'estado de mexico': 'México', 'edomex': 'México',
+  'edo mex': 'México', 'michoacan': 'Michoacán', 'morelia': 'Michoacán',
+  'morelos': 'Morelos', 'nayarit': 'Nayarit', 'nuevo leon': 'Nuevo León',
+  'monterrey': 'Nuevo León', 'oaxaca': 'Oaxaca', 'puebla': 'Puebla',
+  'queretaro': 'Querétaro', 'quintana roo': 'Quintana Roo', 'cancun': 'Quintana Roo',
+  'san luis potosi': 'San Luis Potosí', 'sinaloa': 'Sinaloa', 'culiacan': 'Sinaloa',
+  'sonora': 'Sonora', 'hermosillo': 'Sonora', 'tabasco': 'Tabasco',
+  'tamaulipas': 'Tamaulipas', 'tlaxcala': 'Tlaxcala',
+  'veracruz': 'Veracruz', 'xalapa': 'Veracruz',
+  'yucatan': 'Yucatán', 'merida': 'Yucatán', 'zacatecas': 'Zacatecas',
 };
+
+// ─── Categoria normalization map ──────────────────────────────
+const CATEGORIA_MAP: Record<string, string> = {
+  'motos': 'Motos', 'moto': 'Motos', 'motocicleta': 'Motos', 'motocicletas': 'Motos',
+  'celulares': 'Celulares', 'celular': 'Celulares', 'telefono': 'Celulares',
+  'telefonos': 'Celulares', 'smartphone': 'Celulares', 'smartphones': 'Celulares',
+  'iphone': 'Celulares', 'android': 'Celulares',
+  'bicicletas electricas': 'Bicicletas Eléctricas', 'bicicleta electrica': 'Bicicletas Eléctricas',
+  'bicicletas': 'Bicicletas Eléctricas', 'bicicleta': 'Bicicletas Eléctricas', 'ebike': 'Bicicletas Eléctricas',
+  'pantallas': 'Pantallas/TV', 'pantalla': 'Pantallas/TV', 'tv': 'Pantallas/TV',
+  'television': 'Pantallas/TV', 'televisor': 'Pantallas/TV', 'pantallas/tv': 'Pantallas/TV',
+  'audio': 'Audio', 'bocinas': 'Audio', 'bocina': 'Audio', 'altavoz': 'Audio',
+  'tablets': 'Tablets', 'tablet': 'Tablets', 'ipad': 'Tablets',
+  'consolas': 'Consolas', 'consola': 'Consolas', 'videojuegos': 'Consolas',
+  'playstation': 'Consolas', 'xbox': 'Consolas', 'nintendo': 'Consolas',
+  'climatizacion': 'Climatización', 'climatización': 'Climatización',
+  'aire acondicionado': 'Climatización', 'ventilador': 'Climatización',
+  'accesorios': 'Accesorios', 'accesorio': 'Accesorios',
+};
+
+function normalizeEstado(raw: string): string {
+  const key = stripAccents(raw.trim());
+  // Exact match
+  if (ESTADO_MAP[key]) return ESTADO_MAP[key];
+  // Partial match: check if any map key starts with or contains the input
+  for (const [mapKey, value] of Object.entries(ESTADO_MAP)) {
+    if (mapKey.startsWith(key) || key.startsWith(mapKey)) return value;
+  }
+  // Capitalize as fallback
+  return raw.trim().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function normalizeCategoria(raw: string): string {
+  const key = stripAccents(raw.trim());
+  if (CATEGORIA_MAP[key]) return CATEGORIA_MAP[key];
+  // Partial match
+  for (const [mapKey, value] of Object.entries(CATEGORIA_MAP)) {
+    if (key.includes(mapKey) || mapKey.includes(key)) return value;
+  }
+  return raw.trim().replace(/\b\w/g, c => c.toUpperCase());
+}
 
 // ─── Component catalog ────────────────────────────────────────
 
@@ -97,14 +148,69 @@ export async function orchestrate(
       if (Array.isArray(value) && value.length >= 8) delete filters[key];
     }
 
-    // Normalize estado filter: fix missing accents
-    if (typeof filters.estado === 'string') {
-      filters.estado = ESTADO_MAP[filters.estado.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] ?? filters.estado;
+    // Normalize filters: accents, casing, aliases
+    // If ciudad is actually a state alias (e.g. "monterrey" → Nuevo León), promote to estado
+    if (typeof filters.ciudad === 'string') {
+      const ciudadKey = stripAccents(filters.ciudad.trim());
+      if (ESTADO_MAP[ciudadKey]) {
+        filters.estado = ESTADO_MAP[ciudadKey];
+        delete filters.ciudad;
+        console.log(`[orchestrator] ciudad alias promoted to estado → "${filters.estado}"`);
+      }
     }
-    // Normalize estatus_credito
+    // Normalize estado: string or array
+    if (typeof filters.estado === 'string') {
+      filters.estado = normalizeEstado(filters.estado);
+      console.log(`[orchestrator] estado normalized → "${filters.estado}"`);
+    } else if (Array.isArray(filters.estado)) {
+      filters.estado = (filters.estado as string[]).map(normalizeEstado);
+      console.log(`[orchestrator] estado[] normalized → ${JSON.stringify(filters.estado)}`);
+    }
+    // Normalize categoria: string or array
+    if (typeof filters.categoria === 'string') {
+      filters.categoria = normalizeCategoria(filters.categoria);
+      console.log(`[orchestrator] categoria normalized → "${filters.categoria}"`);
+    } else if (Array.isArray(filters.categoria)) {
+      filters.categoria = (filters.categoria as string[]).map(normalizeCategoria);
+      console.log(`[orchestrator] categoria[] normalized → ${JSON.stringify(filters.categoria)}`);
+    }
+    // Normalize estatus_credito: string or array
+    const ESTATUS_MAP: Record<string, string> = {
+      'al_corriente': 'al_corriente', 'corriente': 'al_corriente', 'vigente': 'al_corriente',
+      'atrasado': 'atrasado', 'vencido': 'atrasado', 'mora': 'atrasado', 'debe': 'atrasado',
+      'liquidado': 'liquidado', 'pagado': 'liquidado', 'saldado': 'liquidado', 'terminado': 'liquidado',
+      'cancelado': 'cancelado', 'baja': 'cancelado',
+    };
+    const normalizeEstatus = (v: string) => ESTATUS_MAP[stripAccents(v).replace(/\s+/g, '_')] ?? v;
     if (typeof filters.estatus_credito === 'string') {
-      const ec = filters.estatus_credito.toLowerCase().replace(/\s+/g, '_');
-      if (['al_corriente','atrasado','liquidado','cancelado'].includes(ec)) filters.estatus_credito = ec;
+      filters.estatus_credito = normalizeEstatus(filters.estatus_credito);
+    } else if (Array.isArray(filters.estatus_credito)) {
+      filters.estatus_credito = (filters.estatus_credito as string[]).map(normalizeEstatus);
+    }
+    // Normalize canal_venta
+    const CANAL_MAP: Record<string, string> = {
+      'tienda_fisica': 'tienda_fisica', 'tienda': 'tienda_fisica', 'fisica': 'tienda_fisica', 'presencial': 'tienda_fisica',
+      'en_linea': 'en_linea', 'online': 'en_linea', 'internet': 'en_linea', 'web': 'en_linea', 'linea': 'en_linea',
+      'telefono': 'telefono', 'llamada': 'telefono', 'call': 'telefono',
+    };
+    if (typeof filters.canal_venta === 'string') {
+      filters.canal_venta = CANAL_MAP[stripAccents(filters.canal_venta).replace(/\s+/g, '_')] ?? filters.canal_venta;
+    }
+    // Normalize fecha_venta range: if Bedrock gives a month name instead of range object, convert it
+    if (typeof filters.fecha_venta === 'string') {
+      const MES_MAP: Record<string, string> = {
+        'enero':'01','febrero':'02','marzo':'03','abril':'04','mayo':'05','junio':'06',
+        'julio':'07','agosto':'08','septiembre':'09','octubre':'10','noviembre':'11','diciembre':'12',
+      };
+      const mesKey = stripAccents(filters.fecha_venta.trim());
+      if (MES_MAP[mesKey]) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const mm = MES_MAP[mesKey];
+        const lastDay = new Date(year, parseInt(mm), 0).getDate();
+        filters.fecha_venta = { gte: `${year}-${mm}-01`, lte: `${year}-${mm}-${lastDay}` };
+        console.log(`[orchestrator] fecha_venta month string → range ${JSON.stringify(filters.fecha_venta)}`);
+      }
     }
     const limit = params.limit ?? parsedIntent.limit ?? 200;
 
@@ -172,34 +278,79 @@ async function interpretIntent(intent: string): Promise<{
           {
             text: `Eres un intérprete de intents para el sistema de dashboards de Macropay, empresa mexicana de ventas a crédito de productos (motos, celulares, bicicletas eléctricas, pantallas, tablets, consolas, audio, accesorios). Tu trabajo es convertir lo que pide el usuario en una consulta estructurada JSON.
 
+IMPORTANTE: El usuario puede escribir sin acentos, en minúsculas, con errores ortográficos o abreviaciones. Debes interpretar correctamente aunque el texto no tenga acentos ni mayúsculas.
+
 Responde SOLO con JSON válido, sin markdown, sin explicaciones.
 Estructura exacta:
 {"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null,"title":null}
 
-Campos: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
-Categorías: Motos, Celulares, Bicicletas Eléctricas, Pantallas/TV, Audio, Tablets, Consolas, Climatización, Accesorios.
-Estatus: al_corriente, atrasado, liquidado, cancelado.
-Canales: tienda_fisica, en_linea, telefono.
+Campos disponibles: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
 
-Reglas:
-- "por estado/categoría/mes/vendedor" → groupBy
-- "semanal/por semana/semanas" → groupBy:"fecha_venta", metricField según contexto
-- "mensual/por mes/meses" → groupBy:"fecha_venta"
-- categoría específica mencionada → filters.categoria
-- estado específico mencionado (Yucatán, CDMX, Jalisco, etc.) → filters.estado (nombre oficial con acento). Es un FILTRO, no la dimensión de análisis
-- categoría específica mencionada (Celulares, Motos, etc.) → filters.categoria. Es un FILTRO
-- "atrasado/liquidado/al corriente/cancelado" → filters.estatus_credito
-- "tabla/listado" → template:table
-- "gráfica/chart/tendencia/semanal/mensual" → template:chart
-- "crédito/estatus/pago/morosidad" → template:credit
-- "por categoría/análisis" → template:category
-- "resumen/dashboard/kpi/ejecutivo" → template:executive
+Categorías válidas (escríbelas EXACTAMENTE así en filters.categoria):
+- Motos (también: moto, motocicleta, motos)
+- Celulares (también: celular, telefono, iphone, smartphone)
+- Bicicletas Eléctricas (también: bicicleta, bici, ebike)
+- Pantallas/TV (también: pantalla, tv, television, tele)
+- Audio (también: bocina, altavoz, sonido)
+- Tablets (también: tablet, ipad)
+- Consolas (también: consola, videojuegos, playstation, xbox)
+- Climatización (también: aire acondicionado, ventilador, clima)
+- Accesorios (también: accesorio)
+
+Estados de México (escríbelos EXACTAMENTE así en filters.estado, con acento):
+Aguascalientes, Baja California, Baja California Sur, Campeche, Chiapas, Chihuahua, Ciudad de México, Coahuila, Colima, Durango, Guanajuato, Guerrero, Hidalgo, Jalisco, México, Michoacán, Morelos, Nayarit, Nuevo León, Oaxaca, Puebla, Querétaro, Quintana Roo, San Luis Potosí, Sinaloa, Sonora, Tabasco, Tamaulipas, Tlaxcala, Veracruz, Yucatán, Zacatecas.
+Alias: cdmx/df → Ciudad de México, edomex/edo mex → México, monterrey → Nuevo León, guadalajara → Jalisco, cancun → Quintana Roo, merida → Yucatán.
+
+Estatus de crédito (escríbelos EXACTAMENTE así en filters.estatus_credito):
+- al_corriente (también: corriente, vigente, al dia, al día)
+- atrasado (también: vencido, mora, debe, atrasados)
+- liquidado (también: pagado, saldado, terminado, liquidados)
+- cancelado (también: baja, cancelados)
+
+Canales de venta (escríbelos EXACTAMENTE así en filters.canal_venta):
+- tienda_fisica (también: tienda, fisica, presencial)
+- en_linea (también: online, internet, web, linea)
+- telefono (también: llamada, call)
+
+Reglas de interpretación:
+- "por estado/categoría/mes/vendedor/semana/año" → groupBy con ese campo
+- "semanal/por semana" → groupBy:"fecha_venta", granularity implícita: week
+- "mensual/por mes" → groupBy:"fecha_venta", granularity implícita: month
+- "anual/por año" → groupBy:"fecha_venta", granularity implícita: year
+- estado específico mencionado → filters.estado (es FILTRO, no groupBy)
+- categoría específica mencionada → filters.categoria (es FILTRO, no groupBy)
+- "tabla/listado/registros" → template:table
+- "grafica/chart/tendencia/semanal/mensual/anual/evolucion" → template:chart
+- "credito/estatus/pago/morosidad/atrasado" → template:credit
+- "por categoria/analisis" → template:category
+- "resumen/dashboard/kpi/ejecutivo/general" → template:executive
 - número mencionado (últimas 10, top 20) → limit
 - genera un título descriptivo en español → title
-- DISTINCIÓN CLAVE: dimensión de análisis = lo que varía en el eje (groupBy). Filtro = limita el dataset pero no aparece en el eje
-  Ejemplo: "ventas semanales de celulares en Yucatán" → groupBy:fecha_venta, filters:{categoria:Celulares, estado:Yucatán}
-  Ejemplo: "ventas por estado" → groupBy:estado, filters:{}
-  Ejemplo: "ventas de motos por estado" → groupBy:estado, filters:{categoria:Motos}
+
+FILTROS MÚLTIPLES Y COMBINADOS (muy importante):
+- Si se mencionan 2+ categorías → filters.categoria debe ser un ARRAY: ["Motos", "Celulares"]
+- Si se mencionan 2+ estados → filters.estado debe ser un ARRAY: ["Jalisco", "Yucatán"]
+- Si se mencionan 2+ estatus → filters.estatus_credito debe ser un ARRAY: ["atrasado", "cancelado"]
+- Mes específico mencionado (enero, febrero, agosto, etc.) → filters.fecha_venta como rango: {"gte":"YYYY-MM-01","lte":"YYYY-MM-31"}
+  Usa el año más reciente disponible (2025 o 2026) si no se especifica año.
+  Meses: enero=01, febrero=02, marzo=03, abril=04, mayo=05, junio=06, julio=07, agosto=08, septiembre=09, octubre=10, noviembre=11, diciembre=12
+- Año específico → filters.fecha_venta: {"gte":"YYYY-01-01","lte":"YYYY-12-31"}
+- "este mes" → rango del mes actual, "mes pasado" → rango del mes anterior
+- Combina TODOS los filtros mencionados simultáneamente en el mismo objeto filters
+
+DISTINCIÓN CLAVE — dimensión vs filtro:
+- Dimensión (groupBy) = lo que varía en el eje de la gráfica. Se pierde el análisis si se elimina.
+- Filtro (filters) = limita el dataset pero NO aparece en el eje.
+Ejemplos:
+  "ventas semanales de celulares en yucatan" → groupBy:"fecha_venta", filters:{categoria:"Celulares", estado:"Yucatán"}
+  "ventas por estado" → groupBy:"estado", filters:{}
+  "ventas de motos por estado" → groupBy:"estado", filters:{categoria:"Motos"}
+  "creditos atrasados en jalisco" → groupBy:null, filters:{estatus_credito:"atrasado", estado:"Jalisco"}, template:"credit"
+  "evolucion mensual de ventas" → groupBy:"fecha_venta", filters:{}, template:"chart"
+  "cuantas motos se vendieron" → groupBy:null, filters:{categoria:"Motos"}, metric:"count"
+  "ventas de celulares y motos en yucatan" → groupBy:null, filters:{categoria:["Celulares","Motos"], estado:"Yucatán"}
+  "creditos atrasados de motos en agosto" → groupBy:null, filters:{categoria:"Motos", estatus_credito:"atrasado", fecha_venta:{gte:"2025-08-01",lte:"2025-08-31"}}, template:"credit"
+  "ventas de celulares y motos atrasadas de yucatan en agosto" → filters:{categoria:["Celulares","Motos"], estatus_credito:"atrasado", estado:"Yucatán", fecha_venta:{gte:"2025-08-01",lte:"2025-08-31"}}
 ${CHART_DECISION_PROMPT}`,
           },
         ],
@@ -218,14 +369,19 @@ ${CHART_DECISION_PROMPT}`,
 
     // Infer temporal granularity from intent
     if (parsed.groupBy === 'fecha_venta' && !parsed.granularity) {
-      if (/\ba[ñn]o\b|anual|por\s+a[ñn]o/i.test(intent)) parsed.granularity = 'year';
+      if (/\ba[ñn]o\b|anio\b|anual|por\s+a[ñn]o|por\s+anio/i.test(intent)) parsed.granularity = 'year';
       else if (/\bmes\b|mensual|por\s+mes/i.test(intent)) parsed.granularity = 'month';
       else if (/\bseman/i.test(intent)) parsed.granularity = 'week';
-      else parsed.granularity = 'month'; // default temporal
+      else parsed.granularity = 'month';
     }
 
-    // Temporal intents need more records to show meaningful trends
-    if (parsed.groupBy === 'fecha_venta' && !parsed.limit) {
+    // "top N" de grupos → limit aplica al chart, no a los registros
+    // Siempre traer suficientes registros para agregar correctamente
+    const isTopN = /top\s*\d|mejores?\s*\d|peores?\s*\d|primeros?\s*\d|\d\s*m[aá]s\s+vend/i.test(intent);
+    if (isTopN) {
+      parsed.topN = parsed.limit;  // guardar el N para el chart
+      parsed.limit = 5000;         // traer todos los registros para agregar bien
+    } else if (parsed.groupBy === 'fecha_venta' && !parsed.limit) {
       parsed.limit = 5000;
     } else if (!parsed.limit) {
       parsed.limit = 200;
@@ -336,10 +492,13 @@ REGLAS DE VISUALIZACIÓN (obligatorias):
 COLORES para charts (usa estos exactos):
 ["#49a4d8","#7C3AED","#059669","#D97706","#DC2626","#2563EB","#6366F1","#0891B2","#10B981","#F59E0B","#EF4444","#EC4899","#14B8A6","#8B5CF6","#F97316"]`;
 
+  const topN = (parsedIntent as Record<string, unknown>).topN as number | null;
+
   const userMessage = `Intent del usuario: "${intent}"
 Template sugerido: ${parsedIntent.template}
 GroupBy detectado: ${parsedIntent.groupBy ?? 'ninguno'}
 Métrica: ${parsedIntent.metric}${parsedIntent.metricField ? ` de ${parsedIntent.metricField}` : ''}
+${topN ? `Top N solicitado: ${topN} — muestra SOLO los ${topN} primeros grupos en el chart (ordenados de mayor a menor). El KPIGrid debe reflejar el total de todos los registros, no solo los top ${topN}.` : ''}
 
 CONTEXTO DE LOS DATOS (${totalRecords} registros totales):
 ${JSON.stringify(aggregations, null, 2)}
@@ -457,7 +616,8 @@ Genera el UIConfig JSON ahora.`;
 
   try {
     const parsed = JSON.parse(raw);
-    return (parsed as Record<string, unknown>).uiConfig ?? parsed;
+    const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
+    return repairEmptyCharts(uiConfig, aggregations, parsedIntent);
   } catch {
     // Try to recover truncated JSON by finding the last complete component
     const lastBracket = raw.lastIndexOf('},');
@@ -465,13 +625,69 @@ Genera el UIConfig JSON ahora.`;
       try {
         const recovered = raw.slice(0, lastBracket + 1) + ']}';
         const parsed = JSON.parse(recovered);
-        return (parsed as Record<string, unknown>).uiConfig ?? parsed;
+        const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
+        return repairEmptyCharts(uiConfig, aggregations, parsedIntent);
       } catch {
         /* fall through */
       }
     }
     throw new Error(`Bedrock returned invalid JSON: ${raw.slice(0, 200)}`);
   }
+}
+
+// ─── Repair empty charts using pre-computed aggregations ──────
+
+function repairEmptyCharts(
+  uiConfig: unknown,
+  aggregations: Record<string, unknown>,
+  parsedIntent: { groupBy: string | null; metric: string; metricField: string | null },
+): unknown {
+  const config = uiConfig as Record<string, unknown>;
+  if (!Array.isArray(config?.components)) return uiConfig;
+
+  const groupByAgg = aggregations.groupBy as { data?: { label: string; value: number }[] } | undefined;
+  if (!groupByAgg?.data?.length) return uiConfig;
+
+  const labels = groupByAgg.data.map(d => d.label);
+  const values = groupByAgg.data.map(d => d.value);
+
+  const COLORS = ['#49a4d8','#7C3AED','#059669','#D97706','#DC2626','#2563EB','#6366F1','#0891B2','#10B981','#F59E0B','#EF4444','#EC4899','#14B8A6','#8B5CF6','#F97316'];
+
+  config.components = (config.components as Record<string, unknown>[]).map(comp => {
+    if (comp.component !== 'Chart') return comp;
+    const props = comp.props as Record<string, unknown>;
+    const data = props.data as Record<string, unknown> | undefined;
+
+    // Detect empty: labels array is empty or missing
+    const existingLabels = (data as Record<string, unknown> | undefined)?.labels;
+    const isEmpty = !existingLabels || (Array.isArray(existingLabels) && existingLabels.length === 0);
+    // Also detect if data is an array but empty
+    const isEmptyArray = Array.isArray(data) && data.length === 0;
+
+    if (!isEmpty && !isEmptyArray) return comp;
+
+    console.log(`[orchestrator] repairing empty Chart — injecting ${labels.length} groupBy data points`);
+
+    const bgColors = labels.length === 1 ? COLORS[0] : COLORS.slice(0, labels.length);
+    return {
+      ...comp,
+      props: {
+        ...props,
+        data: {
+          labels,
+          datasets: [{
+            label: parsedIntent.metricField ?? 'Ventas',
+            data: values,
+            backgroundColor: bgColors,
+            borderColor: bgColors,
+            borderWidth: 2,
+          }],
+        },
+      },
+    };
+  });
+
+  return config;
 }
 
 // ─── Aggregation helper ───────────────────────────────────────

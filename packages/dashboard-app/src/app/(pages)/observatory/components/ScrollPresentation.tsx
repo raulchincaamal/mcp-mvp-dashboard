@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import * as echarts from 'echarts';
 import GlassPanel from './GlassPanel';
@@ -20,6 +20,38 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
   const [viewMode, setViewMode] = useState<ViewMode>('presentation');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [autoPlay, setAutoPlay] = useState(true);
+  const presentationRef = useRef<HTMLDivElement>(null);
+  const gridRef2        = useRef<HTMLDivElement>(null);
+  const isTransitioning = useRef(false);
+
+  // Init: presentation visible, grid hidden
+  useEffect(() => {
+    if (presentationRef.current) gsap.set(presentationRef.current, { opacity: 1, visibility: 'visible', pointerEvents: 'auto', y: 0, scale: 1 });
+    if (gridRef2.current)        gsap.set(gridRef2.current,        { opacity: 0, visibility: 'hidden',  pointerEvents: 'none', y: 0, scale: 1 });
+  }, []);
+
+  const switchMode = (next: ViewMode) => {
+    if (isTransitioning.current || next === viewMode) return;
+    isTransitioning.current = true;
+
+    const outEl = viewMode === 'presentation' ? presentationRef.current : gridRef2.current;
+    const inEl  = next    === 'presentation' ? presentationRef.current : gridRef2.current;
+    if (!outEl || !inEl) { setViewMode(next); isTransitioning.current = false; return; }
+
+    gsap.set(inEl, { visibility: 'visible', opacity: 0, y: next === 'presentation' ? 60 : -60, scale: 0.96, pointerEvents: 'none' });
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        gsap.set(outEl, { visibility: 'hidden', pointerEvents: 'none' });
+        gsap.set(inEl,  { pointerEvents: 'auto' });
+        setViewMode(next);
+        isTransitioning.current = false;
+      }
+    });
+
+    tl.to(outEl, { opacity: 0, y: viewMode === 'presentation' ? -60 : 60, scale: 0.96, duration: 0.35, ease: 'power3.in' }, 0);
+    tl.to(inEl,  { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' }, 0.25);
+  };
 
   const totalSlides = insights.length + 2; // header + insights + end
 
@@ -69,76 +101,54 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
 
   return (
     <div style={{ 
-      position: 'absolute',
-      inset: 0,
-      background: 'var(--bg)',
-      overflow: 'hidden',
+      position: 'absolute', inset: 0, background: 'var(--bg)',
+      overflow: 'hidden', display: 'flex', flexDirection: 'column',
     }}>
-      {viewMode === 'presentation' ? (
+      {/* Presentation layer */}
+      <div
+        ref={presentationRef}
+        style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
         <PresentationMode
-          insights={insights}
-          cursor={cursor}
-          query={query}
-          onReset={onReset}
-          currentSlide={currentSlide}
-          totalSlides={totalSlides}
+          insights={insights} cursor={cursor} query={query} onReset={onReset}
+          currentSlide={currentSlide} totalSlides={totalSlides}
         />
-      ) : (
-        <GridMode 
-          insights={insights} 
-          cursor={cursor} 
-          query={query} 
-          onReset={onReset} 
-        />
-      )}
+      </div>
+
+      {/* Grid layer */}
+      <div
+        ref={gridRef2}
+        style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          visibility: 'hidden', opacity: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} />
+      </div>
 
       {/* Controls */}
-      <div style={{
-        position: 'fixed',
-        bottom: 24,
-        left: 24,
-        zIndex: 100,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-      }}>
+      <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {viewMode === 'presentation' && (
-          <GlassPanel cursor={cursor} depth={0.15} glowOnHover={false}>
-            <button
-              onClick={() => setAutoPlay(!autoPlay)}
-              style={{
-                padding: '10px 16px',
-                background: 'transparent',
-                border: 'none',
-                color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)',
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              {autoPlay ? '⏸' : '▶'} {currentSlide + 1}/{totalSlides}
-            </button>
-          </GlassPanel>
+          <button onClick={() => setAutoPlay(!autoPlay)} style={{
+            padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border-color)',
+            borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)',
+          }}>
+            {autoPlay ? '⏸' : '▶'} {currentSlide + 1}/{totalSlides}
+          </button>
         )}
-
-        <GlassPanel cursor={cursor} depth={0.15} glowOnHover={false}>
-          <div style={{ display: 'flex', padding: 4, gap: 2 }}>
-            <ModeButton 
-              active={viewMode === 'presentation'} 
-              onClick={() => setViewMode('presentation')}
-              label="Slides"
-            />
-            <ModeButton 
-              active={viewMode === 'grid'} 
-              onClick={() => setViewMode('grid')}
-              label="Grid"
-            />
-          </div>
-        </GlassPanel>
+        <button onClick={() => switchMode(viewMode === 'presentation' ? 'grid' : 'presentation')} style={{
+          padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border-color)',
+          borderRadius: 8, color: 'var(--text-tertiary)',
+          fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)',
+        }}>
+          {viewMode === 'presentation' ? '⊞ Grid' : '▶ Slides'}
+        </button>
       </div>
 
       {/* Slide dots */}
@@ -263,7 +273,7 @@ function PresentationMode({ insights, cursor, query, onReset, currentSlide, tota
   totalSlides: number;
 }) {
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
       {/* Header slide */}
       <Slide isActive={currentSlide === 0}>
         <HeaderContent query={query} count={insights.length} />
@@ -305,6 +315,7 @@ function Slide({ isActive, children }: { isActive: boolean; children: React.Reac
       style={{
         position: 'absolute',
         inset: 0,
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -519,128 +530,138 @@ function InsightContent({ insight, cursor, index, total }: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GRID MODE - Scrollable grid with expandable cards
+// GRID MODE — WWDC Bento style with directional entry animations
 // ═══════════════════════════════════════════════════════════════════════════
 
-function GridMode({ insights, cursor, query, onReset }: Props) {
-  const gridRef = useRef<HTMLDivElement>(null);
+// Bento layout: assign grid spans based on index
+function getBentoSpan(i: number, insight: InsightData): { col: string; row: string } {
+  const hasChart = !!insight.chartOptions && !insight.listItems;
+  const isList   = !!insight.listItems;
+  // Charts always get 2 rows so they have enough height
+  if (hasChart) {
+    const colPatterns = ['span 2', 'span 1', 'span 2', 'span 1', 'span 1', 'span 2'];
+    return { col: colPatterns[i % colPatterns.length], row: 'span 2' };
+  }
+  if (isList) return { col: 'span 1', row: 'span 2' };
+  // Stat cards: vary cols
+  const patterns = [
+    { col: 'span 1', row: 'span 1' },
+    { col: 'span 2', row: 'span 1' },
+    { col: 'span 1', row: 'span 1' },
+  ];
+  return patterns[i % patterns.length];
+}
+
+const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
+
+function GridMode({ insights, cursor, query, onReset, visible }: Props & { visible: boolean }) {
+  const gridRef  = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [expandedInsight, setExpandedInsight] = useState<InsightData | null>(null);
+  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    if (!gridRef.current) return;
-    const cards = gridRef.current.querySelectorAll('[data-card]');
-    gsap.fromTo(cards,
-      { opacity: 0, y: 30 },
-      { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: 'power2.out' }
-    );
-  }, []);
+    if (!visible) { hasAnimated.current = false; }
+  }, [visible]);
 
-  // Close on ESC
+  useEffect(() => {
+    if (!visible || hasAnimated.current) return;
+    if (!gridRef.current) return;
+
+    // Esperar un frame para que el layout esté calculado
+    requestAnimationFrame(() => {
+      const containerRect = gridRef.current!.getBoundingClientRect();
+      const cx = containerRect.width  / 2;
+      const cy = containerRect.height / 2;
+
+      cardRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const cardCx = rect.left - containerRect.left + rect.width  / 2;
+        const cardCy = rect.top  - containerRect.top  + rect.height / 2;
+        const dx = (cardCx - cx) * 1.8;
+        const dy = (cardCy - cy) * 1.8;
+
+        gsap.fromTo(el,
+          { opacity: 0, x: dx, y: dy, scale: 0.82 },
+          { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.75, delay: i * 0.07, ease: 'power3.out' }
+        );
+      });
+      hasAnimated.current = true;
+    });
+  }, [visible]);
+
   useEffect(() => {
     if (!expandedInsight) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setExpandedInsight(null);
-    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedInsight(null); };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [expandedInsight]);
 
   return (
-    <div style={{ 
-      position: 'absolute',
-      inset: 0,
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Fixed Header */}
-      <div style={{
-        flexShrink: 0,
-        background: 'var(--bg)',
-        padding: '20px 32px 16px',
-        borderBottom: '1px solid var(--border-color)',
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div>
-            <p style={{
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              color: 'var(--primary)',
-              margin: '0 0 4px',
-            }}>
-              Executive Intelligence
-            </p>
-            <h1 style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: 'var(--text)',
-              margin: 0,
-            }}>
-              {query}
-            </h1>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-            }}>
-              {insights.length} insights
-            </span>
-            <button
-              onClick={onReset}
-              style={{
-                padding: '8px 16px',
-                background: 'var(--primary)',
-                border: 'none',
-                borderRadius: 8,
-                color: 'white',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              New Query
-            </button>
-          </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0 }}>
+
+      {/* Header */}
+      <div style={{ flexShrink: 0, padding: '20px 32px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>
+            Executive Intelligence
+          </p>
+          <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {query}
+          </h1>
         </div>
+        <button onClick={onReset} style={{
+          padding: '8px 16px', borderRadius: 10,
+          background: 'var(--surface)', border: '1px solid var(--border-color)',
+          color: 'var(--text)', fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
+          backdropFilter: 'blur(12px)', flexShrink: 0,
+        }}>
+          ← New Query
+        </button>
       </div>
 
-      {/* Scrollable Grid */}
-      <div 
+      {/* Bento Grid — data-lenis-prevent para que Lenis no intercepte el scroll */}
+      <div
         ref={gridRef}
-        style={{ 
+        data-lenis-prevent
+        style={{
           flex: 1,
-          overflow: 'auto',
-          padding: '24px 32px 100px',
+          overflowY: 'scroll',
+          overflowX: 'hidden',
+          padding: '8px 32px 60px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridAutoRows: '160px',
+          gap: 12,
+          alignContent: 'start',
+          minHeight: 0,
+          WebkitOverflowScrolling: 'touch',
         }}
       >
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-          gap: 20,
-        }}>
-          {insights.map((insight) => (
-            <GridCard 
-              key={insight.id} 
-              insight={insight} 
-              cursor={cursor}
+        {insights.map((insight, i) => {
+          const span = getBentoSpan(i, insight);
+          const accent = ACCENT_COLORS[i % ACCENT_COLORS.length];
+          return (
+            <BentoCard
+              key={insight.id}
+              ref={el => { cardRefs.current[i] = el; }}
+              insight={insight}
+              accent={accent}
+              colSpan={span.col}
+              rowSpan={span.row}
               onClick={() => setExpandedInsight(insight)}
             />
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Expanded Modal */}
       {expandedInsight && (
-        <ExpandedModal 
-          insight={expandedInsight} 
+        <ExpandedModal
+          insight={expandedInsight}
           cursor={cursor}
-          onClose={() => setExpandedInsight(null)} 
+          onClose={() => setExpandedInsight(null)}
         />
       )}
     </div>
@@ -816,93 +837,132 @@ function ExpandedModal({ insight, cursor, onClose }: {
   );
 }
 
-function GridCard({ insight, cursor, onClick }: { 
-  insight: InsightData; 
-  cursor: CursorState;
+const BentoCard = React.forwardRef<HTMLDivElement, {
+  insight: InsightData;
+  accent: string;
+  colSpan: string;
+  rowSpan: string;
   onClick: () => void;
-}) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const isStatCard = !insight.chartOptions && !insight.listItems;
-  const isList = !!insight.listItems;
+}>(({ insight, accent, colSpan, rowSpan, onClick }, ref) => {
+  const chartRef  = useRef<HTMLDivElement>(null);
+  const glowRef   = useRef<HTMLDivElement>(null);
+  const isList    = !!insight.listItems;
+  const isStatCard = !insight.chartOptions && !isList;
 
   useEffect(() => {
-    if (isStatCard || isList || !cardRef.current) return;
+    if (!insight.chartOptions || isList) return;
     let instance: echarts.ECharts | null = null;
     let ro: ResizeObserver | null = null;
-    let rafId: number;
-    function waitForVisible() {
-      const el = cardRef.current;
-      if (!el) return;
-      if (parseFloat(getComputedStyle(el).opacity) > 0.5 && chartRef.current && !instance) {
-        instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-        instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 600 } as echarts.EChartsOption);
-        instance.resize();
-        ro = new ResizeObserver(() => instance?.resize());
-        ro.observe(chartRef.current);
-      } else if (!instance) {
-        rafId = requestAnimationFrame(waitForVisible);
-      }
-    }
-    rafId = requestAnimationFrame(waitForVisible);
-    return () => { cancelAnimationFrame(rafId); ro?.disconnect(); instance?.dispose(); };
-  }, [insight.chartOptions, isStatCard, isList]);
+    const t = setTimeout(() => {
+      if (!chartRef.current) return;
+      instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
+      instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 700 } as echarts.EChartsOption);
+      instance.resize();
+      ro = new ResizeObserver(() => instance?.resize());
+      ro.observe(chartRef.current!);
+    }, 300);
+    return () => { clearTimeout(t); ro?.disconnect(); instance?.dispose(); };
+  }, [insight.chartOptions, isList]);
 
   return (
     <div
-      data-card
-      ref={cardRef}
+      ref={ref}
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{ opacity: 0, gridColumn: insight.isPrimary ? '1 / -1' : undefined, cursor: 'pointer', transform: isHovered ? 'scale(1.02)' : 'scale(1)', transition: 'transform 0.2s ease' }}
+      onMouseEnter={e => {
+        gsap.to(e.currentTarget, { scale: 1.02, duration: 0.35, ease: 'power2.out' });
+        if (glowRef.current) gsap.to(glowRef.current, { opacity: 1, duration: 0.35 });
+      }}
+      onMouseLeave={e => {
+        gsap.to(e.currentTarget, { scale: 1, duration: 0.45, ease: 'power2.out' });
+        if (glowRef.current) gsap.to(glowRef.current, { opacity: 0, duration: 0.45 });
+      }}
+      style={{
+        gridColumn: colSpan,
+        gridRow: rowSpan,
+        position: 'relative',
+        borderRadius: 20,
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.09)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '22px 24px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)',
+        willChange: 'transform',
+      }}
     >
+      {/* Aurora glow on hover */}
+      <div ref={glowRef} style={{
+        position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none',
+        background: `radial-gradient(circle at 30% 80%, ${accent}22 0%, transparent 60%)`,
+        borderRadius: 'inherit',
+      }} />
+      {/* Accent top border */}
       <div style={{
-        background: 'var(--surface)', borderRadius: 'var(--radius)',
-        border: `1px solid ${isHovered ? 'var(--primary)' : 'var(--border-color)'}`,
-        boxShadow: isHovered ? 'var(--shadow-lg)' : 'var(--shadow)',
-        transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-        height: '100%', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ padding: '20px 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isStatCard ? 'center' : 'flex-start', gap: 12, marginBottom: (isStatCard || isList) ? 0 : 14 }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--primary)', margin: 0 }}>
-                {insight.title}
-              </p>
-            </div>
-            {insight.metric && (
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: isStatCard ? 28 : 20, fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1 }}>
-                  {insight.metric}
-                </p>
-                {isStatCard && insight.metricLabel && (
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0' }}>{insight.metricLabel}</p>
-                )}
-              </div>
-            )}
-          </div>
+        position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+        background: `linear-gradient(90deg, transparent, ${accent}88, transparent)`,
+      }} />
 
-          {isList && insight.listItems && (
-            <div style={{ marginTop: 12 }}>
-              {insight.listItems.slice(0, 5).map((item, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--border-color)' : 'none', gap: 12 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{item.title}</p>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: item.status === 'positive' ? '#30d158' : item.status === 'negative' ? 'var(--danger)' : 'var(--text)', margin: 0, flexShrink: 0 }}>{item.amount}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!isStatCard && !isList && (
-            <div ref={chartRef} style={{ height: insight.isPrimary ? 220 : (insight.chartType === 'pie' ? 180 : 150) }} />
-          )}
-        </div>
-        <div style={{ position: 'absolute', bottom: 8, right: 10, fontSize: 9, color: 'var(--text-tertiary)', opacity: isHovered ? 0.8 : 0, transition: 'opacity 0.2s ease' }}>
-          Click to expand
-        </div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexShrink: 0 }}>
+        <p style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: accent, margin: 0,
+          opacity: 0.9,
+        }}>
+          {insight.title}
+        </p>
+        {insight.metric && isStatCard && (
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+            {insight.metricLabel}
+          </p>
+        )}
       </div>
+
+      {/* Big metric */}
+      {insight.metric && (
+        <p style={{
+          fontSize: isStatCard ? 52 : 32, fontWeight: 800,
+          color: 'rgba(255,255,255,0.92)', margin: '0 0 8px',
+          lineHeight: 1, letterSpacing: '-0.03em', flexShrink: 0,
+        }}>
+          {insight.metric}
+        </p>
+      )}
+
+      {/* Subtitle */}
+      {insight.subtitle && (
+        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: '0 0 10px', flexShrink: 0 }}>
+          {insight.subtitle}
+        </p>
+      )}
+
+      {/* List */}
+      {isList && insight.listItems && (
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {insight.listItems.slice(0, 5).map((item, i) => (
+            <div key={i} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '7px 0',
+              borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+            }}>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{item.title}</p>
+              <p style={{ fontSize: 12, fontWeight: 700, margin: 0, flexShrink: 0, marginLeft: 8,
+                color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.8)',
+              }}>{item.amount}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Chart */}
+      {insight.chartOptions && !isList && (
+        <div ref={chartRef} style={{ flex: 1, minHeight: 0 }} />
+      )}
     </div>
   );
-}
+});
+BentoCard.displayName = 'BentoCard';

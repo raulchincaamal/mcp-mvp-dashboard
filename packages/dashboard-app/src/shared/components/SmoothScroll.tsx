@@ -13,6 +13,7 @@ export default function SmoothScroll({ children }: { children: React.ReactNode }
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
+      prevent: (node: Element) => node.hasAttribute('data-lenis-prevent'),
     });
 
     // Connect Lenis scroll events to ScrollTrigger so GSAP animations fire correctly

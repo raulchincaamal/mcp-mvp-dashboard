@@ -34,8 +34,40 @@ export default function ObservatoryPage() {
   const coreLightRef   = useRef<HTMLDivElement>(null);
   const pendingRect    = useRef<DOMRect | null>(null);
   const prevState      = useRef(ctx.state);
+  const [apiOnline, setApiOnline] = useState(false);
+
+  // Health check — muestra/oculta CoreLight segun conexion
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000'}/health`, { signal: AbortSignal.timeout(3000) });
+        setApiOnline(res.ok);
+      } catch {
+        setApiOnline(false);
+      }
+    };
+    check();
+    const interval = setInterval(check, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => observatory.subscribe(setCtx), []);
+
+  // Fullscreen con F o F11
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F' || e.key === 'F11') {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   // Slide command bar
   useEffect(() => {
@@ -203,25 +235,28 @@ export default function ObservatoryPage() {
     }}>
 
       {/* Layer 0 — Three.js + widgets */}
-      <AmbientBackground cursor={cursor} onCategoryClick={handleCategoryClick} />
+      <AmbientBackground onCategoryClick={handleCategoryClick} />
 
       {/* Layer 1 — Cursor */}
       <CursorLight cursor={cursor} />
 
-      {/* Layer 2 — CoreLight */}
+      {/* Layer 2 — CoreLight: visible solo si API online */}
       {!showPresentation && !zoomQuery && (
         <div
           ref={coreLightRef}
-          onClick={() => isIdle && setInputOpen(o => !o)}
+          onClick={() => isIdle && apiOnline && setInputOpen(o => !o)}
           style={{
             position: 'absolute',
             left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
             zIndex: 6,
-            cursor: isIdle ? 'pointer' : 'default',
+            cursor: isIdle && apiOnline ? 'pointer' : 'default',
+            opacity: apiOnline ? 1 : 0,
+            transition: 'opacity 1.2s ease',
+            pointerEvents: apiOnline ? 'auto' : 'none',
           }}
         >
-          <CoreLight cursor={cursor} state={ctx.state} />
+          <CoreLight state={ctx.state} />
         </div>
       )}
 

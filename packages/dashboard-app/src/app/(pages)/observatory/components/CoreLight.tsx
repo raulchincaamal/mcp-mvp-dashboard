@@ -2,11 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import type { CursorState } from '../hooks/useCursor';
+import { cursorRef } from '../hooks/useCursor';
 import type { ObservatoryState } from '../state-machine';
 
 interface Props {
-  cursor: CursorState;
   state: ObservatoryState;
 }
 
@@ -20,12 +19,12 @@ const STATE_CONFIG: Record<ObservatoryState, { scale: number; glow: number; puls
   PRESENTATION:              { scale: 0.4,  glow: 0.10, pulse: 0.010 },
 };
 
-export default function CoreLight({ cursor, state }: Props) {
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const innerRef      = useRef<HTMLDivElement>(null);
-  const hoverGlowRef  = useRef<HTMLDivElement>(null);
-  const frameRef      = useRef(0);
-  const baseScale     = useRef(STATE_CONFIG[state].scale);
+export default function CoreLight({ state }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const innerRef     = useRef<HTMLDivElement>(null);
+  const hoverGlowRef = useRef<HTMLDivElement>(null);
+  const frameRef     = useRef(0);
+  const baseScale    = useRef(STATE_CONFIG[state].scale);
 
   // State-driven scale
   useEffect(() => {
@@ -39,7 +38,7 @@ export default function CoreLight({ cursor, state }: Props) {
     });
   }, [state]);
 
-  // Breathing animation
+  // Breathing — reads cursorRef directly, no prop dependency
   useEffect(() => {
     let raf: number;
     const animate = () => {
@@ -48,45 +47,27 @@ export default function CoreLight({ cursor, state }: Props) {
       const t = frameRef.current * cfg.pulse;
       if (innerRef.current) {
         const breathe = 1 + Math.sin(t) * 0.12;
-        const cursorInfluence = 1 + cursor.speed * 0.003;
+        const cursorInfluence = 1 + cursorRef.current.speed * 0.003;
         innerRef.current.style.transform = `scale(${breathe * cursorInfluence})`;
       }
       raf = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(raf);
-  }, [state, cursor.speed]);
+  }, [state]);
 
   const cfg = STATE_CONFIG[state];
 
   const handleMouseEnter = () => {
-    gsap.to(containerRef.current, {
-      scale: baseScale.current * 1.2,
-      duration: 0.7, ease: 'power2.inOut', overwrite: true,
-    });
-    gsap.to(hoverGlowRef.current, {
-      opacity: 1, scale: 1.4,
-      duration: 0.7, ease: 'power2.inOut',
-    });
-    gsap.to(innerRef.current, {
-      boxShadow: '0 0 50px rgba(120,160,255,1), 0 0 100px rgba(80,120,255,0.65)',
-      duration: 0.6, ease: 'power2.inOut',
-    });
+    gsap.to(containerRef.current, { scale: baseScale.current * 1.2, duration: 0.7, ease: 'power2.inOut', overwrite: true });
+    gsap.to(hoverGlowRef.current, { opacity: 1, scale: 1.4, duration: 0.7, ease: 'power2.inOut' });
+    gsap.to(innerRef.current,     { boxShadow: '0 0 50px rgba(120,160,255,1), 0 0 100px rgba(80,120,255,0.65)', duration: 0.6, ease: 'power2.inOut' });
   };
 
   const handleMouseLeave = () => {
-    gsap.to(containerRef.current, {
-      scale: baseScale.current,
-      duration: 0.8, ease: 'power2.inOut', overwrite: true,
-    });
-    gsap.to(hoverGlowRef.current, {
-      opacity: 0, scale: 1,
-      duration: 0.8, ease: 'power2.inOut',
-    });
-    gsap.to(innerRef.current, {
-      boxShadow: '0 0 20px rgba(100,140,255,0.9), 0 0 40px rgba(80,120,255,0.5)',
-      duration: 0.7, ease: 'power2.inOut',
-    });
+    gsap.to(containerRef.current, { scale: baseScale.current, duration: 0.8, ease: 'power2.inOut', overwrite: true });
+    gsap.to(hoverGlowRef.current, { opacity: 0, scale: 1, duration: 0.8, ease: 'power2.inOut' });
+    gsap.to(innerRef.current,     { boxShadow: '0 0 20px rgba(100,140,255,0.9), 0 0 40px rgba(80,120,255,0.5)', duration: 0.7, ease: 'power2.inOut' });
   };
 
   return (
@@ -94,18 +75,12 @@ export default function CoreLight({ cursor, state }: Props) {
       ref={containerRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      style={{
-        position: 'relative',
-        width: 160, height: 160,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
+      style={{ position: 'relative', width: 160, height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
-      {/* Outer glow rings */}
       {[0, 1, 2].map(i => (
         <div key={i} style={{
           position: 'absolute',
-          width:  100 + i * 50,
-          height: 100 + i * 50,
+          width: 100 + i * 50, height: 100 + i * 50,
           borderRadius: '50%',
           border: '1px solid rgba(100,140,255,0.6)',
           opacity: 0.18 - i * 0.04,
@@ -113,35 +88,24 @@ export default function CoreLight({ cursor, state }: Props) {
         }} />
       ))}
 
-      {/* Large outer glow */}
       <div style={{
-        position: 'absolute',
-        width: 220, height: 220, borderRadius: '50%',
+        position: 'absolute', width: 220, height: 220, borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(80,120,255,0.18) 0%, transparent 70%)',
-        filter: 'blur(25px)',
-        opacity: cfg.glow * 0.7,
+        filter: 'blur(25px)', opacity: cfg.glow * 0.7,
       }} />
 
-      {/* Hover burst glow — separate layer, opacity 0 by default */}
       <div ref={hoverGlowRef} style={{
-        position: 'absolute',
-        width: 260, height: 260, borderRadius: '50%',
+        position: 'absolute', width: 260, height: 260, borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(120,160,255,0.28) 0%, rgba(80,100,255,0.12) 40%, transparent 70%)',
-        filter: 'blur(30px)',
-        opacity: 0,
-        pointerEvents: 'none',
+        filter: 'blur(30px)', opacity: 0, pointerEvents: 'none',
       }} />
 
-      {/* Medium glow */}
       <div style={{
-        position: 'absolute',
-        width: 110, height: 110, borderRadius: '50%',
+        position: 'absolute', width: 110, height: 110, borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(100,140,255,0.5) 0%, transparent 60%)',
-        filter: 'blur(12px)',
-        opacity: cfg.glow * 0.35,
+        filter: 'blur(12px)', opacity: cfg.glow * 0.35,
       }} />
 
-      {/* Inner bright core */}
       <div ref={innerRef} style={{
         width: 36, height: 36, borderRadius: '50%',
         background: 'radial-gradient(circle, #fff 0%, rgba(120,160,255,1) 40%, transparent 100%)',

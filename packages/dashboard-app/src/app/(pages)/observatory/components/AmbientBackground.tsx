@@ -3,11 +3,9 @@
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
-import type { CursorState } from '../hooks/useCursor';
+import { cursorRef } from '../hooks/useCursor';
 
 interface Props {
-  cursor: CursorState;
-  centerElement?: HTMLElement | null;
   onCategoryClick?: (label: string, rect: DOMRect) => void;
 }
 
@@ -91,15 +89,12 @@ const WIDGET_SIZE = 96;
 const depthScales  = new Array(N).fill(1);
 const hoverScales  = new Array(N).fill(1); // GSAP tweens this, loop reads it
 
-export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
-  const mountRef   = useRef<HTMLDivElement>(null);
-  const rafRef     = useRef<number>(0);
-  const widgetRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const angleRef   = useRef(0); // ángulo base — todos los widgets son base + i*DELTA_ANGLE
+export default function AmbientBackground({ onCategoryClick }: Props) {
+  const mountRef    = useRef<HTMLDivElement>(null);
+  const rafRef      = useRef<number>(0);
+  const widgetRefs  = useRef<(HTMLDivElement | null)[]>([]);
+  const angleRef    = useRef(0);
   const lineGeosRef = useRef<THREE.BufferGeometry[]>([]);
-  const cursorRef  = useRef(cursor);
-
-  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -182,7 +177,6 @@ export default function AmbientBackground({ cursor, onCategoryClick }: Props) {
     const animate = () => {
       rafRef.current = requestAnimationFrame(animate);
       const cur = cursorRef.current;
-
       // Camera follows cursor gently
       camera.position.x += (cur.normalizedX * -25 - camera.position.x) * 0.04;
       camera.position.y += (cur.normalizedY *  18 - camera.position.y) * 0.04;

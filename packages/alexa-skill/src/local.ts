@@ -1,17 +1,15 @@
-const express = require('express');
-const Alexa = require('ask-sdk-core');
-const { ExpressAdapter } = require('ask-sdk-express-adapter');
-const config = require('./config');
+import express from 'express';
+import { SkillBuilders } from 'ask-sdk-core';
+import { ExpressAdapter } from 'ask-sdk-express-adapter';
+import { config } from './config';
 
-// Handlers
-const LaunchRequestHandler = require('./handlers/launch');
-const ConsultarVentasIntentHandler = require('./handlers/consultar-ventas');
-const AuraMacropayIntentHandler = require('./handlers/aura-macropay');
-const MapaVentasIntentHandler = require('./handlers/mapa-ventas');
-const { HelpHandler, CancelStopHandler, SessionEndedHandler, ErrorHandler } = require('./handlers/common');
+import { LaunchRequestHandler } from './handlers/launch';
+import { ConsultarVentasIntentHandler } from './handlers/consultar-ventas';
+import { AuraMacropayIntentHandler } from './handlers/aura-macropay';
+import { MapaVentasIntentHandler } from './handlers/mapa-ventas';
+import { HelpHandler, CancelStopHandler, SessionEndedHandler, ErrorHandler } from './handlers/common';
 
-// Build skill
-const skill = Alexa.SkillBuilders.custom()
+const skill = SkillBuilders.custom()
   .addRequestHandlers(
     LaunchRequestHandler,
     ConsultarVentasIntentHandler,
@@ -26,12 +24,10 @@ const skill = Alexa.SkillBuilders.custom()
 
 const adapter = new ExpressAdapter(skill, false, false);
 
-// Express server for local development
 const app = express();
 app.post('/alexa', adapter.getRequestHandlers());
 
-// Health check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', skill: config.SKILL_NAME });
 });
 

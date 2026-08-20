@@ -1,11 +1,13 @@
-const Alexa = require('ask-sdk-core');
+import { getRequestType, getIntentName, HandlerInput, RequestHandler } from 'ask-sdk-core';
 
-const AuraMacropayIntentHandler = {
-  canHandle(handlerInput) {
-    return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
-      && Alexa.getIntentName(handlerInput.requestEnvelope) === 'AuraMacropayIntent';
+export const AuraMacropayIntentHandler: RequestHandler = {
+  canHandle(handlerInput: HandlerInput) {
+    return (
+      getRequestType(handlerInput.requestEnvelope) === 'IntentRequest' &&
+      getIntentName(handlerInput.requestEnvelope) === 'AuraMacropayIntent'
+    );
   },
-  handle(handlerInput) {
+  handle(handlerInput: HandlerInput) {
     const speechText = `El Aura de Macropay es nuestra esencia como empresa. Es lo que nos define, lo que nos mueve y lo que nos diferencia de cualquier otra compañía en el mercado.
 
 Nace de la convicción de que el acceso al crédito puede transformar vidas en México. No somos solo una empresa de tecnología financiera, somos un movimiento que busca democratizar las oportunidades.
@@ -34,7 +36,5 @@ Eso es el Aura de Macropay. ¿Puedo ayudarte con algo más?`;
       .speak(speechText)
       .reprompt('¿Necesitas algo más?')
       .getResponse();
-  }
+  },
 };
-
-module.exports = AuraMacropayIntentHandler;

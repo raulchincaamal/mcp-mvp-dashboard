@@ -11,4 +11,4 @@ gcloud functions deploy alexaSkill \
   --allow-unauthenticated \
   --region us-central1 \
   --entry-point alexaSkill \
-  --set-secrets "SUITE_CORPORATIVO_URL=SUITE_CORPORATIVO_URL:latest,GRAPH_API_URL=GRAPH_API_URL:latest,SKILL_NAME=SKILL_NAME:latest"
+  --set-secrets "GRAPH_API_URL=GRAPH_API_URL:latest"

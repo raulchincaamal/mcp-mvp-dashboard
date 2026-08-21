@@ -358,7 +358,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
             x: sx - WIDGET_SIZE / 2,
             y: sy - totalH / 2,
             zIndex: Math.round(depth * 100) + 10,
-            opacity: (0.4 + depth * 0.6) * splashOpacities[i],
+            opacity: 1,
             scale: baseScale * splashScales[i],
             visibility: cardVisible[i] ? 'visible' : 'hidden',
           });
@@ -406,9 +406,8 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       });
       const tl = gsap.timeline();
       for (let i = 0; i < N; i++) {
-        tl.to(splashScales,    { [i]: 1, duration: 0.6, ease: 'back.out(1.6)' }, i * 0.08);
-        tl.to(splashOpacities, { [i]: 1, duration: 0.5, ease: 'power2.out'    }, i * 0.08);
-        tl.to(lineProgresses,  { [i]: 1, duration: 0.8, ease: 'power3.out'    }, i * 0.08 + 0.1);
+        tl.to(splashScales,   { [i]: 1, duration: 0.7, ease: 'back.out(1.6)' }, i * 0.08);
+        tl.to(lineProgresses, { [i]: 1, duration: 0.8, ease: 'power3.out'    }, i * 0.08 + 0.1);
       }
     };
     requestAnimationFrame(waitForPosition);
@@ -423,94 +422,98 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
+      {/* Three.js canvas */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 
       {CATEGORIES.map((label, i) => {
         const accent = AURORA_COLORS[label];
         return (
-        <div
-          key={label}
-          ref={el => { widgetRefs.current[i] = el; }}
-          style={{
-            position: 'absolute',
-            width: WIDGET_SIZE,
-            cursor: 'pointer', pointerEvents: 'auto',
-            userSelect: 'none',
-            willChange: 'transform',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center',
-            visibility: 'hidden',
-          }}
-          onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
-          onMouseEnter={e => {
-            const el = e.currentTarget;
-            gsap.to(omegaSpeed, { v: 0, duration: 1.2, ease: 'power3.out', overwrite: true });
-            gsap.to(hoverScales, { [i]: 1.08, duration: 0.5, ease: 'power2.out', overwrite: true });
-            const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
-            const border = el.querySelector('.aurora-border') as HTMLElement;
-            if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
-            if (border) gsap.to(border, { opacity: 1, duration: 0.4, ease: 'power2.out' });
-          }}
-          onMouseLeave={e => {
-            const el = e.currentTarget;
-            gsap.to(omegaSpeed, { v: OMEGA, duration: 2.0, ease: 'power2.inOut', overwrite: true });
-            gsap.to(hoverScales, { [i]: 1, duration: 0.8, ease: 'power2.inOut', overwrite: true });
-            const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
-            const border = el.querySelector('.aurora-border') as HTMLElement;
-            if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
-            if (border) gsap.to(border, { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
-          }}
-        >
-          {/* Card */}
-          <div style={{
-            width: WIDGET_SIZE, height: CARD_H,
-            borderRadius: 18,
-            background: `var(--surface-2)`,
-            border: `1px solid ${accent}50`,
-            boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
-            overflow: 'hidden', position: 'relative', flexShrink: 0,
-          }}>
-            {/* Accent tint */}
+          <div
+            key={label}
+            ref={el => { widgetRefs.current[i] = el; }}
+            style={{
+              position: 'absolute',
+              width: WIDGET_SIZE,
+              cursor: 'pointer', pointerEvents: 'auto',
+              userSelect: 'none',
+              willChange: 'transform',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center',
+              visibility: 'hidden',
+            }}
+            onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
+            onMouseEnter={e => {
+              const el = e.currentTarget;
+              gsap.to(omegaSpeed, { v: 0, duration: 1.2, ease: 'power3.out', overwrite: true });
+              gsap.to(hoverScales, { [i]: 1.08, duration: 0.5, ease: 'power2.out', overwrite: true });
+              const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
+              const border = el.querySelector('.aurora-border') as HTMLElement;
+              if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
+              if (border) gsap.to(border, { opacity: 1, duration: 0.4, ease: 'power2.out' });
+            }}
+            onMouseLeave={e => {
+              const el = e.currentTarget;
+              gsap.to(omegaSpeed, { v: OMEGA, duration: 2.0, ease: 'power2.inOut', overwrite: true });
+              gsap.to(hoverScales, { [i]: 1, duration: 0.8, ease: 'power2.inOut', overwrite: true });
+              const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
+              const border = el.querySelector('.aurora-border') as HTMLElement;
+              if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
+              if (border) gsap.to(border, { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
+            }}
+          >
+            {/* Card */}
             <div style={{
-              position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, ${accent}25 0%, transparent 60%)`,
+              width: WIDGET_SIZE, height: CARD_H,
+              borderRadius: 18,
+              background: `${accent}18`,
+              border: `1px solid ${accent}50`,
+              boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
+              overflow: 'hidden', position: 'relative', flexShrink: 0,
+            }}>
+              {/* Solid bg — reads actual --bg value */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                backgroundColor: 'var(--bg)',
+                opacity: 0.92,
+              }} />
+              {/* Accent tint */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: `linear-gradient(135deg, ${accent}30 0%, transparent 60%)`,
+                pointerEvents: 'none',
+              }} />
+              {/* Hover glow */}
+              <div className="aurora-glow" style={{
+                position: 'absolute', inset: 0,
+                background: `radial-gradient(ellipse at 30% 50%, ${accent}40 0%, transparent 70%)`,
+                opacity: 0, pointerEvents: 'none',
+              }} />
+              {/* Border highlight on hover */}
+              <div className="aurora-border" style={{
+                position: 'absolute', inset: -1, borderRadius: 19,
+                border: `1.5px solid ${accent}80`,
+                opacity: 0, pointerEvents: 'none',
+              }} />
+              {/* Top shine */}
+              <div style={{
+                position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                pointerEvents: 'none',
+              }} />
+              <WidgetCard label={label} accent={accent} />
+            </div>
+            {/* Label */}
+            <span style={{
+              marginTop: 6, fontSize: 11, fontWeight: 500,
+              color: 'rgba(255,255,255,0.6)',
+              textAlign: 'center', lineHeight: 1.2, letterSpacing: '0.01em',
+              maxWidth: WIDGET_SIZE,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               pointerEvents: 'none',
-            }} />
-            {/* Hover glow */}
-            <div className="aurora-glow" style={{
-              position: 'absolute', inset: 0,
-              background: `radial-gradient(ellipse at 30% 50%, ${accent}30 0%, transparent 70%)`,
-              opacity: 0, pointerEvents: 'none',
-            }} />
-            {/* Border highlight on hover */}
-            <div className="aurora-border" style={{
-              position: 'absolute', inset: -1, borderRadius: 19,
-              border: `1.5px solid ${accent}70`,
-              opacity: 0, pointerEvents: 'none',
-            }} />
-            {/* Top shine */}
-            <div style={{
-              position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
-              pointerEvents: 'none',
-            }} />
-            <WidgetCard label={label} accent={accent} />
+            }}>
+              {label}
+            </span>
           </div>
-          {/* Label below */}
-          <span style={{
-            marginTop: 6,
-            fontSize: 11, fontWeight: 500,
-            color: 'rgba(255,255,255,0.6)',
-            textAlign: 'center',
-            lineHeight: 1.2,
-            letterSpacing: '0.01em',
-            maxWidth: WIDGET_SIZE,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-          }}>
-            {label}
-          </span>
-        </div>
         );
       })}
     </div>

@@ -10,6 +10,7 @@ import CursorLight from './components/CursorLight';
 import CoreLight from './components/CoreLight';
 import BuildingAnimation from './components/BuildingAnimation';
 import ScrollPresentation from './components/ScrollPresentation';
+import HotCorner from './components/HotCorner';
 
 // Monta useCursor una sola vez para inicializar el RAF global del cursorRef
 // Sin pasar cursor como prop a nadie — evita re-renders en cascada
@@ -58,10 +59,12 @@ export default function ObservatoryPage() {
 
   useEffect(() => observatory.subscribe(setCtx), []);
 
-  // Fullscreen with F11 only (not F key to allow typing)
+  // Fullscreen with F11 or Ctrl+Shift+F
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'F11') {
+      const isF11 = e.key === 'F11';
+      const isCtrlShiftF = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f';
+      if (isF11 || isCtrlShiftF) {
         e.preventDefault();
         if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
         else document.exitFullscreen().catch(() => {});
@@ -240,8 +243,11 @@ export default function ObservatoryPage() {
       {/* Layer 0 — Three.js + widgets */}
       <AmbientBackground onCategoryClick={handleCategoryClick} />
 
-      {/* Layer 1 — Cursor light (lee cursorRef directamente) */}
+      {/* Layer 1 — Cursor light */}
       <CursorLight />
+
+      {/* Hot corner — bottom left theme switcher */}
+      <HotCorner />
 
       {/* Layer 2 — CoreLight: siempre montado, GSAP controla opacity */}
       <div

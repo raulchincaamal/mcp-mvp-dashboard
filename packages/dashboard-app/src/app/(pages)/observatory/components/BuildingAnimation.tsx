@@ -104,13 +104,24 @@ function Phase({ active, children }: { active: boolean; children: React.ReactNod
   useEffect(() => {
     if (!ref.current) return;
     if (active) {
-      gsap.fromTo(ref.current, { opacity: 0, y: 24, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: 'power3.out' });
+      gsap.killTweensOf(ref.current);
+      gsap.fromTo(ref.current,
+        { opacity: 0, y: 40, scale: 0.92, filter: 'blur(8px)' },
+        { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'power3.out' }
+      );
     } else {
-      gsap.to(ref.current, { opacity: 0, y: -16, scale: 0.95, duration: 0.3, ease: 'power2.in' });
+      gsap.killTweensOf(ref.current);
+      gsap.to(ref.current,
+        { opacity: 0, y: -30, scale: 0.94, filter: 'blur(6px)', duration: 0.4, ease: 'power2.in' }
+      );
     }
   }, [active]);
   return (
-    <div ref={ref} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, opacity: 0, pointerEvents: 'none' }}>
+    <div ref={ref} style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 28, opacity: 0, pointerEvents: 'none',
+    }}>
       {children}
     </div>
   );
@@ -222,10 +233,13 @@ function PhaseFetching({ active }: { active: boolean }) {
   }, [active]);
 
   const rows = [
-    { w: '85%', color: '#06b6d4' }, { w: '60%', color: '#34d399' },
-    { w: '75%', color: '#a78bfa' }, { w: '45%', color: '#f472b6' },
-    { w: '90%', color: '#06b6d4' }, { w: '55%', color: '#34d399' },
-    { w: '70%', color: '#a78bfa' },
+    { w: '85%', color: 'var(--primary)' },
+    { w: '60%', color: 'var(--primary-dark)' },
+    { w: '75%', color: 'var(--primary)' },
+    { w: '45%', color: 'var(--primary-dark)' },
+    { w: '90%', color: 'var(--primary)' },
+    { w: '55%', color: 'var(--primary-dark)' },
+    { w: '70%', color: 'var(--primary)' },
   ];
 
   return (
@@ -255,7 +269,10 @@ function PhaseGenerating({ active }: { active: boolean }) {
   const dotsRef  = useRef<(SVGCircleElement | null)[]>([]);
 
   const heights = [42, 74, 36, 88, 54, 92, 46, 72];
-  const colors  = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
+  const colors  = [
+    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
+    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
+  ];
   const pts     = heights.map((h, i) => [7 + i * 12.5, 94 - h * 0.86]);
   const d       = `M ${pts.map(p => p.join(' ')).join(' L ')}`;
   const area    = `${d} L ${pts[pts.length-1][0]} 94 L ${pts[0][0]} 94 Z`;
@@ -314,16 +331,19 @@ function PhaseGenerating({ active }: { active: boolean }) {
         <svg style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="gl" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#34d399" /><stop offset="50%" stopColor="#06b6d4" /><stop offset="100%" stopColor="#a78bfa" />
+              <stop offset="0%" stopColor="#49a4d8" />
+              <stop offset="50%" stopColor="#2d88bf" />
+              <stop offset="100%" stopColor="#49a4d8" />
             </linearGradient>
             <linearGradient id="ga" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" /><stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+              <stop offset="0%" stopColor="#49a4d8" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#49a4d8" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path ref={areaRef} d={area} fill="url(#ga)" opacity="0" />
           <path ref={lineRef} d={d} fill="none" stroke="url(#gl)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity="0" />
           {pts.map((p, i) => (
-            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke={colors[i]} strokeWidth="1.5" opacity="0" style={{ filter: `drop-shadow(0 0 4px ${colors[i]})` }} />
+            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#49a4d8" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #49a4d8)' }} />
           ))}
         </svg>
       </div>
@@ -373,26 +393,69 @@ function PhaseReady({ active }: { active: boolean }) {
 
 // ── Steps ─────────────────────────────────────────────────
 function Steps({ phase }: { phase: number }) {
-  const labels = ['Recibiendo', 'Analizando', 'Obteniendo', 'Generando', 'Listo'];
+  const steps = [
+    { label: 'Recibiendo', icon: '◈' },
+    { label: 'Analizando', icon: '◎' },
+    { label: 'Obteniendo', icon: '⬡' },
+    { label: 'Generando',  icon: '◇' },
+    { label: 'Listo',      icon: '✦' },
+  ];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      {labels.map((label, i) => {
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+      {steps.map(({ label, icon }, i) => {
         const active = phase === i + 1;
         const done   = phase > i + 1;
         return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+            {/* Step */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 72 }}>
               <div style={{
-                width: active ? 12 : 8, height: active ? 12 : 8, borderRadius: '50%',
-                background: done ? '#34d399' : active ? 'var(--primary)' : 'var(--surface-3)',
-                boxShadow: active ? '0 0 16px var(--primary)' : done ? '0 0 8px #34d399' : 'none',
+                width: active ? 36 : 28, height: active ? 36 : 28,
+                borderRadius: '50%',
+                background: done
+                  ? 'linear-gradient(135deg, #34d399, #06b6d4)'
+                  : active
+                    ? 'linear-gradient(135deg, var(--primary), var(--primary-dark))'
+                    : 'var(--surface-3)',
+                border: active ? '2px solid var(--primary-light)' : done ? 'none' : '1px solid var(--border-color)',
+                boxShadow: active ? '0 0 20px var(--primary), 0 0 40px var(--primary-light)' : done ? '0 0 10px #34d39966' : 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                fontSize: active ? 14 : 11,
+                color: done || active ? '#fff' : 'var(--text-tertiary)',
+                animation: active ? 'stepPulse 2s ease-in-out infinite' : 'none',
+              }}>
+                {done ? '✓' : icon}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: active ? 700 : 400,
+                color: done ? '#34d399' : active ? 'var(--primary)' : 'var(--text-tertiary)',
+                opacity: active || done ? 1 : 0.4,
+                letterSpacing: '0.04em',
                 transition: 'all 0.3s',
-                animation: active ? 'stepPulse 1.2s ease-in-out infinite' : 'none',
-              }} />
-              <span style={{ fontSize: 9, fontWeight: active ? 600 : 400, color: done ? '#34d399' : active ? 'var(--primary)' : 'var(--text-tertiary)', opacity: active || done ? 1 : 0.4 }}>{label}</span>
+                whiteSpace: 'nowrap',
+              }}>{label}</span>
             </div>
+            {/* Connector */}
             {i < 4 && (
-              <div style={{ width: 28, height: 2, marginBottom: 18, background: done ? 'linear-gradient(90deg, #34d399, var(--primary))' : 'var(--surface-3)', borderRadius: 1, transition: 'all 0.4s' }} />
+              <div style={{
+                width: 40, height: 2, marginBottom: 22, flexShrink: 0,
+                background: done
+                  ? 'linear-gradient(90deg, #34d399, var(--primary))'
+                  : 'var(--surface-3)',
+                borderRadius: 1,
+                transition: 'background 0.5s ease',
+                position: 'relative', overflow: 'hidden',
+              }}>
+                {/* Animated fill for active connector */}
+                {phase === i + 2 && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(90deg, #34d399, var(--primary))',
+                    animation: 'connectorFill 0.5s ease-out forwards',
+                  }} />
+                )}
+              </div>
             )}
           </div>
         );
@@ -417,7 +480,7 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
   }, [state]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 36, overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, overflow: 'hidden' }}>
       <NodeCanvas />
 
       {/* Grid */}
@@ -428,22 +491,27 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
       }} />
 
       {/* Center glow */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 50% 50% at center, var(--primary-light), transparent)' }} />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 60% at center, var(--primary-light), transparent)' }} />
 
       {/* Query */}
       {query && (
         <p style={{
-          position: 'relative', zIndex: 1, fontSize: 20, fontWeight: 600, color: 'var(--text)',
-          textAlign: 'center', margin: 0, maxWidth: 560, padding: '0 24px',
+          position: 'relative', zIndex: 1,
+          fontSize: 'clamp(16px, 2vw, 22px)', fontWeight: 600, color: 'var(--text)',
+          textAlign: 'center', margin: 0, maxWidth: 'min(640px, 80vw)', padding: '0 24px',
           opacity: phase >= 1 ? 1 : 0, transform: phase >= 1 ? 'translateY(0)' : 'translateY(16px)',
           transition: 'opacity 0.5s ease, transform 0.5s ease',
         }}>
-          <span style={{ color: 'var(--primary)', opacity: 0.4 }}>"</span>{query}<span style={{ color: 'var(--primary)', opacity: 0.4 }}>"</span>
+          <span style={{ color: 'var(--primary)', opacity: 0.4 }}>“</span>{query}<span style={{ color: 'var(--primary)', opacity: 0.4 }}>”</span>
         </p>
       )}
 
-      {/* Phase stage */}
-      <div style={{ position: 'relative', zIndex: 1, width: 'min(560px, 80vw)', height: 340 }}>
+      {/* Phase stage — takes most of the screen */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        width: 'min(700px, 90vw)',
+        height: 'clamp(300px, 45vh, 480px)',
+      }}>
         <PhaseReceiving  active={phase === 1} />
         <PhaseAnalyzing  active={phase === 2} />
         <PhaseFetching   active={phase === 3} />
@@ -457,15 +525,24 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
       </div>
 
       {statusMessage && (
-        <p style={{ position: 'relative', zIndex: 1, fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+        <p style={{
+          position: 'relative', zIndex: 1,
+          fontSize: 11, color: 'var(--primary)',
+          letterSpacing: '0.12em', textTransform: 'uppercase', margin: 0,
+          opacity: 0.7,
+        }}>
           {statusMessage}
         </p>
       )}
 
       <style>{`
         @keyframes stepPulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.35); }
+          0%, 100% { transform: scale(1); box-shadow: 0 0 20px var(--primary), 0 0 40px var(--primary-light); }
+          50%       { transform: scale(1.1); box-shadow: 0 0 30px var(--primary), 0 0 60px var(--primary-light); }
+        }
+        @keyframes connectorFill {
+          from { transform: scaleX(0); transform-origin: left; }
+          to   { transform: scaleX(1); transform-origin: left; }
         }
       `}</style>
     </div>

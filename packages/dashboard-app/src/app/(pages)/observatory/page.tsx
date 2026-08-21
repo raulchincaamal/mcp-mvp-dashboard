@@ -215,11 +215,14 @@ export default function ObservatoryPage() {
     observatory.transition('IDLE');
   }, []);
 
-  // CoreLight fade in/out segun apiOnline
+  // Splash: animate CoreLight in on mount
   useEffect(() => {
     if (!coreLightRef.current) return;
-    gsap.to(coreLightRef.current, { opacity: apiOnline ? 1 : 0, duration: 1.2, ease: 'power2.inOut' });
-  }, [apiOnline]);
+    gsap.fromTo(coreLightRef.current,
+      { opacity: 0, scale: 0.4 },
+      { opacity: 1, scale: 1, duration: 1.2, ease: 'back.out(1.4)', delay: 0.3 }
+    );
+  }, []);
 
   const isIdle = ctx.state === 'IDLE';
 
@@ -242,13 +245,13 @@ export default function ObservatoryPage() {
       {/* Layer 2 — CoreLight: siempre montado, GSAP controla opacity */}
       <div
         ref={coreLightRef}
-        onClick={() => isIdle && apiOnline && setInputOpen(o => !o)}
+        onClick={() => isIdle && setInputOpen(o => !o)}
         style={{
           position: 'absolute', left: '50%', top: '50%',
           transform: 'translate(-50%, -50%)',
           zIndex: 6, opacity: 0,
-          cursor: isIdle && apiOnline ? 'pointer' : 'default',
-          pointerEvents: (apiOnline && !showPresentation && !zoomQuery) ? 'auto' : 'none',
+          cursor: isIdle ? 'pointer' : 'default',
+          pointerEvents: (!showPresentation && !zoomQuery) ? 'auto' : 'none',
           visibility: (showPresentation || zoomQuery) ? 'hidden' : 'visible',
         }}
       >
@@ -310,11 +313,43 @@ export default function ObservatoryPage() {
       {/* Layer 4 — iOS zoom overlay */}
       <div ref={zoomOverlayRef} style={{
         position: 'fixed', display: 'none', background: 'var(--bg)',
-        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         zIndex: 20, alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden', opacity: 0,
       }}>
-        <div ref={buildingRef} style={{ opacity: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        {/* Grid background */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `
+            linear-gradient(to right, var(--border-color) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--border-color) 1px, transparent 1px)
+          `,
+          backgroundSize: '60px 60px',
+          opacity: 0.4,
+        }} />
+        {/* Center glow */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '80%',
+          height: '80%',
+          background: 'radial-gradient(circle, var(--primary-light) 0%, transparent 50%)',
+          opacity: 0.5,
+          pointerEvents: 'none',
+        }} />
+        {/* Scan line */}
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: 2,
+          background: 'linear-gradient(90deg, transparent, var(--primary), transparent)',
+          boxShadow: '0 0 30px var(--primary)',
+          animation: 'scanV 3s ease-in-out infinite',
+        }} />
+        <div ref={buildingRef} style={{ opacity: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
           <BuildingAnimation key={zoomKey} state={ctx.state} query={zoomQuery ?? ''} statusMessage={ctx.statusMessage} />
           {ctx.error && (
             <div style={{ marginTop: 16, padding: '12px 20px', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.3)', borderRadius: 10, maxWidth: 480, textAlign: 'center' }}>
@@ -323,6 +358,14 @@ export default function ObservatoryPage() {
             </div>
           )}
         </div>
+        <style>{`
+          @keyframes scanV {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 0.7; }
+            90% { opacity: 0.7; }
+            100% { top: 100%; opacity: 0; }
+          }
+        `}</style>
       </div>
 
       {/* Layer 5 — Presentation */}

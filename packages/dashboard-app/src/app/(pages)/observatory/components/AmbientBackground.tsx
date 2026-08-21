@@ -93,9 +93,13 @@ const DELTA_ANGLE = (2 * Math.PI) / N;
 
 const WIDGET_SIZE = 110;
 const CARD_H      = 120;
-const LABEL_H     = 24;  // espacio para el label
+const LABEL_H     = 24;
 const hoverScales = new Array(N).fill(1);
+const splashScales = new Array(N).fill(1);
+const splashOpacities = new Array(N).fill(1);
+const lineProgresses = new Array(N).fill(0); // 0 = at center, 1 = full line
 const omegaSpeed  = { v: OMEGA };
+const cardVisible = new Array(N).fill(false);
 
 // ── Data ───────────────────────────────────────────────────
 const MOCK_VALUES: Record<string, number> = {
@@ -347,27 +351,33 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         const el = widgetRefs.current[i];
         if (el) {
           const totalH = CARD_H + LABEL_H;
-          
-          // Billboard: no rotation, always facing viewer
-          // 3D effect comes from position, scale, opacity, and z-index
+          const depth = (wz + RY) / (2 * RY);
+          const baseScale = (0.65 + depth * 0.35) * hoverScales[i];
+
           gsap.set(el, {
             x: sx - WIDGET_SIZE / 2,
             y: sy - totalH / 2,
             zIndex: Math.round(depth * 100) + 10,
-            opacity: 0.4 + depth * 0.6,
-            scale: scale,
-            rotationY: 0,
-            rotationX: 0,
+            opacity: (0.4 + depth * 0.6) * splashOpacities[i],
+            scale: baseScale * splashScales[i],
+            visibility: cardVisible[i] ? 'visible' : 'hidden',
           });
         }
 
-        // Update line
+        // Update line — interpolate from center to widget based on lineProgresses[i]
         const lg = lineGeosRef.current[i];
         if (lg) {
           const lp = lg.attributes.position as THREE.BufferAttribute;
+          const p = lineProgresses[i];
           lp.setXYZ(0, 0, 0, 0);
-          lp.setXYZ(1, wx, wy, wz);
+          lp.setXYZ(1, wx * p, wy * p, wz * p);
           lp.needsUpdate = true;
+          // fade in opacity with progress
+          (lg as any)._mat = (lg as any)._mat;
+          const lineMesh = scene.children.find(c =>
+            c instanceof THREE.Line && (c as THREE.Line).geometry === lg
+          ) as THREE.Line | undefined;
+          if (lineMesh) (lineMesh.material as THREE.LineBasicMaterial).opacity = 0.22 * p;
         }
       }
 
@@ -375,6 +385,33 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     };
 
     animate();
+
+    // Wait for RAF to complete one full orbit calculation before animating in
+    let framesReady = 0;
+    const waitForPosition = () => {
+      framesReady++;
+      if (framesReady < 3) {
+        requestAnimationFrame(waitForPosition);
+        return;
+      }
+      // Cards are positioned — reset splash values and animate in
+      for (let i = 0; i < N; i++) {
+        splashScales[i] = 0;
+        splashOpacities[i] = 0;
+      }
+      // Make visible now that positions are set
+      widgetRefs.current.forEach((el, i) => {
+        if (el) gsap.set(el, { visibility: 'visible' });
+        cardVisible[i] = true;
+      });
+      const tl = gsap.timeline();
+      for (let i = 0; i < N; i++) {
+        tl.to(splashScales,    { [i]: 1, duration: 0.6, ease: 'back.out(1.6)' }, i * 0.08);
+        tl.to(splashOpacities, { [i]: 1, duration: 0.5, ease: 'power2.out'    }, i * 0.08);
+        tl.to(lineProgresses,  { [i]: 1, duration: 0.8, ease: 'power3.out'    }, i * 0.08 + 0.1);
+      }
+    };
+    requestAnimationFrame(waitForPosition);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -402,6 +439,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
             willChange: 'transform',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center',
+            visibility: 'hidden',
           }}
           onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
           onMouseEnter={e => {

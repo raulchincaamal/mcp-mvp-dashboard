@@ -11,10 +11,15 @@ interface Props {
 }
 
 export default function BuildingAnimation({ state, query, statusMessage }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
+  const gridLinesHRef = useRef<(HTMLDivElement | null)[]>([]);
+  const gridLinesVRef = useRef<(HTMLDivElement | null)[]>([]);
+  const barsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const lineRef = useRef<SVGPathElement>(null);
+  
   const [buildPhase, setBuildPhase] = useState(0);
   const prevPhase = useRef(0);
+
+  const barHeights = [40, 65, 35, 80, 50, 88, 45, 70];
 
   // Map state to build phase
   useEffect(() => {
@@ -25,271 +30,251 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
     else if (state === 'GENERATING_VISUALIZATIONS') phase = 4;
     else if (state === 'REVEAL') phase = 5;
     
-    // Only animate forward, not backward
     if (phase >= prevPhase.current) {
       setBuildPhase(phase);
       prevPhase.current = phase;
     }
   }, [state]);
 
-  // Animate chart container on phase change
+  // Phase 1+: Grid lines animate in
   useEffect(() => {
-    if (!chartRef.current) return;
+    if (buildPhase < 1) return;
     
-    if (buildPhase >= 4) {
-      // Chart building phase - subtle border highlight
-      gsap.to(chartRef.current, {
-        borderColor: 'var(--primary)',
-        duration: 0.4,
-        ease: 'power2.out',
-      });
-    }
+    gridLinesHRef.current.forEach((line, i) => {
+      if (!line) return;
+      gsap.fromTo(line,
+        { scaleX: 0, opacity: 0 },
+        { scaleX: 1, opacity: 0.4, duration: 0.5, ease: 'power2.out', delay: i * 0.05, transformOrigin: 'left' }
+      );
+    });
     
-    if (buildPhase === 5) {
-      // Reveal phase - subtle scale
-      gsap.to(chartRef.current, {
-        scale: 1.01,
-        duration: 0.6,
-        ease: 'power2.out',
-      });
-    }
+    gridLinesVRef.current.forEach((line, i) => {
+      if (!line) return;
+      gsap.fromTo(line,
+        { scaleY: 0, opacity: 0 },
+        { scaleY: 1, opacity: 0.4, duration: 0.5, ease: 'power2.out', delay: 0.2 + i * 0.05, transformOrigin: 'top' }
+      );
+    });
   }, [buildPhase]);
 
+  // Phase 3: Bars grow
+  useEffect(() => {
+    if (buildPhase < 3) return;
+    
+    barsRef.current.forEach((bar, i) => {
+      if (!bar) return;
+      gsap.fromTo(bar,
+        { scaleY: 0 },
+        { scaleY: 1, duration: 0.6, ease: 'elastic.out(1, 0.5)', delay: i * 0.07, transformOrigin: 'bottom' }
+      );
+    });
+  }, [buildPhase]);
+
+  // Phase 4: Line draws
+  useEffect(() => {
+    if (buildPhase < 4 || !lineRef.current) return;
+    
+    const length = lineRef.current.getTotalLength();
+    gsap.set(lineRef.current, { strokeDasharray: length, strokeDashoffset: length });
+    gsap.to(lineRef.current, { strokeDashoffset: 0, duration: 1.2, ease: 'power2.inOut' });
+  }, [buildPhase]);
+
+  const steps = ['Recibiendo', 'Analizando', 'Obteniendo', 'Generando', 'Listo'];
+
   return (
-    <div 
-      ref={containerRef} 
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 28,
-        width: '100%',
-        maxWidth: 550,
-      }}
-    >
-      {/* Query text */}
+    <div style={{
+      width: '100%',
+      maxWidth: 700,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 32,
+      padding: 24,
+    }}>
+      {/* Query */}
       {query && (
         <h2 style={{
           fontSize: 22,
           fontWeight: 600,
           color: 'var(--text)',
-          margin: 0,
           textAlign: 'center',
-          letterSpacing: '-0.01em',
+          margin: 0,
           opacity: buildPhase >= 1 ? 1 : 0,
-          transform: buildPhase >= 1 ? 'translateY(0)' : 'translateY(10px)',
+          transform: buildPhase >= 1 ? 'translateY(0)' : 'translateY(20px)',
           transition: 'all 0.5s ease',
         }}>
+          <span style={{ color: 'var(--primary)', opacity: 0.5 }}>"</span>
           {query}
+          <span style={{ color: 'var(--primary)', opacity: 0.5 }}>"</span>
         </h2>
       )}
 
-      {/* Building visualization */}
-      <div 
-        ref={chartRef}
-        style={{
-          position: 'relative',
-          width: 280,
-          height: 180,
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius)',
-          background: 'var(--surface)',
-          backdropFilter: 'blur(20px)',
-          overflow: 'hidden',
-          transition: 'all 0.4s ease',
-        }}
-      >
-        {/* Grid lines */}
-        <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
-          {/* Horizontal grid */}
-          {[0.25, 0.5, 0.75].map((y, i) => (
-            <line
-              key={`h${i}`}
-              x1="12%" y1={`${y * 100}%`} x2="88%" y2={`${y * 100}%`}
-              stroke="var(--border-color)" strokeWidth="1"
-              style={{
-                opacity: buildPhase >= 2 ? 0.5 : 0,
-                transition: `opacity 0.4s ease ${i * 0.1}s`,
-              }}
-            />
-          ))}
-          {/* Vertical grid */}
-          {[0.25, 0.5, 0.75].map((x, i) => (
-            <line
-              key={`v${i}`}
-              x1={`${x * 100}%`} y1="12%" x2={`${x * 100}%`} y2="88%"
-              stroke="var(--border-color)" strokeWidth="1"
-              style={{
-                opacity: buildPhase >= 2 ? 0.5 : 0,
-                transition: `opacity 0.4s ease ${i * 0.1 + 0.15}s`,
-              }}
-            />
-          ))}
-          {/* X Axis */}
-          <line
-            x1="12%" y1="88%" x2="88%" y2="88%"
-            stroke="var(--primary)" strokeWidth="2"
-            strokeDasharray="250"
+      {/* Chart area */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        height: 260,
+        background: 'var(--surface)',
+        borderRadius: 16,
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden',
+      }}>
+        {/* Inner grid - horizontal */}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={`h${i}`}
+            ref={el => { gridLinesHRef.current[i] = el; }}
             style={{
-              strokeDashoffset: buildPhase >= 2 ? 0 : 250,
-              transition: 'stroke-dashoffset 0.6s ease',
+              position: 'absolute',
+              left: 40,
+              right: 20,
+              top: `${15 + i * 14}%`,
+              height: 1,
+              background: 'var(--border-color)',
+              opacity: 0,
             }}
           />
-          {/* Y Axis */}
-          <line
-            x1="12%" y1="12%" x2="12%" y2="88%"
-            stroke="var(--primary)" strokeWidth="2"
-            strokeDasharray="150"
+        ))}
+        
+        {/* Inner grid - vertical */}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={`v${i}`}
+            ref={el => { gridLinesVRef.current[i] = el; }}
             style={{
-              strokeDashoffset: buildPhase >= 2 ? 0 : 150,
-              transition: 'stroke-dashoffset 0.6s ease 0.2s',
+              position: 'absolute',
+              left: `${10 + i * 11}%`,
+              top: 20,
+              bottom: 40,
+              width: 1,
+              background: 'var(--border-color)',
+              opacity: 0,
             }}
           />
-        </svg>
+        ))}
 
-        {/* Data points flying in */}
-        {buildPhase >= 3 && (
-          <div style={{ position: 'absolute', inset: 0 }}>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: `${20 + Math.random() * 60}%`,
-                  top: `${20 + Math.random() * 50}%`,
-                  width: 4,
-                  height: 4,
-                  borderRadius: '50%',
-                  background: 'var(--primary)',
-                  opacity: 0,
-                  animation: `dataFly 1.2s ease-out ${i * 0.08}s forwards`,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Bars building */}
-        {buildPhase >= 4 && (
-          <div style={{
-            position: 'absolute',
-            bottom: '12%',
-            left: '18%',
-            right: '18%',
-            height: '70%',
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: '10%',
-          }}>
-            {[0.55, 0.8, 0.4, 0.65, 0.9].map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(to top, var(--primary), var(--primary-light))',
-                  borderRadius: '3px 3px 0 0',
-                  height: `${h * 100}%`,
-                  transform: 'scaleY(0)',
-                  transformOrigin: 'bottom',
-                  animation: `barGrow 0.5s ease-out ${0.3 + i * 0.08}s forwards`,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Scanning line */}
-        {buildPhase >= 3 && buildPhase < 5 && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 2,
-            height: '100%',
-            background: 'linear-gradient(to bottom, transparent, var(--primary), transparent)',
-            animation: 'scanLine 1.8s ease-in-out infinite',
-          }} />
-        )}
-
-        {/* Success overlay */}
-        {buildPhase === 5 && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(135deg, var(--primary-light) 0%, transparent 60%)',
-            opacity: 0,
-            animation: 'successFade 0.8s ease-out forwards',
-            borderRadius: 'inherit',
-          }} />
-        )}
-      </div>
-
-      {/* Status */}
-      <div style={{ textAlign: 'center' }}>
-        <p style={{
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          color: 'var(--primary)',
-          margin: 0,
-          minHeight: 16,
-          opacity: statusMessage ? 1 : 0,
-          transition: 'opacity 0.3s ease',
+        {/* Bars */}
+        <div style={{
+          position: 'absolute',
+          inset: '30px 30px 40px 50px',
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: '3%',
         }}>
-          {statusMessage}
-        </p>
-
-        {/* Progress indicator */}
-        <div style={{ 
-          display: 'flex', 
-          gap: 10, 
-          justifyContent: 'center', 
-          marginTop: 14,
-        }}>
-          {[1, 2, 3, 4, 5].map(phase => (
+          {barHeights.map((h, i) => (
             <div
-              key={phase}
+              key={i}
+              ref={el => { barsRef.current[i] = el; }}
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: buildPhase >= phase ? 'var(--primary)' : 'var(--border-color)',
-                boxShadow: buildPhase >= phase ? '0 0 12px var(--primary)' : 'none',
-                transition: 'all 0.3s ease',
-                transform: buildPhase === phase ? 'scale(1.3)' : 'scale(1)',
+                flex: 1,
+                height: `${h}%`,
+                background: 'linear-gradient(to top, var(--primary), var(--primary-light))',
+                borderRadius: '4px 4px 0 0',
+                boxShadow: '0 0 20px var(--primary)',
+                transform: 'scaleY(0)',
+                transformOrigin: 'bottom',
               }}
             />
           ))}
         </div>
+
+        {/* Line chart */}
+        <svg
+          style={{ position: 'absolute', inset: '30px 30px 40px 50px' }}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="50%" stopColor="#06b6d4" />
+              <stop offset="100%" stopColor="#a78bfa" />
+            </linearGradient>
+          </defs>
+          <path
+            ref={lineRef}
+            d={`M ${barHeights.map((h, i) => `${5 + i * 13} ${100 - h}`).join(' L ')}`}
+            fill="none"
+            stroke="url(#lg)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+
+        {/* Particles */}
+        {buildPhase >= 3 && buildPhase < 5 && Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${20 + Math.random() * 60}%`,
+              top: `${20 + Math.random() * 50}%`,
+              width: 4,
+              height: 4,
+              borderRadius: '50%',
+              background: 'var(--primary)',
+              boxShadow: '0 0 8px var(--primary)',
+              animation: `particle 2s ease-out ${i * 0.1}s infinite`,
+            }}
+          />
+        ))}
       </div>
 
+      {/* Progress */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {steps.map((label, i) => {
+          const active = buildPhase === i + 1;
+          const done = buildPhase > i + 1;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{
+                  width: active ? 12 : 8,
+                  height: active ? 12 : 8,
+                  borderRadius: '50%',
+                  background: done ? '#34d399' : active ? 'var(--primary)' : 'var(--surface-3)',
+                  boxShadow: active ? '0 0 16px var(--primary)' : done ? '0 0 8px #34d399' : 'none',
+                  transition: 'all 0.3s',
+                  animation: active ? 'pulse 1.2s ease-in-out infinite' : 'none',
+                }} />
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: active ? 600 : 400,
+                  color: done ? '#34d399' : active ? 'var(--primary)' : 'var(--text-tertiary)',
+                  opacity: active || done ? 1 : 0.5,
+                }}>{label}</span>
+              </div>
+              {i < 4 && (
+                <div style={{
+                  width: 24,
+                  height: 2,
+                  background: done ? '#34d399' : 'var(--surface-3)',
+                  marginBottom: 16,
+                  transition: 'all 0.3s',
+                }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Status */}
+      {statusMessage && (
+        <p style={{ fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+          {statusMessage}
+        </p>
+      )}
+
       <style>{`
-        @keyframes dataFly {
-          0% { opacity: 0; transform: translate(-30px, -30px) scale(0); }
-          60% { opacity: 0.8; transform: translate(0, 0) scale(1.3); }
-          100% { opacity: 0.5; transform: translate(0, 0) scale(1); }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.3); }
         }
-        @keyframes barGrow {
-          0% { transform: scaleY(0); }
-          70% { transform: scaleY(1.08); }
-          100% { transform: scaleY(1); }
-        }
-        @keyframes scanLine {
-          0% { left: 0; opacity: 0; }
-          15% { opacity: 0.8; }
-          85% { opacity: 0.8; }
-          100% { left: 100%; opacity: 0; }
-        }
-        @keyframes glowPulse {
-          0% { opacity: 0; }
-          50% { opacity: 0.4; }
-          100% { opacity: 0.2; }
-        }
-        @keyframes successFade {
-          0% { opacity: 0; }
-          50% { opacity: 0.3; }
-          100% { opacity: 0.15; }
+        @keyframes particle {
+          0% { opacity: 0.8; transform: translate(0, 0) scale(1); }
+          100% { opacity: 0; transform: translate(20px, -30px) scale(0); }
         }
       `}</style>
     </div>

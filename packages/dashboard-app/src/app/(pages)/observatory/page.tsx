@@ -58,10 +58,10 @@ export default function ObservatoryPage() {
 
   useEffect(() => observatory.subscribe(setCtx), []);
 
-  // Fullscreen
+  // Fullscreen with F11 only (not F key to allow typing)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'f' || e.key === 'F' || e.key === 'F11') {
+      if (e.key === 'F11') {
         e.preventDefault();
         if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
         else document.exitFullscreen().catch(() => {});
@@ -69,6 +69,31 @@ export default function ObservatoryPage() {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
+  // Hide cursor after 5s of inactivity
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    const container = document.body;
+    
+    const showCursor = () => {
+      container.style.cursor = 'default';
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        container.style.cursor = 'none';
+      }, 5000);
+    };
+    
+    const handleMove = () => showCursor();
+    
+    window.addEventListener('mousemove', handleMove);
+    showCursor();
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      clearTimeout(timeout);
+      container.style.cursor = 'default';
+    };
   }, []);
 
   // Command bar slide

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import React from 'react';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import { cursorRef } from '../hooks/useCursor';
@@ -80,19 +81,123 @@ const AURORA_COLORS: Record<string, string> = {
 };
 
 // Elipse 3D — eje X horizontal, eje Y inclinado
-const RX   = 320;   // radio horizontal (pantalla)
-const RY   = 110;   // radio vertical antes de tilt
-const TILT = 0.38;  // radianes de inclinación del plano (≈22°)
+const RX   = 480;   // radio horizontal amplio para evitar solapamiento
+const RY   = 140;   // radio vertical para efecto 3D más pronunciado
+const TILT = 0.5;   // inclinación del plano (~28°) para mejor perspectiva 3D
 
-// Velocidad orbital: una vuelta completa cada ~40s
-const OMEGA = (2 * Math.PI) / (40 * 60); // rad/frame a 60fps
+// Velocidad orbital: una vuelta completa cada ~50s
+const OMEGA = (2 * Math.PI) / (50 * 60); // rad/frame a 60fps
 
 // Separación angular uniforme: 2π/8 = 45°
 const DELTA_ANGLE = (2 * Math.PI) / N;
 
-const WIDGET_SIZE = 96;
-const depthScales  = new Array(N).fill(1);
-const hoverScales  = new Array(N).fill(1); // GSAP tweens this, loop reads it
+const WIDGET_SIZE = 110;
+const CARD_H      = 120;
+const LABEL_H     = 24;  // espacio para el label
+const hoverScales = new Array(N).fill(1);
+const omegaSpeed  = { v: OMEGA };
+
+// ── Data ───────────────────────────────────────────────────
+const MOCK_VALUES: Record<string, number> = {
+  Motos: 1243, Celulares: 876, 'Bicicletas Eléctricas': 312,
+  'Pantallas/TV': 541, Audio: 198, Tablets: 423, Consolas: 267, 'Climatización': 389,
+};
+const MOCK_CHANGE: Record<string, number> = {
+  Motos: 4.2, Celulares: -1.8, 'Bicicletas Eléctricas': 7.1,
+  'Pantallas/TV': -0.5, Audio: 2.3, Tablets: -3.1, Consolas: 5.8, 'Climatización': 1.4,
+};
+
+// ── Ticker hook ──────────────────────────────────────────
+function useTicker(label: string) {
+  const target = MOCK_VALUES[label] ?? 100;
+  const [display, setDisplay] = React.useState(Math.max(0, target - Math.ceil(target * 0.08)));
+  const [dir, setDir] = React.useState<'up' | 'down' | null>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    let current = Math.max(0, target - Math.ceil(target * 0.08));
+    const step = Math.max(1, Math.ceil((target - current) / 20));
+    const tick = () => {
+      current = Math.min(target, current + step);
+      setDir(current < target ? 'up' : null);
+      setDisplay(current);
+      if (current < target) { timerRef.current = setTimeout(tick, 35); }
+      else {
+        let b = 0;
+        const bounce = () => {
+          if (b >= 6) { setDir(null); setDisplay(target); return; }
+          const d = Math.ceil(target * 0.005) || 1;
+          const up = b % 2 === 0;
+          setDir(up ? 'up' : 'down');
+          setDisplay(target + (up ? d : -d));
+          b++;
+          timerRef.current = setTimeout(bounce, 120);
+        };
+        timerRef.current = setTimeout(bounce, 60);
+      }
+    };
+    timerRef.current = setTimeout(tick, 300 + Math.random() * 600);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [target]);
+
+  return { display, dir };
+}
+
+function WidgetCard({ label, accent }: { label: string; accent: string }) {
+  const { display } = useTicker(label);
+  const pct   = MOCK_CHANGE[label] ?? 0;
+  const isUp  = pct >= 0;
+  const pctCol = isUp ? '#34d399' : '#f87171';
+
+  return (
+    <div style={{
+      width: '100%', height: '100%',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '12px',
+      boxSizing: 'border-box',
+      position: 'relative', zIndex: 1,
+      gap: 6,
+    }}>
+      {/* Watermark icon — oversized decorative background */}
+      <div
+        className="widget-icon"
+        style={{
+          position: 'absolute',
+          bottom: -30, right: -45,
+          width: 140, height: 140,
+          opacity: 0.12,
+          pointerEvents: 'none',
+          filter: `drop-shadow(0 0 12px ${accent})`,
+        }}
+        dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
+      />
+
+      {/* Number */}
+      <span style={{
+        fontSize: 24, fontWeight: 700, color: '#fff',
+        letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
+        lineHeight: 1, textAlign: 'center',
+        position: 'relative', zIndex: 2,
+      }}>
+        {Math.round(display).toLocaleString('es-MX')}
+      </span>
+
+      {/* % pill */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        background: isUp ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
+        borderRadius: 100, padding: '3px 9px',
+        position: 'relative', zIndex: 2,
+      }}>
+        <span style={{ fontSize: 9, color: pctCol, lineHeight: 1 }}>{isUp ? '↑' : '↓'}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: pctCol, lineHeight: 1 }}>
+          {isUp ? '+' : ''}{pct.toFixed(1)}%
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function AmbientBackground({ onCategoryClick }: Props) {
   const mountRef    = useRef<HTMLDivElement>(null);
@@ -187,8 +292,8 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       camera.position.y += (cur.normalizedY *  18 - camera.position.y) * 0.04;
       camera.lookAt(0, 0, 0);
 
-      // Advance orbit angle
-      angleRef.current += OMEGA;
+      // Advance orbit angle — speed controlled by omegaSpeed.v
+      angleRef.current += omegaSpeed.v;
 
       // Particles
       const pp = pGeo.attributes.position as THREE.BufferAttribute;
@@ -220,7 +325,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       }
       cp.needsUpdate = true;
 
-      // Widgets — deterministic, uniform spacing, no overlap
+      // Widgets — GSAP 3D billboard (always flat, facing viewer)
       for (let i = 0; i < N; i++) {
         const a  = angleRef.current + i * DELTA_ANGLE;
         const wx = RX * Math.cos(a);
@@ -233,18 +338,27 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         const sx = ( v.x * 0.5 + 0.5) * window.innerWidth;
         const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
 
+        // Depth: 0 = back, 1 = front
         const depth = (wz + RY) / (2 * RY);
-        const baseScale = 0.72 + depth * 0.38;
-        depthScales[i] = baseScale;
+        
+        // Scale based on depth (3D effect)
+        const scale = (0.65 + depth * 0.35) * hoverScales[i];
 
         const el = widgetRefs.current[i];
         if (el) {
-          el.style.left    = `${sx - WIDGET_SIZE / 2}px`;
-          el.style.top     = `${sy - WIDGET_SIZE / 2}px`;
-          el.style.zIndex  = String(Math.round(depth * 8) + 1);
-          el.style.opacity = String(0.5 + depth * 0.5);
-          // Always apply: depth * hover multiplier — no conflict with GSAP
-          el.style.transform = `scale(${baseScale * hoverScales[i]})`;
+          const totalH = CARD_H + LABEL_H;
+          
+          // Billboard: no rotation, always facing viewer
+          // 3D effect comes from position, scale, opacity, and z-index
+          gsap.set(el, {
+            x: sx - WIDGET_SIZE / 2,
+            y: sy - totalH / 2,
+            zIndex: Math.round(depth * 100) + 10,
+            opacity: 0.4 + depth * 0.6,
+            scale: scale,
+            rotationY: 0,
+            rotationX: 0,
+          });
         }
 
         // Update line
@@ -282,83 +396,78 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           ref={el => { widgetRefs.current[i] = el; }}
           style={{
             position: 'absolute',
-            width: WIDGET_SIZE, height: WIDGET_SIZE,
-            borderRadius: 20,
-            // Glassmorphism base
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.10)',
-            backdropFilter: 'blur(18px)',
-            WebkitBackdropFilter: 'blur(18px)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 6,
+            width: WIDGET_SIZE,
             cursor: 'pointer', pointerEvents: 'auto',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
             userSelect: 'none',
-            willChange: 'transform, opacity',
-            overflow: 'hidden',
+            willChange: 'transform',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center',
           }}
           onClick={e => onCategoryClick?.(label, e.currentTarget.getBoundingClientRect())}
           onMouseEnter={e => {
             const el = e.currentTarget;
-            el.dataset.hovered = '1';
-            gsap.to(hoverScales, { [i]: 1.15, duration: 0.7, ease: 'power2.inOut', overwrite: true });
-            const glow    = el.querySelector('.aurora-glow')    as HTMLElement;
-            const border  = el.querySelector('.aurora-border')  as HTMLElement;
-            const icon    = el.querySelector('.widget-icon')    as HTMLElement;
-            if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.6, ease: 'power2.inOut' });
-            if (border) gsap.to(border, { opacity: 1, duration: 0.6, ease: 'power2.inOut' });
-            if (icon)   gsap.to(icon,   { opacity: 1, scale: 1.08, duration: 0.6, ease: 'power2.inOut' });
+            gsap.to(omegaSpeed, { v: 0, duration: 1.2, ease: 'power3.out', overwrite: true });
+            gsap.to(hoverScales, { [i]: 1.08, duration: 0.5, ease: 'power2.out', overwrite: true });
+            const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
+            const border = el.querySelector('.aurora-border') as HTMLElement;
+            if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
+            if (border) gsap.to(border, { opacity: 1, duration: 0.4, ease: 'power2.out' });
           }}
           onMouseLeave={e => {
             const el = e.currentTarget;
-            delete el.dataset.hovered;
+            gsap.to(omegaSpeed, { v: OMEGA, duration: 2.0, ease: 'power2.inOut', overwrite: true });
             gsap.to(hoverScales, { [i]: 1, duration: 0.8, ease: 'power2.inOut', overwrite: true });
-            const glow    = el.querySelector('.aurora-glow')    as HTMLElement;
-            const border  = el.querySelector('.aurora-border')  as HTMLElement;
-            const icon    = el.querySelector('.widget-icon')    as HTMLElement;
-            if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.8, ease: 'power2.inOut' });
-            if (border) gsap.to(border, { opacity: 0, duration: 0.8, ease: 'power2.inOut' });
-            if (icon)   gsap.to(icon,   { opacity: 0.85, scale: 1, duration: 0.6, ease: 'power2.inOut' });
+            const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
+            const border = el.querySelector('.aurora-border') as HTMLElement;
+            if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
+            if (border) gsap.to(border, { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
           }}
         >
-          {/* Aurora glow layer — bottom radial */}
-          <div className="aurora-glow" style={{
-            position: 'absolute', inset: 0,
-            background: `radial-gradient(circle at 50% 120%, ${accent}45 0%, transparent 65%)`,
-            opacity: 0, pointerEvents: 'none', borderRadius: 'inherit',
-          }} />
-          {/* Aurora border glow — separate element, opacity tweened by GSAP */}
-          <div className="aurora-border" style={{
-            position: 'absolute', inset: -1,
-            borderRadius: 21,
-            border: `1px solid ${accent}`,
-            boxShadow: `0 0 18px ${accent}55, inset 0 0 12px ${accent}18`,
-            opacity: 0, pointerEvents: 'none',
-          }} />
-          {/* Top shimmer line */}
+          {/* Card */}
           <div style={{
-            position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
-            borderRadius: 1,
-            pointerEvents: 'none',
-          }} />
-          {/* SVG icon */}
-          <div
-            className="widget-icon"
-            style={{ width: 40, height: 40, opacity: 0.85, position: 'relative', zIndex: 1 }}
-            dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
-          />
-          {/* Label */}
+            width: WIDGET_SIZE, height: CARD_H,
+            borderRadius: 18,
+            background: `linear-gradient(135deg, ${accent}15 0%, rgba(255,255,255,0.04) 60%, rgba(0,0,0,0.1) 100%)`,
+            border: `1px solid ${accent}25`,
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: `
+              0 8px 32px rgba(0,0,0,0.35),
+              inset 0 1px 0 rgba(255,255,255,0.08)
+            `,
+            overflow: 'hidden', position: 'relative', flexShrink: 0,
+          }}>
+            {/* Hover glow */}
+            <div className="aurora-glow" style={{
+              position: 'absolute', inset: 0,
+              background: `radial-gradient(ellipse at 30% 50%, ${accent}30 0%, transparent 70%)`,
+              opacity: 0, pointerEvents: 'none',
+            }} />
+            {/* Border highlight on hover */}
+            <div className="aurora-border" style={{
+              position: 'absolute', inset: -1, borderRadius: 19,
+              border: `1.5px solid ${accent}70`,
+              opacity: 0, pointerEvents: 'none',
+            }} />
+            {/* Top shine */}
+            <div style={{
+              position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+              pointerEvents: 'none',
+            }} />
+            <WidgetCard label={label} accent={accent} />
+          </div>
+          {/* Label below */}
           <span style={{
-            fontSize: 8, fontWeight: 700,
-            color: 'rgba(255,255,255,0.45)',
-            letterSpacing: '0.06em', textTransform: 'uppercase',
-            position: 'relative', zIndex: 1,
+            marginTop: 6,
+            fontSize: 11, fontWeight: 500,
+            color: 'rgba(255,255,255,0.6)',
             textAlign: 'center',
-            width: '100%',
-            padding: '0 4px',
-            lineHeight: 1.3,
-            display: 'block',
+            lineHeight: 1.2,
+            letterSpacing: '0.01em',
+            maxWidth: WIDGET_SIZE,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            pointerEvents: 'none',
           }}>
             {label}
           </span>

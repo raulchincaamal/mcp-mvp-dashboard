@@ -188,100 +188,122 @@ function resolveIcon(icon: string): string {
   return ICON_MAP[key] ?? (icon.length <= 4 ? icon : '📌');
 }
 
+// ─── Ticker: stock-style number that counts up/down fast ──
+
+function StockTicker({ value }: { value: string }) {
+  // Extract numeric part from value string (e.g. "$1,234" → 1234, "156" → 156)
+  const parseNum = (v: string) => {
+    const n = parseFloat(v.replace(/[^0-9.-]/g, ''));
+    return isNaN(n) ? 0 : n;
+  };
+
+  const target = parseNum(value);
+  const [display, setDisplay] = useState(Math.max(0, target - Math.ceil(target * 0.08)));
+  const [dir, setDir] = useState<'up' | 'down' | null>(null);
+  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (target === 0) return;
+    const start = Math.max(0, target - Math.ceil(target * 0.08));
+    setDisplay(start);
+    setDir(null);
+
+    let current = start;
+    const step = Math.max(1, Math.ceil((target - start) / 18));
+
+    const tick = () => {
+      current = Math.min(target, current + step);
+      const going = current < target ? 'up' : null;
+      setDir(going);
+      setDisplay(current);
+      if (current < target) {
+        rafRef.current = setTimeout(tick, 40);
+      } else {
+        // After reaching target, do a few random up/down ticks
+        let bounces = 0;
+        const bounce = () => {
+          if (bounces >= 6) { setDir(null); setDisplay(target); return; }
+          const delta = Math.ceil(target * 0.005) || 1;
+          const goUp = bounces % 2 === 0;
+          setDir(goUp ? 'up' : 'down');
+          setDisplay(target + (goUp ? delta : -delta));
+          bounces++;
+          rafRef.current = setTimeout(bounce, 120);
+        };
+        rafRef.current = setTimeout(bounce, 80);
+      }
+    };
+
+    rafRef.current = setTimeout(tick, 120);
+    return () => { if (rafRef.current) clearTimeout(rafRef.current); };
+  }, [target]);
+
+  // Format display number matching original value format
+  const hasCurrency = /[$€£¥]/.test(value);
+  const hasComma = value.includes(',');
+  const prefix = hasCurrency ? value.match(/^[^0-9]*/)?.[0] ?? '' : '';
+  const suffix = value.match(/[^0-9.,]+$/)?.[0] ?? '';
+
+  const formatted = hasComma
+    ? Math.round(display).toLocaleString('es-MX')
+    : String(Math.round(display));
+
+  const color = dir === 'up' ? '#30d158' : dir === 'down' ? '#ff453a' : 'var(--text-tertiary)';
+
+  return (
+    <span style={{ fontSize: '0.72rem', fontWeight: 700, color, letterSpacing: '0.5px', fontVariantNumeric: 'tabular-nums', transition: 'color 0.1s' }}>
+      {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '●'} {prefix}{formatted}{suffix}
+    </span>
+  );
+}
+
 // ─── Composite: StatCard ───────────────────────────────────
-// Props: { title, value, subtitle?, trend?, trendDirection?, icon? }
+// iOS app-icon style: card with icon + ticker, label+value below
 
 function StatCard({ props }: { props: Record<string, unknown> }) {
   const title = props.title as string;
   const value = props.value as string;
   const subtitle = props.subtitle as string | undefined;
-  const trend = props.trend as string | undefined;
-  const trendDirection = (props.trendDirection as string | undefined)
-    ?.toLowerCase()
-    .trim() as 'up' | 'down' | 'neutral' | undefined;
-  const validTrend =
-    trendDirection === 'up' ||
-    trendDirection === 'down' ||
-    trendDirection === 'neutral'
-      ? trendDirection
-      : undefined;
-  const trendColor =
-    validTrend === 'up'
-      ? '#30d158'
-      : validTrend === 'down'
-        ? 'var(--danger)'
-        : 'var(--text-tertiary)';
-  const trendIcon =
-    validTrend === 'up' ? '↑' : validTrend === 'down' ? '↓' : '';
-  // Clean trend text — remove if it's just the direction word
-  const trendText =
-    typeof trend === 'string' &&
-    !['up', 'down', 'neutral'].includes(trend.toLowerCase().trim())
-      ? trend
-      : undefined;
+  const icon = typeof props.icon === 'string' ? props.icon : '';
 
   return (
-    <div
-      style={{
-        background: 'var(--surface)',
-        backdropFilter: 'var(--surface-blur)',
-        WebkitBackdropFilter: 'var(--surface-blur)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius)',
-        padding: '1.5rem',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+      {/* Card — icon only */}
       <div
         style={{
+          width: '100%',
+          aspectRatio: '1 / 1',
+          background: 'var(--surface)',
+          backdropFilter: 'var(--surface-blur)',
+          WebkitBackdropFilter: 'var(--surface-blur)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius)',
+          boxShadow: 'var(--shadow-sm)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
+          gap: '0.35rem',
+          padding: '0.75rem',
         }}
       >
-        <p
-          style={{
-            fontSize: '0.82rem',
-            fontWeight: 500,
-            color: 'var(--text-tertiary)',
-          }}
-        >
+        <StockTicker value={value} />
+        <span style={{ fontSize: '2rem', lineHeight: 1 }}>
+          {icon ? resolveIcon(icon) : '📌'}
+        </span>
+      </div>
+      {/* Label below card */}
+      <div style={{ textAlign: 'center', width: '100%' }}>
+        <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}
         </p>
-        {typeof props.icon === 'string' && props.icon && (
-          <span style={{ fontSize: '1.2rem' }}>{resolveIcon(props.icon)}</span>
-        )}
-      </div>
-      <p
-        style={{
-          fontSize: '2rem',
-          fontWeight: 700,
-          letterSpacing: '-0.5px',
-          marginTop: '0.5rem',
-          color: 'var(--text)',
-        }}
-      >
-        {value}
-      </p>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          marginTop: '0.25rem',
-        }}
-      >
-        {trendText && (
-          <span
-            style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}
-          >
-            {trendIcon} {trendText}
-          </span>
-        )}
+        <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px', marginTop: '0.1rem' }}>
+          {value}
+        </p>
         {subtitle && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '0.1rem' }}>
             {subtitle}
-          </span>
+          </p>
         )}
       </div>
     </div>
@@ -311,8 +333,8 @@ function renderKPIGrid(props: Record<string, unknown>) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: '1rem',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+        gap: '1.25rem',
       }}
     >
       {items.map((item, i) => (

@@ -74,25 +74,26 @@ export default function ObservatoryPage() {
   // Hide cursor after 5s of inactivity
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    const container = document.body;
-    
-    const showCursor = () => {
-      container.style.cursor = 'default';
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        container.style.cursor = 'none';
-      }, 5000);
+
+    const hide = () => {
+      document.documentElement.style.setProperty('cursor', 'none', 'important');
+      document.documentElement.classList.add('cursor-hidden');
     };
-    
-    const handleMove = () => showCursor();
-    
-    window.addEventListener('mousemove', handleMove);
-    showCursor();
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
+    const show = () => {
+      document.documentElement.style.removeProperty('cursor');
+      document.documentElement.classList.remove('cursor-hidden');
       clearTimeout(timeout);
-      container.style.cursor = 'default';
+      timeout = setTimeout(hide, 5000);
+    };
+
+    window.addEventListener('mousemove', show);
+    timeout = setTimeout(hide, 5000);
+
+    return () => {
+      window.removeEventListener('mousemove', show);
+      clearTimeout(timeout);
+      document.documentElement.style.removeProperty('cursor');
+      document.documentElement.classList.remove('cursor-hidden');
     };
   }, []);
 
@@ -312,60 +313,19 @@ export default function ObservatoryPage() {
 
       {/* Layer 4 — iOS zoom overlay */}
       <div ref={zoomOverlayRef} style={{
-        position: 'fixed', display: 'none', background: 'var(--bg)',
-        zIndex: 20, alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden', opacity: 0,
+        position: 'fixed', display: 'none',
+        zIndex: 20, opacity: 0,
+        inset: 0,
       }}>
-        {/* Grid background */}
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `
-            linear-gradient(to right, var(--border-color) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--border-color) 1px, transparent 1px)
-          `,
-          backgroundSize: '60px 60px',
-          opacity: 0.4,
-        }} />
-        {/* Center glow */}
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '80%',
-          height: '80%',
-          background: 'radial-gradient(circle, var(--primary-light) 0%, transparent 50%)',
-          opacity: 0.5,
-          pointerEvents: 'none',
-        }} />
-        {/* Scan line */}
-        <div style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          height: 2,
-          background: 'linear-gradient(90deg, transparent, var(--primary), transparent)',
-          boxShadow: '0 0 30px var(--primary)',
-          animation: 'scanV 3s ease-in-out infinite',
-        }} />
-        <div ref={buildingRef} style={{ opacity: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, position: 'relative', zIndex: 1 }}>
+        <div ref={buildingRef} style={{ opacity: 0, width: '100%', height: '100%' }}>
           <BuildingAnimation key={zoomKey} state={ctx.state} query={zoomQuery ?? ''} statusMessage={ctx.statusMessage} />
           {ctx.error && (
-            <div style={{ marginTop: 16, padding: '12px 20px', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.3)', borderRadius: 10, maxWidth: 480, textAlign: 'center' }}>
+            <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', padding: '12px 20px', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.3)', borderRadius: 10, maxWidth: 480, textAlign: 'center', zIndex: 10 }}>
               <p style={{ color: '#ff453a', fontSize: 13, margin: 0 }}>{ctx.error}</p>
               <button onClick={handleReset} style={{ marginTop: 10, padding: '6px 16px', borderRadius: 8, background: 'transparent', border: '1px solid rgba(255,69,58,0.4)', color: '#ff453a', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Dismiss</button>
             </div>
           )}
         </div>
-        <style>{`
-          @keyframes scanV {
-            0% { top: 0; opacity: 0; }
-            10% { opacity: 0.7; }
-            90% { opacity: 0.7; }
-            100% { top: 100%; opacity: 0; }
-          }
-        `}</style>
       </div>
 
       {/* Layer 5 — Presentation */}

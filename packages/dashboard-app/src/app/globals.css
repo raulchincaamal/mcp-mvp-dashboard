@@ -163,7 +163,13 @@
   --popover-foreground: 220 30% 95%;
 }
 
-/* ── Base ────────────────────────────────────────────────────────────────── */
+/* ── Observatory cursor hide ─────────────────────────────────────────────── */
+
+.cursor-hidden,
+.cursor-hidden * {
+  cursor: none !important;
+}
+
 
 * {
   scrollbar-width: thin;

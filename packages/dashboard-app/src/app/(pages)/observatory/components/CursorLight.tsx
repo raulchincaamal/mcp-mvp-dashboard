@@ -31,7 +31,22 @@ export default function CursorLight() {
       raf = requestAnimationFrame(loop);
     };
     loop();
-    return () => cancelAnimationFrame(raf);
+
+    // Sync visibility with cursor-hidden class on <html>
+    const observer = new MutationObserver(() => {
+      const hidden = document.documentElement.classList.contains('cursor-hidden');
+      const opacity = hidden ? 0 : 1;
+      if (spotRef.current) spotRef.current.style.transition = 'opacity 0.4s ease';
+      if (coreRef.current) coreRef.current.style.transition = 'opacity 0.4s ease';
+      if (spotRef.current) spotRef.current.style.opacity = String(opacity);
+      if (coreRef.current) coreRef.current.style.opacity = String(opacity);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, []);
 
   return (

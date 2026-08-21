@@ -1,11 +1,14 @@
 export const config = {
-  // URLs de la app
-  SUITE_CORPORATIVO_URL: 'https://suitecorporativo-dev.macropay.mx',
+  // URLs
+  SUITE_CORPORATIVO_URL: process.env.SUITE_CORPORATIVO_URL!,
 
-  // Puerto para desarrollo local
-  LOCAL_PORT: Number(process.env.PORT) || 3001,
+  // Microsoft Graph
+  GRAPH_API_URL: process.env.GRAPH_API_URL!,
 
   // Skill metadata
-  SKILL_NAME: 'Macropay Skill',
-  INVOCATION_NAME: 'macropay skill',
-} as const;
+  SKILL_NAME: process.env.SKILL_NAME!,
+
+  // Puerto
+  LOCAL_PORT: Number(process.env.PORT),
+};
+

@@ -149,8 +149,8 @@ function useTicker(label: string) {
 
 function WidgetCard({ label, accent }: { label: string; accent: string }) {
   const { display } = useTicker(label);
-  const pct   = MOCK_CHANGE[label] ?? 0;
-  const isUp  = pct >= 0;
+  const pct    = MOCK_CHANGE[label] ?? 0;
+  const isUp   = pct >= 0;
   const pctCol = isUp ? '#34d399' : '#f87171';
 
   return (
@@ -158,47 +158,43 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
       width: '100%', height: '100%',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      padding: '12px',
+      padding: '10px 8px',
       boxSizing: 'border-box',
       position: 'relative', zIndex: 1,
-      gap: 6,
+      gap: 8,
     }}>
-      {/* Watermark icon — oversized decorative background */}
+      {/* Ticker + pill */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 2 }}>
+        <span style={{
+          fontSize: 22, fontWeight: 700, color: '#fff',
+          letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
+          fontFamily: '"Fira Code", monospace',
+          lineHeight: 1, textAlign: 'center',
+        }}>
+          {Math.round(display).toLocaleString('es-MX')}
+        </span>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          background: isUp ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
+          borderRadius: 100, padding: '2px 8px',
+        }}>
+          <span style={{ fontSize: 9, color: pctCol, lineHeight: 1 }}>{isUp ? '↑' : '↓'}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: pctCol, lineHeight: 1 }}>
+            {isUp ? '+' : ''}{pct.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Icon centered below */}
       <div
-        className="widget-icon"
         style={{
-          position: 'absolute',
-          bottom: -30, right: -45,
-          width: 140, height: 140,
-          opacity: 0.12,
-          pointerEvents: 'none',
-          filter: `drop-shadow(0 0 12px ${accent})`,
+          width: 48, height: 48,
+          opacity: 0.55,
+          filter: `drop-shadow(0 0 8px ${accent})`,
+          zIndex: 2,
         }}
         dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
       />
-
-      {/* Number */}
-      <span style={{
-        fontSize: 24, fontWeight: 700, color: '#fff',
-        letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
-        lineHeight: 1, textAlign: 'center',
-        position: 'relative', zIndex: 2,
-      }}>
-        {Math.round(display).toLocaleString('es-MX')}
-      </span>
-
-      {/* % pill */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3,
-        background: isUp ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
-        borderRadius: 100, padding: '3px 9px',
-        position: 'relative', zIndex: 2,
-      }}>
-        <span style={{ fontSize: 9, color: pctCol, lineHeight: 1 }}>{isUp ? '↑' : '↓'}</span>
-        <span style={{ fontSize: 11, fontWeight: 600, color: pctCol, lineHeight: 1 }}>
-          {isUp ? '+' : ''}{pct.toFixed(1)}%
-        </span>
-      </div>
     </div>
   );
 }

@@ -188,7 +188,7 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
         </span>
         <span style={{
           position: 'absolute',
-          left: `calc(50% - ${num.length * 7 + 8}px)`,
+          right: `calc(50% - ${num.length * 7 + 8}px)`,
           fontSize: 11, color: pctCol,
           fontFamily: '"Chivo Mono", monospace', lineHeight: 1,
         }}>

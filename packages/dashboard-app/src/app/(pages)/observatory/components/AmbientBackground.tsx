@@ -152,41 +152,49 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
   const pct    = MOCK_CHANGE[label] ?? 0;
   const isUp   = pct >= 0;
   const pctCol = isUp ? '#34d399' : '#f87171';
+  const num    = display >= 1000 ? `${(display / 1000).toFixed(1)}k` : Math.round(display).toString();
 
   return (
     <div style={{
-      width: '100%', height: '100%',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '10px 8px',
+      position: 'absolute', inset: 0,
+      display: 'grid',
+      gridTemplateRows: '1fr auto',
+      alignItems: 'center',
+      justifyItems: 'center',
+      padding: '12px 8px 10px',
       boxSizing: 'border-box',
-      position: 'relative',
       zIndex: 2,
-      gap: 8,
     }}>
-      {/* Icon top */}
+      {/* Icon */}
       <div
         style={{
           width: 44, height: 44,
           opacity: 0.8,
           filter: `drop-shadow(0 0 8px ${accent})`,
-          color: 'white',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          alignSelf: 'center',
         }}
         dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
       />
-
-      {/* Ticker with inline arrow */}
-      <span style={{
-        fontSize: 20, fontWeight: 700,
-        color: 'white',
-        letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
-        fontFamily: '"Fira Code", monospace',
-        lineHeight: 1, textAlign: 'center',
-        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-      }}>
-        <span style={{ color: pctCol }}>{isUp ? '↑' : '↓'}</span>{' '}
-        {Math.round(display).toLocaleString('es-MX')}
-      </span>
+      {/* Ticker */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        <span style={{
+          fontSize: 20, fontWeight: 700, color: 'white',
+          fontVariantNumeric: 'tabular-nums',
+          fontFamily: '"Chivo Mono", monospace',
+          lineHeight: 1,
+        }}>
+          {num}
+        </span>
+        <span style={{
+          position: 'absolute',
+          left: `calc(50% - ${num.length * 7 + 8}px)`,
+          fontSize: 11, color: pctCol,
+          fontFamily: '"Chivo Mono", monospace', lineHeight: 1,
+        }}>
+          {isUp ? '↑' : '↓'}
+        </span>
+      </div>
     </div>
   );
 }

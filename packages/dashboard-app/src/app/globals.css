@@ -177,7 +177,7 @@
 }
 
 body {
-  font-family: "Fira Code", "Space Grotesk", -apple-system, "Helvetica Neue", system-ui, sans-serif;
+  font-family: "Chivo Mono", "Fira Code", monospace;
   background: var(--bg);
   color: var(--text);
   letter-spacing: -0.01em;
@@ -188,11 +188,11 @@ body {
     color var(--t-slow) var(--ease-in-out);
 }
 
-/* Numbers always use Fira Code Mono */
+/* Numbers always use Chivo Mono */
 .tabular-nums,
 [style*="tabular-nums"],
 input[type="number"] {
-  font-family: "Fira Code", monospace;
+  font-family: "Chivo Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 

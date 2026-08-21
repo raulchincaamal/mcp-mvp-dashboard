@@ -160,41 +160,33 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
       alignItems: 'center', justifyContent: 'center',
       padding: '10px 8px',
       boxSizing: 'border-box',
-      position: 'relative', zIndex: 1,
+      position: 'relative',
+      zIndex: 2,
       gap: 8,
     }}>
-      {/* Ticker + pill */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 2 }}>
-        <span style={{
-          fontSize: 22, fontWeight: 700, color: '#fff',
-          letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
-          fontFamily: '"Fira Code", monospace',
-          lineHeight: 1, textAlign: 'center',
-        }}>
-          {Math.round(display).toLocaleString('es-MX')}
-        </span>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3,
-          background: isUp ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
-          borderRadius: 100, padding: '2px 8px',
-        }}>
-          <span style={{ fontSize: 9, color: pctCol, lineHeight: 1 }}>{isUp ? '↑' : '↓'}</span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: pctCol, lineHeight: 1 }}>
-            {isUp ? '+' : ''}{pct.toFixed(1)}%
-          </span>
-        </div>
-      </div>
-
-      {/* Icon centered below */}
+      {/* Icon top */}
       <div
         style={{
-          width: 48, height: 48,
-          opacity: 0.55,
+          width: 44, height: 44,
+          opacity: 0.8,
           filter: `drop-shadow(0 0 8px ${accent})`,
-          zIndex: 2,
+          color: 'white',
         }}
         dangerouslySetInnerHTML={{ __html: CATEGORY_SVGS[label] }}
       />
+
+      {/* Ticker with inline arrow */}
+      <span style={{
+        fontSize: 20, fontWeight: 700,
+        color: 'white',
+        letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums',
+        fontFamily: '"Fira Code", monospace',
+        lineHeight: 1, textAlign: 'center',
+        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+      }}>
+        <span style={{ color: pctCol }}>{isUp ? '↑' : '↓'}</span>{' '}
+        {Math.round(display).toLocaleString('es-MX')}
+      </span>
     </div>
   );
 }

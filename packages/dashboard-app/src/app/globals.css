@@ -11,7 +11,7 @@
   /* Surfaces — Light */
   --bg: #d8dfe8;
   --surface: rgba(255, 255, 255, 0.52);
-  --surface-2: rgba(255, 255, 255, 0.35);
+  --surface-2: #f0f4fa;
   --surface-3: rgba(195, 208, 225, 0.55);
   --surface-blur: blur(28px);
 

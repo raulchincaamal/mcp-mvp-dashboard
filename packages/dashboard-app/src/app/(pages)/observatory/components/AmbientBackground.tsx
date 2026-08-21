@@ -465,16 +465,17 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           <div style={{
             width: WIDGET_SIZE, height: CARD_H,
             borderRadius: 18,
-            background: `linear-gradient(135deg, ${accent}15 0%, rgba(255,255,255,0.04) 60%, rgba(0,0,0,0.1) 100%)`,
-            border: `1px solid ${accent}25`,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: `
-              0 8px 32px rgba(0,0,0,0.35),
-              inset 0 1px 0 rgba(255,255,255,0.08)
-            `,
+            background: `var(--surface-2)`,
+            border: `1px solid ${accent}50`,
+            boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
             overflow: 'hidden', position: 'relative', flexShrink: 0,
           }}>
+            {/* Accent tint */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg, ${accent}25 0%, transparent 60%)`,
+              pointerEvents: 'none',
+            }} />
             {/* Hover glow */}
             <div className="aurora-glow" style={{
               position: 'absolute', inset: 0,

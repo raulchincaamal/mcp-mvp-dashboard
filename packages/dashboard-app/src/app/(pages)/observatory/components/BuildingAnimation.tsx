@@ -145,18 +145,18 @@ function PhaseReceiving({ active }: { active: boolean }) {
         {[0, 1, 2].map(i => (
           <div key={i} ref={el => { ringsRef.current[i] = el; }} style={{
             position: 'absolute',
-            width: 80, height: 80, borderRadius: '50%',
+            width: 120, height: 120, borderRadius: '50%',
             border: '1.5px solid var(--primary)',
             opacity: 0,
           }} />
         ))}
         <div ref={dotRef} style={{
-          width: 18, height: 18, borderRadius: '50%',
+          width: 26, height: 26, borderRadius: '50%',
           background: 'var(--primary)',
-          boxShadow: '0 0 24px var(--primary), 0 0 48px var(--primary)',
+          boxShadow: '0 0 32px var(--primary), 0 0 64px var(--primary)',
         }} />
       </div>
-      <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Recibiendo query...</p>
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Recibiendo query...</p>
     </Phase>
   );
 }
@@ -168,36 +168,36 @@ function PhaseAnalyzing({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return;
-    gsap.to(glassRef.current, { x: 20, y: -14, duration: 1.6, ease: 'sine.inOut', yoyo: true, repeat: -1 });
-    gsap.to(scanRef.current, { y: 30, duration: 1.0, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+    gsap.to(glassRef.current, { x: 28, y: -18, duration: 1.6, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+    gsap.to(scanRef.current, { y: 44, duration: 1.0, ease: 'sine.inOut', yoyo: true, repeat: -1 });
     return () => { gsap.killTweensOf(glassRef.current); gsap.killTweensOf(scanRef.current); };
   }, [active]);
 
   return (
     <Phase active={active}>
-      <div ref={glassRef} style={{ position: 'relative', width: 90, height: 90 }}>
+      <div ref={glassRef} style={{ position: 'relative', width: 130, height: 130 }}>
         <div style={{
-          position: 'absolute', top: 0, left: 0, width: 66, height: 66, borderRadius: '50%',
-          border: '3px solid var(--primary)',
-          boxShadow: '0 0 24px var(--primary), inset 0 0 16px rgba(73,164,216,0.1)',
+          position: 'absolute', top: 0, left: 0, width: 96, height: 96, borderRadius: '50%',
+          border: '4px solid var(--primary)',
+          boxShadow: '0 0 32px var(--primary), inset 0 0 24px rgba(73,164,216,0.12)',
         }} />
         <div style={{
-          position: 'absolute', top: 8, left: 8, width: 50, height: 50, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(73,164,216,0.1) 0%, transparent 70%)',
+          position: 'absolute', top: 12, left: 12, width: 72, height: 72, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(73,164,216,0.12) 0%, transparent 70%)',
         }} />
         <div ref={scanRef} style={{
-          position: 'absolute', top: 16, left: 10, right: 16, height: 2,
+          position: 'absolute', top: 22, left: 14, right: 22, height: 3,
           background: 'linear-gradient(90deg, transparent, var(--primary), transparent)',
-          boxShadow: '0 0 8px var(--primary)', borderRadius: 1,
+          boxShadow: '0 0 12px var(--primary)', borderRadius: 2,
         }} />
         <div style={{
-          position: 'absolute', bottom: 2, right: 2, width: 3, height: 32, borderRadius: 2,
+          position: 'absolute', bottom: 4, right: 4, width: 4, height: 46, borderRadius: 3,
           background: 'linear-gradient(to bottom, var(--primary), var(--primary-dark))',
           transform: 'rotate(45deg)', transformOrigin: 'top center',
-          boxShadow: '0 0 8px var(--primary)',
+          boxShadow: '0 0 12px var(--primary)',
         }} />
       </div>
-      <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Analizando intent...</p>
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Analizando intent...</p>
     </Phase>
   );
 }
@@ -230,18 +230,18 @@ function PhaseFetching({ active }: { active: boolean }) {
 
   return (
     <Phase active={active}>
-      <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '0 0 4px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Dataset · ventas-credito</p>
+      <div style={{ width: 400, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 6px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Dataset · ventas-credito</p>
         {rows.map((r, i) => (
           <div key={i} ref={el => { rowsRef.current[i] = el; }} style={{
-            height: 8, width: r.w, borderRadius: 4,
+            height: 10, width: r.w, borderRadius: 5,
             background: `linear-gradient(90deg, ${r.color}, ${r.color}44)`,
-            boxShadow: `0 0 8px ${r.color}66`,
+            boxShadow: `0 0 10px ${r.color}66`,
             opacity: 0,
           }} />
         ))}
       </div>
-      <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Obteniendo datos...</p>
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Obteniendo datos...</p>
     </Phase>
   );
 }
@@ -293,16 +293,16 @@ function PhaseGenerating({ active }: { active: boolean }) {
 
   return (
     <Phase active={active}>
-      <div style={{ width: 320, height: 200, position: 'relative' }}>
+      <div style={{ width: 460, height: 260, position: 'relative' }}>
         {/* Axes */}
-        <div style={{ position: 'absolute', left: 28, top: 8, bottom: 28, width: 2, background: 'linear-gradient(to top, var(--primary), var(--primary-light))', borderRadius: 1, boxShadow: '0 0 8px var(--primary)' }} />
-        <div style={{ position: 'absolute', left: 28, right: 8, bottom: 28, height: 2, background: 'linear-gradient(to right, var(--primary), var(--primary-light))', borderRadius: 1, boxShadow: '0 0 8px var(--primary)' }} />
+        <div style={{ position: 'absolute', left: 32, top: 8, bottom: 32, width: 2, background: 'linear-gradient(to top, var(--primary), var(--primary-light))', borderRadius: 1, boxShadow: '0 0 8px var(--primary)' }} />
+        <div style={{ position: 'absolute', left: 32, right: 8, bottom: 32, height: 2, background: 'linear-gradient(to right, var(--primary), var(--primary-light))', borderRadius: 1, boxShadow: '0 0 8px var(--primary)' }} />
         {/* Grid */}
         {[0.3, 0.55, 0.8].map((y, i) => (
-          <div key={i} style={{ position: 'absolute', left: 30, right: 8, bottom: `${28 + y * 150}px`, height: 1, background: 'var(--border-color)', opacity: 0.4 }} />
+          <div key={i} style={{ position: 'absolute', left: 34, right: 8, bottom: `${32 + y * 200}px`, height: 1, background: 'var(--border-color)', opacity: 0.4 }} />
         ))}
         {/* Bars */}
-        <div style={{ position: 'absolute', left: 34, right: 10, bottom: 30, top: 10, display: 'flex', alignItems: 'flex-end', gap: '3%' }}>
+        <div style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10, display: 'flex', alignItems: 'flex-end', gap: '3%' }}>
           {heights.map((h, i) => (
             <div key={i} style={{ flex: 1, height: `${h}%`, position: 'relative' }}>
               <div ref={el => { barsRef.current[i] = el; }} style={{ position: 'absolute', inset: 0, background: `linear-gradient(to top, ${colors[i]}, ${colors[i]}44)`, borderRadius: '4px 4px 0 0', boxShadow: `0 0 12px ${colors[i]}55`, transform: 'scaleY(0)', transformOrigin: 'bottom' }} />
@@ -311,7 +311,7 @@ function PhaseGenerating({ active }: { active: boolean }) {
           ))}
         </div>
         {/* Line + area */}
-        <svg style={{ position: 'absolute', left: 34, right: 10, bottom: 30, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="gl" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#34d399" /><stop offset="50%" stopColor="#06b6d4" /><stop offset="100%" stopColor="#a78bfa" />
@@ -327,7 +327,7 @@ function PhaseGenerating({ active }: { active: boolean }) {
           ))}
         </svg>
       </div>
-      <p style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Generando dashboard...</p>
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Generando dashboard...</p>
     </Phase>
   );
 }
@@ -359,14 +359,14 @@ function PhaseReady({ active }: { active: boolean }) {
 
   return (
     <Phase active={active}>
-      <div style={{ position: 'relative', width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div ref={glowRef} style={{ position: 'absolute', inset: -20, borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, transparent 70%)', opacity: 0 }} />
-        <svg width="80" height="80" viewBox="0 0 80 80">
+      <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div ref={glowRef} style={{ position: 'absolute', inset: -30, borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, transparent 70%)', opacity: 0 }} />
+        <svg width="120" height="120" viewBox="0 0 80 80">
           <circle ref={circleRef} cx="40" cy="40" r="32" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 8px #34d399)' }} />
           <path ref={checkRef} d="M 24 40 L 35 52 L 56 28" fill="none" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px #34d399)' }} />
         </svg>
       </div>
-      <p style={{ fontSize: 14, fontWeight: 600, color: '#34d399', margin: 0, letterSpacing: '0.04em', textShadow: '0 0 16px #34d39966' }}>¡Dashboard listo!</p>
+      <p style={{ fontSize: 16, fontWeight: 600, color: '#34d399', margin: 0, letterSpacing: '0.04em', textShadow: '0 0 16px #34d39966' }}>¡Dashboard listo!</p>
     </Phase>
   );
 }
@@ -443,7 +443,7 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
       )}
 
       {/* Phase stage */}
-      <div style={{ position: 'relative', zIndex: 1, width: 360, height: 260 }}>
+      <div style={{ position: 'relative', zIndex: 1, width: 'min(560px, 80vw)', height: 340 }}>
         <PhaseReceiving  active={phase === 1} />
         <PhaseAnalyzing  active={phase === 2} />
         <PhaseFetching   active={phase === 3} />

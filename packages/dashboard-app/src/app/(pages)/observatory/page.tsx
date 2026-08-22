@@ -323,7 +323,7 @@ export default function ObservatoryPage() {
         zIndex: 20, opacity: 0,
         inset: 0,
       }}>
-        <div ref={buildingRef} style={{ opacity: 0, width: '100%', height: '100%' }}>
+        <div ref={buildingRef} style={{ opacity: 1, width: '100%', height: '100%' }}>
           <BuildingAnimation key={zoomKey} state={ctx.state} query={zoomQuery ?? ''} statusMessage={ctx.statusMessage} />
           {ctx.error && (
             <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', padding: '12px 20px', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.3)', borderRadius: 10, maxWidth: 480, textAlign: 'center', zIndex: 10 }}>

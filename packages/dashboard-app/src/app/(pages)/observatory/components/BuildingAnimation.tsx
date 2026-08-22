@@ -101,20 +101,32 @@ function NodeCanvas() {
 // ── Phase wrapper ─────────────────────────────────────────
 function Phase({ active, children }: { active: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const hasBeenActive = useRef(false);
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
     if (!ref.current) return;
+
     if (active) {
+      hasBeenActive.current = true;
       gsap.killTweensOf(ref.current);
-      gsap.fromTo(ref.current,
-        { opacity: 0, y: 40, scale: 0.92, filter: 'blur(8px)' },
-        { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'power3.out' }
-      );
-    } else {
+      if (isFirstRender.current) {
+        // Already active on mount — snap in immediately
+        gsap.set(ref.current, { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' });
+      } else {
+        gsap.fromTo(ref.current,
+          { opacity: 0, y: 40, scale: 0.92, filter: 'blur(8px)' },
+          { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'power3.out' }
+        );
+      }
+    } else if (hasBeenActive.current) {
       gsap.killTweensOf(ref.current);
       gsap.to(ref.current,
         { opacity: 0, y: -30, scale: 0.94, filter: 'blur(6px)', duration: 0.4, ease: 'power2.in' }
       );
     }
+
+    isFirstRender.current = false;
   }, [active]);
   return (
     <div ref={ref} style={{
@@ -219,27 +231,31 @@ function PhaseFetching({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return;
-    const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.4 });
-    rowsRef.current.forEach((el, i) => {
-      if (!el) return;
-      tl.fromTo(el,
-        { scaleX: 0, opacity: 0 },
-        { scaleX: 1, opacity: 1, duration: 0.35, ease: 'power2.out', transformOrigin: 'left' },
-        i * 0.08
-      );
-    });
-    tl.to(rowsRef.current, { opacity: 0, duration: 0.3, stagger: 0.04 }, '+=0.5');
-    return () => tl.kill();
+    const rows = rowsRef.current.filter(Boolean) as HTMLDivElement[];
+    if (rows.length === 0) return;
+
+    let currentTl: gsap.core.Timeline | null = null;
+    let alive = true;
+
+    const loop = () => {
+      if (!alive) return;
+      // reset
+      gsap.set(rows, { width: 0, opacity: 1 });
+      currentTl = gsap.timeline({ onComplete: loop });
+      rows.forEach((el, i) => {
+        const targetW = el.dataset.w ?? '80%';
+        currentTl!.to(el, { width: targetW, duration: 0.4, ease: 'power2.out' }, i * 0.1);
+      });
+      currentTl.to(rows, { opacity: 0, duration: 0.4, stagger: 0.05 }, '+=0.8');
+    };
+    loop();
+
+    return () => { alive = false; currentTl?.kill(); };
   }, [active]);
 
   const rows = [
-    { w: '85%', color: 'var(--primary)' },
-    { w: '60%', color: 'var(--primary-dark)' },
-    { w: '75%', color: 'var(--primary)' },
-    { w: '45%', color: 'var(--primary-dark)' },
-    { w: '90%', color: 'var(--primary)' },
-    { w: '55%', color: 'var(--primary-dark)' },
-    { w: '70%', color: 'var(--primary)' },
+    { w: '85%' }, { w: '60%' }, { w: '75%' },
+    { w: '45%' }, { w: '90%' }, { w: '55%' }, { w: '70%' },
   ];
 
   return (
@@ -247,12 +263,15 @@ function PhaseFetching({ active }: { active: boolean }) {
       <div style={{ width: 400, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 6px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Dataset · ventas-credito</p>
         {rows.map((r, i) => (
-          <div key={i} ref={el => { rowsRef.current[i] = el; }} style={{
-            height: 10, width: r.w, borderRadius: 5,
-            background: `linear-gradient(90deg, ${r.color}, ${r.color}44)`,
-            boxShadow: `0 0 10px ${r.color}66`,
-            opacity: 0,
-          }} />
+          <div key={i} ref={el => { rowsRef.current[i] = el; }}
+            data-w={r.w}
+            style={{
+              height: 10, width: 0, borderRadius: 5,
+              background: i % 2 === 0 ? 'var(--primary)' : 'var(--primary-dark)',
+              boxShadow: i % 2 === 0 ? '0 0 10px var(--primary)' : '0 0 10px var(--primary-dark)',
+              opacity: 1,
+            }}
+          />
         ))}
       </div>
       <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Obteniendo datos...</p>
@@ -465,17 +484,21 @@ function Steps({ phase }: { phase: number }) {
 }
 
 // ── Main ──────────────────────────────────────────────────
+function stateToPhase(state: ObservatoryState): number {
+  if (state === 'QUERY_RECEIVED') return 1;
+  if (state === 'ANALYZING') return 2;
+  if (state === 'FETCHING_DATA') return 3;
+  if (state === 'GENERATING_VISUALIZATIONS') return 4;
+  if (state === 'REVEAL') return 5;
+  return 0;
+}
+
 export default function BuildingAnimation({ state, query, statusMessage }: Props) {
-  const [phase, setPhase] = useState(0);
-  const prevPhase = useRef(0);
+  const [phase, setPhase] = useState(() => stateToPhase(state));
+  const prevPhase = useRef(stateToPhase(state));
 
   useEffect(() => {
-    let p = 0;
-    if (state === 'QUERY_RECEIVED') p = 1;
-    else if (state === 'ANALYZING') p = 2;
-    else if (state === 'FETCHING_DATA') p = 3;
-    else if (state === 'GENERATING_VISUALIZATIONS') p = 4;
-    else if (state === 'REVEAL') p = 5;
+    const p = stateToPhase(state);
     if (p >= prevPhase.current) { setPhase(p); prevPhase.current = p; }
   }, [state]);
 

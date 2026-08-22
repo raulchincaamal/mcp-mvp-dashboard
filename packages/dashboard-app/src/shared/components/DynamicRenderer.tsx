@@ -1317,7 +1317,7 @@ export default function DynamicRenderer({
           gap: '1.25rem',
           padding: '4rem 2rem',
           textAlign: 'center',
-          animation: 'fadeSlideUp 0.4s var(--ease-out-expo) both',
+          animation: 'fadeSlideUp 0.4s cubic-bezier(0.16,1,0.3,1) both',
         }}
       >
         <div

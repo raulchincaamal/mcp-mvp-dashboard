@@ -228,6 +228,104 @@ function ResultPresentation({
   );
 }
 
+function LoadingState({ loadingMsg }: { loadingMsg: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const spinnerRef = useRef<HTMLDivElement>(null);
+  const pulseRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    gsap.fromTo(el,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }
+    );
+  }, []);
+
+  useEffect(() => {
+    const spinner = spinnerRef.current;
+    const pulse = pulseRef.current;
+    if (!spinner || !pulse) return;
+
+    const spinTween = gsap.to(spinner, { rotation: 360, duration: 0.9, ease: 'none', repeat: -1 });
+    const pulseTween = gsap.to(pulse, { scale: 1.15, opacity: 1, duration: 0.75, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+
+    return () => { spinTween.kill(); pulseTween.kill(); };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '1.5rem',
+        paddingTop: '5rem',
+        opacity: 0,
+      }}
+    >
+      <div style={{ position: 'relative', width: 64, height: 64 }}>
+        <div
+          ref={pulseRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '50%',
+            background: 'var(--primary-light)',
+            opacity: 0.6,
+          }}
+        />
+        <div
+          ref={spinnerRef}
+          style={{
+            position: 'absolute',
+            inset: 8,
+            borderRadius: '50%',
+            border: '2px solid var(--primary)',
+            borderTopColor: 'transparent',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.4rem',
+          }}
+        >
+          ✦
+        </div>
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)' }}>
+          {LOADING_MESSAGES[loadingMsg]}
+        </p>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', marginTop: '0.35rem' }}>
+          Bedrock está orquestando tu dashboard
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        {LOADING_MESSAGES.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: i === loadingMsg ? 20 : 6,
+              height: 6,
+              borderRadius: 99,
+              background: i === loadingMsg ? 'var(--primary)' : 'var(--border-color)',
+              transition: 'all 0.3s ease',
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DynamicPage() {
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -556,92 +654,7 @@ export default function DynamicPage() {
         }}
       >
         {/* Loading */}
-        {loading && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '1.5rem',
-              paddingTop: '5rem',
-              animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both',
-            }}
-          >
-            <div style={{ position: 'relative', width: 64, height: 64 }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: '50%',
-                  background: 'var(--primary-light)',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 8,
-                  borderRadius: '50%',
-                  border: '2px solid var(--primary)',
-                  borderTopColor: 'transparent',
-                  animation: 'spin 0.9s linear infinite',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.4rem',
-                }}
-              >
-                ✦
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p
-                style={{
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                }}
-              >
-                {LOADING_MESSAGES[loadingMsg]}
-              </p>
-              <p
-                style={{
-                  fontSize: '0.82rem',
-                  color: 'var(--text-tertiary)',
-                  marginTop: '0.35rem',
-                }}
-              >
-                Bedrock está orquestando tu dashboard
-              </p>
-            </div>
-            <div
-              style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
-            >
-              {LOADING_MESSAGES.map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: i === loadingMsg ? 20 : 6,
-                    height: 6,
-                    borderRadius: 99,
-                    background:
-                      i === loadingMsg
-                        ? 'var(--primary)'
-                        : 'var(--border-color)',
-                    transition: 'all 0.3s var(--ease-out-expo)',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {loading && <LoadingState loadingMsg={loadingMsg} />}
 
         {/* Credentials expired */}
         {credExpired && !loading && (
@@ -654,7 +667,7 @@ export default function DynamicPage() {
               gap: '1rem',
               paddingTop: '4rem',
               textAlign: 'center',
-              animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both',
+              animation: 'fadeSlideUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
             }}
           >
             <div
@@ -765,7 +778,7 @@ export default function DynamicPage() {
               gap: '1rem',
               paddingTop: '4rem',
               textAlign: 'center',
-              animation: 'fadeSlideUp 0.3s var(--ease-out-expo) both',
+              animation: 'fadeSlideUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
             }}
           >
             <div
@@ -845,7 +858,7 @@ export default function DynamicPage() {
               gap: '1.25rem',
               paddingTop: '5rem',
               textAlign: 'center',
-              animation: 'fadeSlideUp 0.5s 0.1s var(--ease-out-expo) both',
+              animation: 'fadeSlideUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both',
             }}
           >
             <div
@@ -935,17 +948,6 @@ export default function DynamicPage() {
         )}
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 0.6; }
-          50% { transform: scale(1.15); opacity: 1; }
-        }
-        @keyframes fadeSlideDown {
-          from { opacity: 0; transform: translateY(-12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

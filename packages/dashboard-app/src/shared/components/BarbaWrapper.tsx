@@ -41,7 +41,7 @@ export default function BarbaWrapper({ children }: { children: React.ReactNode }
     <div
       ref={containerRef}
       data-barba="container"
-      style={{ minHeight: '100vh' }}
+      style={{ minHeight: '100vh', opacity: 1 }}
     >
       {children}
     </div>

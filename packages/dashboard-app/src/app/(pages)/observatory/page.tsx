@@ -246,8 +246,8 @@ export default function ObservatoryPage() {
       {/* Layer 1 — Cursor light */}
       <CursorLight />
 
-      {/* Hot corner — bottom left theme switcher */}
-      <HotCorner />
+      {/* Hot corner — bottom left theme switcher (solo en landing) */}
+      <HotCorner enabled={isIdle && !zoomQuery && !showPresentation} />
 
       {/* Layer 2 — CoreLight: siempre montado, GSAP controla opacity */}
       <div

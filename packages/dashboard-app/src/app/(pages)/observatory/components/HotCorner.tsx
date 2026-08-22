@@ -13,7 +13,7 @@ const THEMES: { value: Theme; label: string; dot: string }[] = [
 
 const TRIGGER_ZONE = 80; // px from corner to trigger
 
-export default function HotCorner() {
+export default function HotCorner({ enabled = true }: { enabled?: boolean }) {
   const [theme, setTheme] = useState<Theme>('dark');
   const [visible, setVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,7 +27,16 @@ export default function HotCorner() {
   }, []);
 
   useEffect(() => {
+    if (!enabled && visible) setVisible(false);
+  }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const onMove = (e: MouseEvent) => {
+      if (!enabled) {
+        if (hideTimeout.current) clearTimeout(hideTimeout.current);
+        hideTimeout.current = setTimeout(() => setVisible(false), 0);
+        return;
+      }
       const nearCorner =
         e.clientX < TRIGGER_ZONE &&
         e.clientY > window.innerHeight - TRIGGER_ZONE;
@@ -45,7 +54,7 @@ export default function HotCorner() {
       window.removeEventListener('mousemove', onMove);
       if (hideTimeout.current) clearTimeout(hideTimeout.current);
     };
-  }, [visible]);
+  }, [visible, enabled]);
 
   // Animate in/out
   useEffect(() => {

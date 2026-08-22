@@ -140,8 +140,8 @@ export default function Navbar() {
         })}
       </nav>
 
-      {/* Theme switcher */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
+      {/* Theme switcher — only on landing (/) */}
+      <div style={{ position: 'relative', flexShrink: 0, visibility: pathname === '/' ? 'visible' : 'hidden', pointerEvents: pathname === '/' ? 'auto' : 'none' }}>
         <button
           onClick={() => setThemeOpen((o) => !o)}
           style={{

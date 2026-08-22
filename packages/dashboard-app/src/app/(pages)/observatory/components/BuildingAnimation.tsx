@@ -110,20 +110,18 @@ function Phase({ active, children }: { active: boolean; children: React.ReactNod
     if (active) {
       hasBeenActive.current = true;
       gsap.killTweensOf(ref.current);
+      gsap.set(ref.current, { y: 0, scale: 1, filter: 'blur(0px)' });
       if (isFirstRender.current) {
-        // Already active on mount — snap in immediately
-        gsap.set(ref.current, { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' });
+        gsap.set(ref.current, { opacity: 1 });
       } else {
         gsap.fromTo(ref.current,
-          { opacity: 0, y: 40, scale: 0.92, filter: 'blur(8px)' },
-          { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'power3.out' }
+          { opacity: 0 },
+          { opacity: 1, duration: 0.5, ease: 'power2.out' }
         );
       }
     } else if (hasBeenActive.current) {
       gsap.killTweensOf(ref.current);
-      gsap.to(ref.current,
-        { opacity: 0, y: -30, scale: 0.94, filter: 'blur(6px)', duration: 0.4, ease: 'power2.in' }
-      );
+      gsap.to(ref.current, { opacity: 0, duration: 0.3, ease: 'power2.in' });
     }
 
     isFirstRender.current = false;
@@ -184,41 +182,67 @@ function PhaseReceiving({ active }: { active: boolean }) {
   );
 }
 
-// ── Phase 2: ANALIZANDO — scanning magnifier ──────────────
+// ── Phase 2: ANALIZANDO — vertical scan ──────────────────
 function PhaseAnalyzing({ active }: { active: boolean }) {
-  const glassRef = useRef<HTMLDivElement>(null);
   const scanRef  = useRef<HTMLDivElement>(null);
+  const trailRef = useRef<HTMLDivElement>(null);
+  const dotRefs  = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     if (!active) return;
-    gsap.to(glassRef.current, { x: 28, y: -18, duration: 1.6, ease: 'sine.inOut', yoyo: true, repeat: -1 });
-    gsap.to(scanRef.current, { y: 44, duration: 1.0, ease: 'sine.inOut', yoyo: true, repeat: -1 });
-    return () => { gsap.killTweensOf(glassRef.current); gsap.killTweensOf(scanRef.current); };
+    gsap.to(scanRef.current,  { y: 96, duration: 1.2, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+    gsap.to(trailRef.current, { y: 96, duration: 1.2, ease: 'sine.inOut', yoyo: true, repeat: -1 });
+    dotRefs.current.forEach((el, i) => {
+      if (!el) return;
+      gsap.to(el, { opacity: 1, duration: 0.3, ease: 'power2.out', delay: i * 0.18, yoyo: true, repeat: -1, repeatDelay: 0.4 });
+    });
+    return () => {
+      gsap.killTweensOf(scanRef.current);
+      gsap.killTweensOf(trailRef.current);
+      dotRefs.current.forEach(el => gsap.killTweensOf(el));
+    };
   }, [active]);
+
+  const dots = [
+    { x: 30, y: 28 }, { x: 70, y: 45 }, { x: 50, y: 65 },
+    { x: 20, y: 60 }, { x: 80, y: 25 }, { x: 55, y: 20 },
+  ];
 
   return (
     <Phase active={active}>
-      <div ref={glassRef} style={{ position: 'relative', width: 130, height: 130 }}>
+      <div style={{ position: 'relative', width: 120, height: 120 }}>
+        {/* Border circle */}
         <div style={{
-          position: 'absolute', top: 0, left: 0, width: 96, height: 96, borderRadius: '50%',
-          border: '4px solid var(--primary)',
-          boxShadow: '0 0 32px var(--primary), inset 0 0 24px rgba(73,164,216,0.12)',
-        }} />
-        <div style={{
-          position: 'absolute', top: 12, left: 12, width: 72, height: 72, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(73,164,216,0.12) 0%, transparent 70%)',
-        }} />
-        <div ref={scanRef} style={{
-          position: 'absolute', top: 22, left: 14, right: 22, height: 3,
-          background: 'linear-gradient(90deg, transparent, var(--primary), transparent)',
-          boxShadow: '0 0 12px var(--primary)', borderRadius: 2,
-        }} />
-        <div style={{
-          position: 'absolute', bottom: 4, right: 4, width: 4, height: 46, borderRadius: 3,
-          background: 'linear-gradient(to bottom, var(--primary), var(--primary-dark))',
-          transform: 'rotate(45deg)', transformOrigin: 'top center',
-          boxShadow: '0 0 12px var(--primary)',
-        }} />
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          border: '1.5px solid var(--primary)',
+          boxShadow: '0 0 24px var(--primary)',
+          overflow: 'hidden',
+        }}>
+          {/* Scan line */}
+          <div ref={scanRef} style={{
+            position: 'absolute', left: 0, right: 0, top: 0, height: 2,
+            background: 'linear-gradient(90deg, transparent, var(--primary), transparent)',
+            boxShadow: '0 0 8px var(--primary)',
+          }} />
+          {/* Scan glow trail */}
+          <div ref={trailRef} style={{
+            position: 'absolute', left: 0, right: 0, top: 0, height: 24,
+            background: 'linear-gradient(to bottom, rgba(73,164,216,0.15), transparent)',
+            pointerEvents: 'none',
+          }} />
+        </div>
+        {/* Dots */}
+        {dots.map((d, i) => (
+          <div key={i} ref={el => { dotRefs.current[i] = el; }} style={{
+            position: 'absolute',
+            left: `${d.x}%`, top: `${d.y}%`,
+            width: 4, height: 4, borderRadius: '50%',
+            background: 'var(--primary)',
+            boxShadow: '0 0 6px var(--primary)',
+            opacity: 0,
+            transform: 'translate(-50%, -50%)',
+          }} />
+        ))}
       </div>
       <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Analizando intent...</p>
     </Phase>
@@ -375,7 +399,6 @@ function PhaseGenerating({ active }: { active: boolean }) {
 function PhaseReady({ active }: { active: boolean }) {
   const checkRef  = useRef<SVGPathElement>(null);
   const circleRef = useRef<SVGCircleElement>(null);
-  const glowRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -390,22 +413,17 @@ function PhaseReady({ active }: { active: boolean }) {
     const tl = gsap.timeline();
     tl.to(circleRef.current, { strokeDashoffset: 0, duration: 0.6, ease: 'power2.out' });
     tl.to(checkRef.current,  { strokeDashoffset: 0, duration: 0.4, ease: 'power2.out' }, '-=0.1');
-    tl.fromTo(glowRef.current, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(2)' }, '-=0.2');
-    tl.to(glowRef.current, { opacity: 0.4, scale: 1.4, duration: 1.2, ease: 'power1.inOut', yoyo: true, repeat: -1 }, '+=0.1');
 
     return () => tl.kill();
   }, [active]);
 
   return (
     <Phase active={active}>
-      <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div ref={glowRef} style={{ position: 'absolute', inset: -30, borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, transparent 70%)', opacity: 0 }} />
-        <svg width="120" height="120" viewBox="0 0 80 80">
-          <circle ref={circleRef} cx="40" cy="40" r="32" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 8px #34d399)' }} />
-          <path ref={checkRef} d="M 24 40 L 35 52 L 56 28" fill="none" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px #34d399)' }} />
-        </svg>
-      </div>
-      <p style={{ fontSize: 16, fontWeight: 600, color: '#34d399', margin: 0, letterSpacing: '0.04em', textShadow: '0 0 16px #34d39966' }}>¡Dashboard listo!</p>
+      <svg width="120" height="120" viewBox="0 0 80 80" style={{ overflow: 'visible', filter: 'drop-shadow(0 0 20px rgba(52,211,153,0.5))' }}>
+        <circle ref={circleRef} cx="40" cy="40" r="32" fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
+        <path ref={checkRef} d="M 24 40 L 35 52 L 56 28" fill="none" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <p style={{ fontSize: 16, fontWeight: 600, color: '#34d399', margin: 0, letterSpacing: '0.04em', textShadow: '0 0 16px rgba(52,211,153,0.4)' }}>¡Dashboard listo!</p>
     </Phase>
   );
 }
@@ -503,7 +521,7 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
   }, [state]);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', overflow: 'hidden' }}>
       <NodeCanvas />
 
       {/* Grid */}
@@ -516,12 +534,13 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
       {/* Center glow */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 60% at center, var(--primary-light), transparent)' }} />
 
-      {/* Query */}
+      {/* Query — fixed top */}
       {query && (
         <p style={{
-          position: 'relative', zIndex: 1,
+          position: 'absolute', top: 'clamp(32px, 6vh, 64px)', left: 0, right: 0,
+          zIndex: 1, textAlign: 'center', margin: 0,
           fontSize: 'clamp(16px, 2vw, 22px)', fontWeight: 600, color: 'var(--text)',
-          textAlign: 'center', margin: 0, maxWidth: 'min(640px, 80vw)', padding: '0 24px',
+          padding: '0 24px',
           opacity: phase >= 1 ? 1 : 0, transform: phase >= 1 ? 'translateY(0)' : 'translateY(16px)',
           transition: 'opacity 0.5s ease, transform 0.5s ease',
         }}>
@@ -529,11 +548,14 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
         </p>
       )}
 
-      {/* Phase stage — takes most of the screen */}
+      {/* Phase stage — absolutely centered */}
       <div style={{
-        position: 'relative', zIndex: 1,
+        position: 'absolute',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
         width: 'min(700px, 90vw)',
         height: 'clamp(300px, 45vh, 480px)',
+        zIndex: 1,
       }}>
         <PhaseReceiving  active={phase === 1} />
         <PhaseAnalyzing  active={phase === 2} />
@@ -542,14 +564,15 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
         <PhaseReady      active={phase === 5} />
       </div>
 
-      {/* Steps */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      {/* Steps — fixed bottom */}
+      <div style={{ position: 'absolute', bottom: 'clamp(32px, 6vh, 64px)', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1 }}>
         <Steps phase={phase} />
       </div>
 
       {statusMessage && (
         <p style={{
-          position: 'relative', zIndex: 1,
+          position: 'absolute', bottom: 'clamp(12px, 2vh, 20px)', left: 0, right: 0,
+          textAlign: 'center', zIndex: 1,
           fontSize: 11, color: 'var(--primary)',
           letterSpacing: '0.12em', textTransform: 'uppercase', margin: 0,
           opacity: 0.7,

@@ -5,6 +5,7 @@ import React from 'react';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import { cursorRef } from '../hooks/useCursor';
+import AuroraBackground from './AuroraBackground';
 
 interface Props {
   onCategoryClick?: (label: string, rect: DOMRect) => void;
@@ -374,6 +375,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
+      <AuroraBackground position="fixed" />
       {/* Three.js canvas */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 

@@ -96,11 +96,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
       </div>
       <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {viewMode === 'presentation' && (
-          <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)' }}>
+          <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {autoPlay ? '⏸' : '▶'} {currentSlide + 1}/{totalSlides}
           </button>
         )}
-        <button onClick={() => switchMode(viewMode === 'presentation' ? 'grid' : 'presentation')} style={{ padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)' }}>
+        <button onClick={() => switchMode(viewMode === 'presentation' ? 'grid' : 'presentation')} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           {viewMode === 'presentation' ? '⊞ Grid' : '▶ Slides'}
         </button>
       </div>
@@ -297,7 +297,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         }}
       >
         {/* Header card */}
-        <div ref={headerCardRef} data-header-card style={{ borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
+        <div ref={headerCardRef} data-header-card style={{ borderRadius: 20, background: 'rgba(255,255,255,0.06)', outline: '1px solid rgba(255,255,255,0.12)', outlineOffset: '-1px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>
@@ -433,9 +433,9 @@ const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accen
 
     return (
       <div ref={ref} onClick={onClick}
-        onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.02, duration: 0.35, ease: 'power2.out' })}
-        onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.45, ease: 'power2.out' })}
-        style={{ gridColumn: colSpan, gridRow: rowSpan, position: 'relative', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '22px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)', willChange: 'transform' }}
+        onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.02, duration: 0.3, ease: 'power2.out', overwrite: true })}
+        onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: true })}
+        style={{ gridColumn: colSpan, gridRow: rowSpan, position: 'relative', borderRadius: 20, background: 'rgba(255,255,255,0.06)', outline: '1px solid rgba(255,255,255,0.12)', outlineOffset: '-1px', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '22px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)', willChange: 'transform' }}
       >
         <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: `linear-gradient(90deg, transparent, ${accent}88, transparent)` }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexShrink: 0 }}>

@@ -145,11 +145,11 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
         </span>
         <span style={{
           position: 'absolute',
-          right: `calc(50% - ${num.length * 7 + 8}px)`,
-          fontSize: 11, color: pctCol,
-          fontFamily: '"Chivo Mono", monospace', lineHeight: 1,
+          right: `calc(50% - ${num.length * 7 + 13}px)`,
+          fontSize: 14, color: pctCol,
+          lineHeight: 1,
         }}>
-          {isUp ? '↑' : '↓'}
+          {isUp ? '▲' : '▼'}
         </span>
       </div>
     </div>
@@ -181,14 +181,15 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     mount.appendChild(renderer.domElement);
 
     // ── Particles ──────────────────────────────────────────────────────────
-    const PC = 700;
+    const PC = 300;
     const pPos = new Float32Array(PC * 3);
-    const pVel: { x: number; y: number }[] = [];
+    const pVel = new Float32Array(PC * 2);
     for (let i = 0; i < PC; i++) {
       pPos[i * 3]     = (Math.random() - 0.5) * 1400;
       pPos[i * 3 + 1] = (Math.random() - 0.5) * 900;
       pPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
-      pVel.push({ x: (Math.random() - 0.5) * 0.12, y: (Math.random() - 0.5) * 0.12 });
+      pVel[i * 2]     = (Math.random() - 0.5) * 0.12;
+      pVel[i * 2 + 1] = (Math.random() - 0.5) * 0.12;
     }
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
@@ -196,14 +197,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       new THREE.PointsMaterial({ color: 0x8899ff, size: 1.6, transparent: true, opacity: 0.4 })
     ));
 
-    // ── Particle connections ───────────────────────────────────────────────
-    const MAX_CONN = 500;
-    const connPos = new Float32Array(MAX_CONN * 6);
-    const connGeo = new THREE.BufferGeometry();
-    connGeo.setAttribute('position', new THREE.BufferAttribute(connPos, 3));
-    scene.add(new THREE.LineSegments(connGeo,
-      new THREE.LineBasicMaterial({ color: 0x4455bb, transparent: true, opacity: 0.15 })
-    ));
+    // ── Particle connections — DISABLED for performance ───────────────────
 
     // ── Orbit ellipse guide ────────────────────────────────────────────────
     const epts: THREE.Vector3[] = [];
@@ -222,13 +216,15 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
 
     // ── Center→widget lines ────────────────────────────────────────────────
     const lineGeos: THREE.BufferGeometry[] = [];
+    // Cache line materials for direct access
+    const lineMaterials: THREE.LineBasicMaterial[] = [];
     for (let i = 0; i < N; i++) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-      scene.add(new THREE.Line(geo,
-        new THREE.LineBasicMaterial({ color: 0x5577ff, transparent: true, opacity: 0.22 }),
-      ));
+      const mat = new THREE.LineBasicMaterial({ color: 0x5577ff, transparent: true, opacity: 0.22 });
+      scene.add(new THREE.Line(geo, mat));
       lineGeos.push(geo);
+      lineMaterials.push(mat);
     }
     lineGeosRef.current = lineGeos;
 
@@ -239,6 +235,9 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', onResize);
+
+    // Reusable vector for projection
+    const projVec = new THREE.Vector3();
 
     // ── Loop ───────────────────────────────────────────────────────────────
     const animate = () => {
@@ -252,35 +251,18 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       // Advance orbit angle — speed controlled by omegaSpeed.v
       angleRef.current += omegaSpeed.v;
 
-      // Particles
+      // Particles — typed array access
       const pp = pGeo.attributes.position as THREE.BufferAttribute;
+      const arr = pp.array as Float32Array;
       for (let i = 0; i < PC; i++) {
-        let x = pp.getX(i) + pVel[i].x;
-        let y = pp.getY(i) + pVel[i].y;
+        let x = arr[i * 3]     + pVel[i * 2];
+        let y = arr[i * 3 + 1] + pVel[i * 2 + 1];
         if (x >  700) x = -700; if (x < -700) x =  700;
         if (y >  450) y = -450; if (y < -450) y =  450;
-        pp.setXYZ(i, x, y, pp.getZ(i));
+        arr[i * 3]     = x;
+        arr[i * 3 + 1] = y;
       }
       pp.needsUpdate = true;
-
-      // Particle connections
-      let ci = 0;
-      const cp = connGeo.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < PC && ci < MAX_CONN; i++) {
-        for (let j = i + 1; j < PC && ci < MAX_CONN; j++) {
-          const dx = pp.getX(i) - pp.getX(j);
-          const dy = pp.getY(i) - pp.getY(j);
-          if (dx * dx + dy * dy < 85 * 85) {
-            cp.setXYZ(ci * 2,     pp.getX(i), pp.getY(i), pp.getZ(i));
-            cp.setXYZ(ci * 2 + 1, pp.getX(j), pp.getY(j), pp.getZ(j));
-            ci++;
-          }
-        }
-      }
-      for (let i = ci; i < MAX_CONN; i++) {
-        cp.setXYZ(i * 2, 0, 0, -9999); cp.setXYZ(i * 2 + 1, 0, 0, -9999);
-      }
-      cp.needsUpdate = true;
 
       // Widgets — GSAP 3D billboard (always flat, facing viewer)
       for (let i = 0; i < N; i++) {
@@ -289,11 +271,10 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         const wy = RY * Math.sin(a) * Math.cos(TILT);
         const wz = RY * Math.sin(a) * Math.sin(TILT);
 
-        // Project to screen
-        const v = new THREE.Vector3(wx, wy, wz);
-        v.project(camera);
-        const sx = ( v.x * 0.5 + 0.5) * window.innerWidth;
-        const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
+        // Project to screen — reuse vector
+        projVec.set(wx, wy, wz).project(camera);
+        const sx = ( projVec.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
 
         // Depth: 0 = back, 1 = front
         const depth = (wz + RY) / (2 * RY);
@@ -306,15 +287,11 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           const totalH = CARD_H + LABEL_H;
           const depth = (wz + RY) / (2 * RY);
           const baseScale = (0.65 + depth * 0.35) * hoverScales[i];
-
-          gsap.set(el, {
-            x: sx - WIDGET_SIZE / 2,
-            y: sy - totalH / 2,
-            zIndex: Math.round(depth * 100) + 10,
-            opacity: 1,
-            scale: baseScale * splashScales[i],
-            visibility: cardVisible[i] ? 'visible' : 'hidden',
-          });
+          const finalScale = baseScale * splashScales[i];
+          // Direct style manipulation instead of gsap.set
+          el.style.transform = `translate(${sx - WIDGET_SIZE / 2}px, ${sy - totalH / 2}px) scale(${finalScale})`;
+          el.style.zIndex = String(Math.round(depth * 100) + 10);
+          if (cardVisible[i]) el.style.visibility = 'visible';
         }
 
         // Update line — interpolate from center to widget based on lineProgresses[i]
@@ -325,12 +302,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           lp.setXYZ(0, 0, 0, 0);
           lp.setXYZ(1, wx * p, wy * p, wz * p);
           lp.needsUpdate = true;
-          // fade in opacity with progress
-          (lg as any)._mat = (lg as any)._mat;
-          const lineMesh = scene.children.find(c =>
-            c instanceof THREE.Line && (c as THREE.Line).geometry === lg
-          ) as THREE.Line | undefined;
-          if (lineMesh) (lineMesh.material as THREE.LineBasicMaterial).opacity = 0.22 * p;
+          lineMaterials[i].opacity = 0.22 * p;
         }
       }
 
@@ -403,7 +375,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
-              if (border) gsap.to(border, { opacity: 1, duration: 0.4, ease: 'power2.out' });
+              if (border) border.style.outlineColor = `${accent}cc`;
             }}
             onMouseLeave={e => {
               const el = e.currentTarget;
@@ -412,7 +384,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
-              if (border) gsap.to(border, { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
+              if (border) border.style.outlineColor = `${accent}50`;
             }}
           >
             {/* Card */}
@@ -420,7 +392,6 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               width: WIDGET_SIZE, height: CARD_H,
               borderRadius: 18,
               background: `${accent}18`,
-              border: `1px solid ${accent}50`,
               boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
               overflow: 'hidden', position: 'relative', flexShrink: 0,
             }}>
@@ -442,11 +413,13 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
                 background: `radial-gradient(ellipse at 30% 50%, ${accent}40 0%, transparent 70%)`,
                 opacity: 0, pointerEvents: 'none',
               }} />
-              {/* Border highlight on hover */}
+              {/* Border — always visible base + hover highlight */}
               <div className="aurora-border" style={{
-                position: 'absolute', inset: -1, borderRadius: 19,
-                border: `1.5px solid ${accent}80`,
-                opacity: 0, pointerEvents: 'none',
+                position: 'absolute', inset: 0, borderRadius: 18,
+                outline: `1px solid ${accent}50`,
+                outlineOffset: '-1px',
+                opacity: 1, pointerEvents: 'none',
+                transition: 'outline-color 0.4s ease',
               }} />
               {/* Top shine */}
               <div style={{

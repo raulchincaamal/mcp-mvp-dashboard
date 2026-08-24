@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import type { ObservatoryState } from '../state-machine';
+import AuroraBackground from './AuroraBackground';
 
 interface Props {
   state: ObservatoryState;
@@ -522,17 +523,15 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
 
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', overflow: 'hidden' }}>
+      <AuroraBackground position="absolute" />
       <NodeCanvas />
 
       {/* Grid */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         backgroundImage: `linear-gradient(var(--border-color) 1px, transparent 1px), linear-gradient(90deg, var(--border-color) 1px, transparent 1px)`,
-        backgroundSize: '60px 60px', opacity: 0.5,
+        backgroundSize: '60px 60px', opacity: 0.3,
       }} />
-
-      {/* Center glow */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 60% at center, var(--primary-light), transparent)' }} />
 
       {/* Query — fixed top */}
       {query && (

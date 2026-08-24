@@ -255,6 +255,7 @@ const GAP = 16;
 
 function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void }) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const headerCardRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
   useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
   useEffect(() => {
@@ -262,7 +263,12 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
     requestAnimationFrame(() => {
       const cr = gridRef.current!.getBoundingClientRect();
       const cx = cr.width / 2, cy = cr.height / 2;
-      cardRefs.current.forEach((el, i) => {
+      const allRefs = [headerCardRef.current, ...cardRefs.current];
+      allRefs.forEach((el, i) => {
+        if (!el) return;
+        gsap.set(el, { opacity: 0 });
+      });
+      allRefs.forEach((el, i) => {
         if (!el) return;
         const r = el.getBoundingClientRect();
         const dx = (r.left - cr.left + r.width / 2 - cx) * 1.8;
@@ -287,7 +293,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         }}
       >
         {/* Header card */}
-        <div style={{ borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
+        <div ref={headerCardRef} style={{ borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>

@@ -46,7 +46,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
     const inEl  = next    === 'presentation' ? presentationRef.current : gridRef2.current;
     if (!outEl || !inEl) { setViewMode(next); isTransitioning.current = false; return; }
     gsap.set(inEl, { visibility: 'visible', opacity: 0, y: next === 'presentation' ? 60 : -60, scale: 0.96, pointerEvents: 'none' });
-    if (next === 'grid') gridCardRefs.current.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
+    if (next === 'grid') {
+      gridCardRefs.current.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
+      const headerCard = gridRef2.current?.querySelector('[data-header-card]') as HTMLElement | null;
+      if (headerCard) gsap.set(headerCard, { opacity: 0, x: 0, y: 0, scale: 1 });
+    }
     const tl = gsap.timeline({ onComplete: () => { gsap.set(outEl, { visibility: 'hidden', pointerEvents: 'none' }); gsap.set(inEl, { pointerEvents: 'auto' }); setViewMode(next); isTransitioning.current = false; } });
     tl.to(outEl, { opacity: 0, y: viewMode === 'presentation' ? -60 : 60, scale: 0.96, duration: 0.35, ease: 'power3.in' }, 0);
     tl.to(inEl,  { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out' }, 0.25);
@@ -260,14 +264,14 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
   useEffect(() => {
     if (!visible || hasAnimated.current || !gridRef.current) return;
-    requestAnimationFrame(() => {
-      const cr = gridRef.current!.getBoundingClientRect();
+    const allRefs = [headerCardRef.current, ...cardRefs.current];
+    // Frame 1: hide everything
+    allRefs.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
+    // Frame 2: read positions and animate in
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!gridRef.current) return;
+      const cr = gridRef.current.getBoundingClientRect();
       const cx = cr.width / 2, cy = cr.height / 2;
-      const allRefs = [headerCardRef.current, ...cardRefs.current];
-      allRefs.forEach((el, i) => {
-        if (!el) return;
-        gsap.set(el, { opacity: 0 });
-      });
       allRefs.forEach((el, i) => {
         if (!el) return;
         const r = el.getBoundingClientRect();
@@ -276,7 +280,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         gsap.fromTo(el, { opacity: 0, x: dx, y: dy, scale: 0.82 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.75, delay: i * 0.07, ease: 'power3.out' });
       });
       hasAnimated.current = true;
-    });
+    }));
   }, [visible]);
 
   return (
@@ -293,7 +297,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         }}
       >
         {/* Header card */}
-        <div ref={headerCardRef} style={{ borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
+        <div ref={headerCardRef} data-header-card style={{ borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>

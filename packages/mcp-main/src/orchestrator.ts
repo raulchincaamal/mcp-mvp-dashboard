@@ -13,48 +13,107 @@ const MODEL_ID = process.env.BEDROCK_MODEL_ID!;
 
 // ─── Normalize string: lowercase + strip accents ─────────────
 function stripAccents(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 // ─── Estado normalization map (no-accent key → accented value) ───
 const ESTADO_MAP: Record<string, string> = {
-  'aguascalientes': 'Aguascalientes', 'baja california': 'Baja California',
-  'baja california sur': 'Baja California Sur', 'campeche': 'Campeche',
-  'chiapas': 'Chiapas', 'chihuahua': 'Chihuahua',
-  'ciudad de mexico': 'Ciudad de México', 'cdmx': 'Ciudad de México',
-  'df': 'Ciudad de México', 'distrito federal': 'Ciudad de México',
-  'coahuila': 'Coahuila', 'coahuila de zaragoza': 'Coahuila', 'colima': 'Colima',
-  'durango': 'Durango', 'guanajuato': 'Guanajuato', 'guerrero': 'Guerrero',
-  'hidalgo': 'Hidalgo', 'jalisco': 'Jalisco', 'guadalajara': 'Jalisco',
-  'mexico': 'México', 'estado de mexico': 'México', 'edomex': 'México',
-  'edo mex': 'México', 'michoacan': 'Michoacán', 'morelia': 'Michoacán',
-  'morelos': 'Morelos', 'nayarit': 'Nayarit', 'nuevo leon': 'Nuevo León',
-  'monterrey': 'Nuevo León', 'oaxaca': 'Oaxaca', 'puebla': 'Puebla',
-  'queretaro': 'Querétaro', 'quintana roo': 'Quintana Roo', 'cancun': 'Quintana Roo',
-  'san luis potosi': 'San Luis Potosí', 'sinaloa': 'Sinaloa', 'culiacan': 'Sinaloa',
-  'sonora': 'Sonora', 'hermosillo': 'Sonora', 'tabasco': 'Tabasco',
-  'tamaulipas': 'Tamaulipas', 'tlaxcala': 'Tlaxcala',
-  'veracruz': 'Veracruz', 'xalapa': 'Veracruz',
-  'yucatan': 'Yucatán', 'merida': 'Yucatán', 'zacatecas': 'Zacatecas',
+  aguascalientes: 'Aguascalientes',
+  'baja california': 'Baja California',
+  'baja california sur': 'Baja California Sur',
+  campeche: 'Campeche',
+  chiapas: 'Chiapas',
+  chihuahua: 'Chihuahua',
+  'ciudad de mexico': 'Ciudad de México',
+  cdmx: 'Ciudad de México',
+  df: 'Ciudad de México',
+  'distrito federal': 'Ciudad de México',
+  coahuila: 'Coahuila',
+  'coahuila de zaragoza': 'Coahuila',
+  colima: 'Colima',
+  durango: 'Durango',
+  guanajuato: 'Guanajuato',
+  guerrero: 'Guerrero',
+  hidalgo: 'Hidalgo',
+  jalisco: 'Jalisco',
+  guadalajara: 'Jalisco',
+  mexico: 'México',
+  'estado de mexico': 'México',
+  edomex: 'México',
+  'edo mex': 'México',
+  michoacan: 'Michoacán',
+  morelia: 'Michoacán',
+  morelos: 'Morelos',
+  nayarit: 'Nayarit',
+  'nuevo leon': 'Nuevo León',
+  monterrey: 'Nuevo León',
+  oaxaca: 'Oaxaca',
+  puebla: 'Puebla',
+  queretaro: 'Querétaro',
+  'quintana roo': 'Quintana Roo',
+  cancun: 'Quintana Roo',
+  'san luis potosi': 'San Luis Potosí',
+  sinaloa: 'Sinaloa',
+  culiacan: 'Sinaloa',
+  sonora: 'Sonora',
+  hermosillo: 'Sonora',
+  tabasco: 'Tabasco',
+  tamaulipas: 'Tamaulipas',
+  tlaxcala: 'Tlaxcala',
+  veracruz: 'Veracruz',
+  xalapa: 'Veracruz',
+  yucatan: 'Yucatán',
+  merida: 'Yucatán',
+  zacatecas: 'Zacatecas',
 };
 
 // ─── Categoria normalization map ──────────────────────────────
 const CATEGORIA_MAP: Record<string, string> = {
-  'motos': 'Motos', 'moto': 'Motos', 'motocicleta': 'Motos', 'motocicletas': 'Motos',
-  'celulares': 'Celulares', 'celular': 'Celulares', 'telefono': 'Celulares',
-  'telefonos': 'Celulares', 'smartphone': 'Celulares', 'smartphones': 'Celulares',
-  'iphone': 'Celulares', 'android': 'Celulares',
-  'bicicletas electricas': 'Bicicletas Eléctricas', 'bicicleta electrica': 'Bicicletas Eléctricas',
-  'bicicletas': 'Bicicletas Eléctricas', 'bicicleta': 'Bicicletas Eléctricas', 'ebike': 'Bicicletas Eléctricas',
-  'pantallas': 'Pantallas/TV', 'pantalla': 'Pantallas/TV', 'tv': 'Pantallas/TV',
-  'television': 'Pantallas/TV', 'televisor': 'Pantallas/TV', 'pantallas/tv': 'Pantallas/TV',
-  'audio': 'Audio', 'bocinas': 'Audio', 'bocina': 'Audio', 'altavoz': 'Audio',
-  'tablets': 'Tablets', 'tablet': 'Tablets', 'ipad': 'Tablets',
-  'consolas': 'Consolas', 'consola': 'Consolas', 'videojuegos': 'Consolas',
-  'playstation': 'Consolas', 'xbox': 'Consolas', 'nintendo': 'Consolas',
-  'climatizacion': 'Climatización', 'climatización': 'Climatización',
-  'aire acondicionado': 'Climatización', 'ventilador': 'Climatización',
-  'accesorios': 'Accesorios', 'accesorio': 'Accesorios',
+  motos: 'Motos',
+  moto: 'Motos',
+  motocicleta: 'Motos',
+  motocicletas: 'Motos',
+  celulares: 'Celulares',
+  celular: 'Celulares',
+  telefono: 'Celulares',
+  telefonos: 'Celulares',
+  smartphone: 'Celulares',
+  smartphones: 'Celulares',
+  iphone: 'Celulares',
+  android: 'Celulares',
+  'bicicletas electricas': 'Bicicletas Eléctricas',
+  'bicicleta electrica': 'Bicicletas Eléctricas',
+  bicicletas: 'Bicicletas Eléctricas',
+  bicicleta: 'Bicicletas Eléctricas',
+  ebike: 'Bicicletas Eléctricas',
+  pantallas: 'Pantallas/TV',
+  pantalla: 'Pantallas/TV',
+  tv: 'Pantallas/TV',
+  television: 'Pantallas/TV',
+  televisor: 'Pantallas/TV',
+  'pantallas/tv': 'Pantallas/TV',
+  audio: 'Audio',
+  bocinas: 'Audio',
+  bocina: 'Audio',
+  altavoz: 'Audio',
+  tablets: 'Tablets',
+  tablet: 'Tablets',
+  ipad: 'Tablets',
+  consolas: 'Consolas',
+  consola: 'Consolas',
+  videojuegos: 'Consolas',
+  playstation: 'Consolas',
+  xbox: 'Consolas',
+  nintendo: 'Consolas',
+  climatizacion: 'Climatización',
+  climatización: 'Climatización',
+  'aire acondicionado': 'Climatización',
+  ventilador: 'Climatización',
+  accesorios: 'Accesorios',
+  accesorio: 'Accesorios',
 };
 
 function normalizeEstado(raw: string): string {
@@ -66,7 +125,7 @@ function normalizeEstado(raw: string): string {
     if (mapKey.startsWith(key) || key.startsWith(mapKey)) return value;
   }
   // Capitalize as fallback
-  return raw.trim().replace(/\b\w/g, c => c.toUpperCase());
+  return raw.trim().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function normalizeCategoria(raw: string): string {
@@ -76,7 +135,7 @@ function normalizeCategoria(raw: string): string {
   for (const [mapKey, value] of Object.entries(CATEGORIA_MAP)) {
     if (key.includes(mapKey) || mapKey.includes(key)) return value;
   }
-  return raw.trim().replace(/\b\w/g, c => c.toUpperCase());
+  return raw.trim().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ─── Component catalog ────────────────────────────────────────
@@ -115,7 +174,7 @@ export async function orchestrate(
 ): Promise<unknown> {
   const dataset = params.dataset ?? 'ventas-credito';
 
-  const { gcpClient, uiClient } = await import('./mcp-client.js').then((m) =>
+  const { gcpClient } = await import('./mcp-client.js').then((m) =>
     m.createMcpClients(),
   );
 
@@ -155,7 +214,9 @@ export async function orchestrate(
       if (ESTADO_MAP[ciudadKey]) {
         filters.estado = ESTADO_MAP[ciudadKey];
         delete filters.ciudad;
-        console.log(`[orchestrator] ciudad alias promoted to estado → "${filters.estado}"`);
+        console.log(
+          `[orchestrator] ciudad alias promoted to estado → "${filters.estado}"`,
+        );
       }
     }
     // Normalize estado: string or array
@@ -164,43 +225,84 @@ export async function orchestrate(
       console.log(`[orchestrator] estado normalized → "${filters.estado}"`);
     } else if (Array.isArray(filters.estado)) {
       filters.estado = (filters.estado as string[]).map(normalizeEstado);
-      console.log(`[orchestrator] estado[] normalized → ${JSON.stringify(filters.estado)}`);
+      console.log(
+        `[orchestrator] estado[] normalized → ${JSON.stringify(filters.estado)}`,
+      );
     }
     // Normalize categoria: string or array
     if (typeof filters.categoria === 'string') {
       filters.categoria = normalizeCategoria(filters.categoria);
-      console.log(`[orchestrator] categoria normalized → "${filters.categoria}"`);
+      console.log(
+        `[orchestrator] categoria normalized → "${filters.categoria}"`,
+      );
     } else if (Array.isArray(filters.categoria)) {
-      filters.categoria = (filters.categoria as string[]).map(normalizeCategoria);
-      console.log(`[orchestrator] categoria[] normalized → ${JSON.stringify(filters.categoria)}`);
+      filters.categoria = (filters.categoria as string[]).map(
+        normalizeCategoria,
+      );
+      console.log(
+        `[orchestrator] categoria[] normalized → ${JSON.stringify(filters.categoria)}`,
+      );
     }
     // Normalize estatus_credito: string or array
     const ESTATUS_MAP: Record<string, string> = {
-      'al_corriente': 'al_corriente', 'corriente': 'al_corriente', 'vigente': 'al_corriente',
-      'atrasado': 'atrasado', 'vencido': 'atrasado', 'mora': 'atrasado', 'debe': 'atrasado',
-      'liquidado': 'liquidado', 'pagado': 'liquidado', 'saldado': 'liquidado', 'terminado': 'liquidado',
-      'cancelado': 'cancelado', 'baja': 'cancelado',
+      al_corriente: 'al_corriente',
+      corriente: 'al_corriente',
+      vigente: 'al_corriente',
+      atrasado: 'atrasado',
+      vencido: 'atrasado',
+      mora: 'atrasado',
+      debe: 'atrasado',
+      liquidado: 'liquidado',
+      pagado: 'liquidado',
+      saldado: 'liquidado',
+      terminado: 'liquidado',
+      cancelado: 'cancelado',
+      baja: 'cancelado',
     };
-    const normalizeEstatus = (v: string) => ESTATUS_MAP[stripAccents(v).replace(/\s+/g, '_')] ?? v;
+    const normalizeEstatus = (v: string) =>
+      ESTATUS_MAP[stripAccents(v).replace(/\s+/g, '_')] ?? v;
     if (typeof filters.estatus_credito === 'string') {
       filters.estatus_credito = normalizeEstatus(filters.estatus_credito);
     } else if (Array.isArray(filters.estatus_credito)) {
-      filters.estatus_credito = (filters.estatus_credito as string[]).map(normalizeEstatus);
+      filters.estatus_credito = (filters.estatus_credito as string[]).map(
+        normalizeEstatus,
+      );
     }
     // Normalize canal_venta
     const CANAL_MAP: Record<string, string> = {
-      'tienda_fisica': 'tienda_fisica', 'tienda': 'tienda_fisica', 'fisica': 'tienda_fisica', 'presencial': 'tienda_fisica',
-      'en_linea': 'en_linea', 'online': 'en_linea', 'internet': 'en_linea', 'web': 'en_linea', 'linea': 'en_linea',
-      'telefono': 'telefono', 'llamada': 'telefono', 'call': 'telefono',
+      tienda_fisica: 'tienda_fisica',
+      tienda: 'tienda_fisica',
+      fisica: 'tienda_fisica',
+      presencial: 'tienda_fisica',
+      en_linea: 'en_linea',
+      online: 'en_linea',
+      internet: 'en_linea',
+      web: 'en_linea',
+      linea: 'en_linea',
+      telefono: 'telefono',
+      llamada: 'telefono',
+      call: 'telefono',
     };
     if (typeof filters.canal_venta === 'string') {
-      filters.canal_venta = CANAL_MAP[stripAccents(filters.canal_venta).replace(/\s+/g, '_')] ?? filters.canal_venta;
+      filters.canal_venta =
+        CANAL_MAP[stripAccents(filters.canal_venta).replace(/\s+/g, '_')] ??
+        filters.canal_venta;
     }
     // Normalize fecha_venta range: if Bedrock gives a month name instead of range object, convert it
     if (typeof filters.fecha_venta === 'string') {
       const MES_MAP: Record<string, string> = {
-        'enero':'01','febrero':'02','marzo':'03','abril':'04','mayo':'05','junio':'06',
-        'julio':'07','agosto':'08','septiembre':'09','octubre':'10','noviembre':'11','diciembre':'12',
+        enero: '01',
+        febrero: '02',
+        marzo: '03',
+        abril: '04',
+        mayo: '05',
+        junio: '06',
+        julio: '07',
+        agosto: '08',
+        septiembre: '09',
+        octubre: '10',
+        noviembre: '11',
+        diciembre: '12',
       };
       const mesKey = stripAccents(filters.fecha_venta.trim());
       if (MES_MAP[mesKey]) {
@@ -208,8 +310,13 @@ export async function orchestrate(
         const year = now.getFullYear();
         const mm = MES_MAP[mesKey];
         const lastDay = new Date(year, parseInt(mm), 0).getDate();
-        filters.fecha_venta = { gte: `${year}-${mm}-01`, lte: `${year}-${mm}-${lastDay}` };
-        console.log(`[orchestrator] fecha_venta month string → range ${JSON.stringify(filters.fecha_venta)}`);
+        filters.fecha_venta = {
+          gte: `${year}-${mm}-01`,
+          lte: `${year}-${mm}-${lastDay}`,
+        };
+        console.log(
+          `[orchestrator] fecha_venta month string → range ${JSON.stringify(filters.fecha_venta)}`,
+        );
       }
     }
     const limit = params.limit ?? parsedIntent.limit ?? 200;
@@ -242,7 +349,6 @@ export async function orchestrate(
     return uiConfig;
   } finally {
     await gcpClient.disconnect();
-    await uiClient.disconnect();
   }
 }
 
@@ -369,18 +475,23 @@ ${CHART_DECISION_PROMPT}`,
 
     // Infer temporal granularity from intent
     if (parsed.groupBy === 'fecha_venta' && !parsed.granularity) {
-      if (/\ba[ñn]o\b|anio\b|anual|por\s+a[ñn]o|por\s+anio/i.test(intent)) parsed.granularity = 'year';
-      else if (/\bmes\b|mensual|por\s+mes/i.test(intent)) parsed.granularity = 'month';
+      if (/\ba[ñn]o\b|anio\b|anual|por\s+a[ñn]o|por\s+anio/i.test(intent))
+        parsed.granularity = 'year';
+      else if (/\bmes\b|mensual|por\s+mes/i.test(intent))
+        parsed.granularity = 'month';
       else if (/\bseman/i.test(intent)) parsed.granularity = 'week';
       else parsed.granularity = 'month';
     }
 
     // "top N" de grupos → limit aplica al chart, no a los registros
     // Siempre traer suficientes registros para agregar correctamente
-    const isTopN = /top\s*\d|mejores?\s*\d|peores?\s*\d|primeros?\s*\d|\d\s*m[aá]s\s+vend/i.test(intent);
+    const isTopN =
+      /top\s*\d|mejores?\s*\d|peores?\s*\d|primeros?\s*\d|\d\s*m[aá]s\s+vend/i.test(
+        intent,
+      );
     if (isTopN) {
-      parsed.topN = parsed.limit;  // guardar el N para el chart
-      parsed.limit = 5000;         // traer todos los registros para agregar bien
+      parsed.topN = parsed.limit; // guardar el N para el chart
+      parsed.limit = 5000; // traer todos los registros para agregar bien
     } else if (parsed.groupBy === 'fecha_venta' && !parsed.limit) {
       parsed.limit = 5000;
     } else if (!parsed.limit) {
@@ -396,7 +507,9 @@ ${CHART_DECISION_PROMPT}`,
     const decision = selectChartType(intent, parsed.groupBy, parsed.chartType);
     if (!parsed.chartType || decision.confidence === 'high') {
       parsed.chartType = decision.chartType;
-      console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`);
+      console.log(
+        `[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`,
+      );
     }
     return parsed;
   } catch (err) {
@@ -640,52 +753,84 @@ Genera el UIConfig JSON ahora.`;
 function repairEmptyCharts(
   uiConfig: unknown,
   aggregations: Record<string, unknown>,
-  parsedIntent: { groupBy: string | null; metric: string; metricField: string | null },
+  parsedIntent: {
+    groupBy: string | null;
+    metric: string;
+    metricField: string | null;
+  },
 ): unknown {
   const config = uiConfig as Record<string, unknown>;
   if (!Array.isArray(config?.components)) return uiConfig;
 
-  const groupByAgg = aggregations.groupBy as { data?: { label: string; value: number }[] } | undefined;
+  const groupByAgg = aggregations.groupBy as
+    | { data?: { label: string; value: number }[] }
+    | undefined;
   if (!groupByAgg?.data?.length) return uiConfig;
 
-  const labels = groupByAgg.data.map(d => d.label);
-  const values = groupByAgg.data.map(d => d.value);
+  const labels = groupByAgg.data.map((d) => d.label);
+  const values = groupByAgg.data.map((d) => d.value);
 
-  const COLORS = ['#49a4d8','#7C3AED','#059669','#D97706','#DC2626','#2563EB','#6366F1','#0891B2','#10B981','#F59E0B','#EF4444','#EC4899','#14B8A6','#8B5CF6','#F97316'];
+  const COLORS = [
+    '#49a4d8',
+    '#7C3AED',
+    '#059669',
+    '#D97706',
+    '#DC2626',
+    '#2563EB',
+    '#6366F1',
+    '#0891B2',
+    '#10B981',
+    '#F59E0B',
+    '#EF4444',
+    '#EC4899',
+    '#14B8A6',
+    '#8B5CF6',
+    '#F97316',
+  ];
 
-  config.components = (config.components as Record<string, unknown>[]).map(comp => {
-    if (comp.component !== 'Chart') return comp;
-    const props = comp.props as Record<string, unknown>;
-    const data = props.data as Record<string, unknown> | undefined;
+  config.components = (config.components as Record<string, unknown>[]).map(
+    (comp) => {
+      if (comp.component !== 'Chart') return comp;
+      const props = comp.props as Record<string, unknown>;
+      const data = props.data as Record<string, unknown> | undefined;
 
-    // Detect empty: labels array is empty or missing
-    const existingLabels = (data as Record<string, unknown> | undefined)?.labels;
-    const isEmpty = !existingLabels || (Array.isArray(existingLabels) && existingLabels.length === 0);
-    // Also detect if data is an array but empty
-    const isEmptyArray = Array.isArray(data) && data.length === 0;
+      // Detect empty: labels array is empty or missing
+      const existingLabels = (data as Record<string, unknown> | undefined)
+        ?.labels;
+      const isEmpty =
+        !existingLabels ||
+        (Array.isArray(existingLabels) && existingLabels.length === 0);
+      // Also detect if data is an array but empty
+      const isEmptyArray = Array.isArray(data) && data.length === 0;
 
-    if (!isEmpty && !isEmptyArray) return comp;
+      if (!isEmpty && !isEmptyArray) return comp;
 
-    console.log(`[orchestrator] repairing empty Chart — injecting ${labels.length} groupBy data points`);
+      console.log(
+        `[orchestrator] repairing empty Chart — injecting ${labels.length} groupBy data points`,
+      );
 
-    const bgColors = labels.length === 1 ? COLORS[0] : COLORS.slice(0, labels.length);
-    return {
-      ...comp,
-      props: {
-        ...props,
-        data: {
-          labels,
-          datasets: [{
-            label: parsedIntent.metricField ?? 'Ventas',
-            data: values,
-            backgroundColor: bgColors,
-            borderColor: bgColors,
-            borderWidth: 2,
-          }],
+      const bgColors =
+        labels.length === 1 ? COLORS[0] : COLORS.slice(0, labels.length);
+      return {
+        ...comp,
+        props: {
+          ...props,
+          data: {
+            labels,
+            datasets: [
+              {
+                label: parsedIntent.metricField ?? 'Ventas',
+                data: values,
+                backgroundColor: bgColors,
+                borderColor: bgColors,
+                borderWidth: 2,
+              },
+            ],
+          },
         },
-      },
-    };
-  });
+      };
+    },
+  );
 
   return config;
 }
@@ -747,7 +892,8 @@ function computeAggregations(
   if (parsedIntent.groupBy) {
     const field = parsedIntent.groupBy;
     const isDateField = field === 'fecha_venta';
-    const granularity = (parsedIntent as Record<string, unknown>).granularity as string | null;
+    const granularity = (parsedIntent as Record<string, unknown>)
+      .granularity as string | null;
     const groups: Record<string, number> = {};
 
     for (const record of records) {
@@ -759,7 +905,10 @@ function computeAggregations(
             key = `${d.getFullYear()}`;
           } else if (granularity === 'week') {
             const jan4 = new Date(d.getFullYear(), 0, 4);
-            const weekNum = Math.ceil(((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7);
+            const weekNum = Math.ceil(
+              ((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) /
+                7,
+            );
             key = `${d.getFullYear()}-S${String(weekNum).padStart(2, '0')}`;
           } else {
             // month (default)
@@ -775,7 +924,8 @@ function computeAggregations(
       if (parsedIntent.metric === 'count') {
         groups[key] = (groups[key] ?? 0) + 1;
       } else if (parsedIntent.metricField) {
-        groups[key] = (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
+        groups[key] =
+          (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
       } else {
         groups[key] = (groups[key] ?? 0) + 1;
       }
@@ -784,13 +934,16 @@ function computeAggregations(
     const sortedGroups = Object.entries(groups).sort(([a], [b]) =>
       isDateField ? a.localeCompare(b) : groups[b] - groups[a],
     );
-    const maxSlice = granularity === 'week' ? 52 : granularity === 'year' ? 10 : 36;
+    const maxSlice =
+      granularity === 'week' ? 52 : granularity === 'year' ? 10 : 36;
     agg.groupBy = {
       field,
       granularity: granularity ?? (isDateField ? 'month' : 'value'),
       metric: parsedIntent.metric,
       uniqueGroups: sortedGroups.length,
-      data: sortedGroups.slice(0, maxSlice).map(([label, value]) => ({ label, value })),
+      data: sortedGroups
+        .slice(0, maxSlice)
+        .map(([label, value]) => ({ label, value })),
     };
   }
 

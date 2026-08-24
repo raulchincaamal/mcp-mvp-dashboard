@@ -13,7 +13,6 @@
     "dev:dashboard": "npm run dev --workspace=packages/dashboard-app",
     "dev:mcp-main": "npm run start:http --workspace=packages/mcp-main",
     "dev:mcp-gcp": "npm run dev --workspace=packages/mcp-gcp-mock",
-    "dev:mcp-ui": "npm run dev --workspace=packages/mcp-ui",
     "dev:alexa": "npm run start --workspace=packages/alexa-skill"
   },
   "dependencies": {

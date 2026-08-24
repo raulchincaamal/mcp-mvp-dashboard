@@ -14,6 +14,14 @@ import {
 
 const LATEST_KEY = 'mcp-dashboard:latest';
 
+// In-memory SSE clients map (no Redis needed)
+const sseClients = new Map<string, Set<(data: string) => void>>();
+
+function notifySSE(userId: string, payload: object) {
+  const clients = sseClients.get(userId);
+  if (clients) clients.forEach(send => send(JSON.stringify(payload)));
+}
+
 function userLatestKey(userId?: string): string {
   if (userId) return `${LATEST_KEY}:${userId}`;
   return LATEST_KEY;
@@ -48,11 +56,39 @@ if (!IS_MCP_MODE) {
     mode: 'bedrock-orchestrator',
   }));
 
+  fastify.get('/api/stream', async (request, reply) => {
+    const { userId } = request.query as { userId?: string };
+    const key = userId ?? 'default';
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    reply.raw.write(':ok\n\n');
+
+    const send = (data: string) => reply.raw.write(`data: ${data}\n\n`);
+    if (!sseClients.has(key)) sseClients.set(key, new Set());
+    sseClients.get(key)!.add(send);
+
+    request.raw.on('close', () => {
+      sseClients.get(key)?.delete(send);
+    });
+
+    // Keep-alive ping every 20s
+    const ping = setInterval(() => reply.raw.write(':ping\n\n'), 20000);
+    request.raw.on('close', () => clearInterval(ping));
+
+    await new Promise(() => {}); // keep handler alive
+  });
+
   fastify.get('/api/latest', async (_request, reply) => {
     const { userId } = _request.query as { userId?: string };
     const latest = await cacheGet<{
       hash: string;
       status: string;
+      intent?: string;
       uiConfig: unknown;
     }>(userLatestKey(userId));
     if (!latest)
@@ -63,6 +99,7 @@ if (!IS_MCP_MODE) {
       success: true,
       hash: latest.hash,
       status: latest.status ?? 'ready',
+      intent: latest.intent ?? null,
       data: latest.status === 'ready' ? latest.uiConfig : null,
       url:
         latest.status === 'ready'
@@ -95,12 +132,15 @@ if (!IS_MCP_MODE) {
     }
 
     try {
+      // Signal frontend via SSE (no Redis needed)
+      if (userId) notifySSE(userId, { intent, status: 'processing' });
+
       // Signal frontend that a new dashboard is being generated
       const latestKey = userLatestKey(userId);
       const processingHash = `processing-${Date.now()}`;
       await cacheSet(
         latestKey,
-        { hash: processingHash, status: 'processing' },
+        { hash: processingHash, status: 'processing', intent },
         1,
       );
 

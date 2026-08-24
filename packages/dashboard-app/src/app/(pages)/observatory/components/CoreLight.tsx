@@ -7,6 +7,8 @@ import type { ObservatoryState } from '../state-machine';
 
 interface Props {
   state: ObservatoryState;
+  triggered?: boolean;
+  onTriggerComplete?: () => void;
 }
 
 const STATE_CONFIG: Record<ObservatoryState, { scale: number; glow: number; pulse: number }> = {
@@ -19,13 +21,35 @@ const STATE_CONFIG: Record<ObservatoryState, { scale: number; glow: number; puls
   PRESENTATION:              { scale: 0.4,  glow: 0.10, pulse: 0.010 },
 };
 
-const CoreLight = memo(function CoreLight({ state }: Props) {
+const CoreLight = memo(function CoreLight({ state, triggered, onTriggerComplete }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef     = useRef<HTMLDivElement>(null);
   const hoverGlowRef = useRef<HTMLDivElement>(null);
+  const ripple1Ref   = useRef<HTMLDivElement>(null);
+  const ripple2Ref   = useRef<HTMLDivElement>(null);
+  const ripple3Ref   = useRef<HTMLDivElement>(null);
   const frameRef     = useRef(0);
   const baseScale    = useRef(STATE_CONFIG[state].scale);
   const stateRef     = useRef(state);
+
+  // iOS-style trigger animation
+  useEffect(() => {
+    if (!triggered) return;
+    const tl = gsap.timeline({ onComplete: onTriggerComplete });
+    const ripples = [ripple1Ref.current, ripple2Ref.current, ripple3Ref.current];
+
+    // Reset ripples
+    ripples.forEach(r => gsap.set(r, { scale: 0.5, opacity: 0 }));
+
+    // 1. Quick scale-up punch
+    tl.to(containerRef.current, { scale: baseScale.current * 1.6, duration: 0.18, ease: 'power3.out' });
+    // 2. Ripples expand outward staggered
+    tl.to(ripples, { scale: 3.5, opacity: 0, duration: 0.9, ease: 'power2.out', stagger: 0.12 }, '-=0.1');
+    // 3. Inner dot flash white
+    tl.to(innerRef.current, { boxShadow: '0 0 80px rgba(180,200,255,1), 0 0 160px rgba(120,160,255,0.9)', scale: 1.8, duration: 0.2, ease: 'power2.out' }, '-=0.85');
+    // 4. Collapse into zoom
+    tl.to(containerRef.current, { scale: 0, duration: 0.35, ease: 'back.in(2)' }, '-=0.3');
+  }, [triggered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep stateRef in sync without re-rendering
   useEffect(() => {
@@ -79,6 +103,18 @@ const CoreLight = memo(function CoreLight({ state }: Props) {
       onMouseLeave={handleMouseLeave}
       style={{ position: 'relative', width: 160, height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
+      {/* Ripples — iOS tap feedback */}
+      {[ripple1Ref, ripple2Ref, ripple3Ref].map((ref, i) => (
+        <div key={`ripple-${i}`} ref={ref} style={{
+          position: 'absolute',
+          width: 160, height: 160,
+          borderRadius: '50%',
+          border: `1.5px solid rgba(${i === 0 ? '180,200,255' : i === 1 ? '120,160,255' : '80,120,255'},0.7)`,
+          opacity: 0,
+          pointerEvents: 'none',
+        }} />
+      ))}
+
       {[0, 1, 2].map(i => (
         <div key={i} style={{
           position: 'absolute',

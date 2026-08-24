@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { useCursor } from './hooks/useCursor';
-import { observatory, runMockFlow } from './state-machine';
+import { observatory, runMockFlow, ALEXA_USER_ID } from './state-machine';
 import type { ObservatoryContext, InsightData } from './state-machine';
 import AmbientBackground from './components/AmbientBackground';
 import CursorLight from './components/CursorLight';
@@ -36,6 +36,8 @@ export default function ObservatoryPage() {
   const [showPresentation, setShowPresentation] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
   const [zoomKey, setZoomKey] = useState(0);
+  const [coreLightTriggered, setCoreLightTriggered] = useState(false);
+  const pendingIntentRef = useRef<string | null>(null);
 
   const zoomOverlayRef = useRef<HTMLDivElement>(null);
   const buildingRef    = useRef<HTMLDivElement>(null);
@@ -188,6 +190,24 @@ export default function ObservatoryPage() {
     setTimeout(() => setZoomQuery(query), 16);
   }, []);
 
+  // SSE: detectar intent externo (Alexa) via /api/stream
+  useEffect(() => {
+    const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
+    const es = new EventSource(`${API_URL}/api/stream?userId=${ALEXA_USER_ID}`);
+
+    es.onmessage = (e) => {
+      try {
+        const { intent, status } = JSON.parse(e.data);
+        if (status === 'processing' && intent && observatory.getContext().state === 'IDLE') {
+          pendingIntentRef.current = intent;
+          setCoreLightTriggered(true);
+        }
+      } catch { /* silencioso */ }
+    };
+
+    return () => es.close();
+  }, [triggerZoom]);
+
   const handleCategoryClick = useCallback((label: string, rect: DOMRect) => {
     triggerZoom(`Resumen de ${label}`, rect);
   }, [triggerZoom]);
@@ -262,7 +282,19 @@ export default function ObservatoryPage() {
           visibility: (showPresentation || zoomQuery) ? 'hidden' : 'visible',
         }}
       >
-        <CoreLight state={ctx.state} />
+        <CoreLight
+          state={ctx.state}
+          triggered={coreLightTriggered}
+          onTriggerComplete={() => {
+            setCoreLightTriggered(false);
+            const intent = pendingIntentRef.current;
+            pendingIntentRef.current = null;
+            if (intent) {
+              const rect = coreLightRef.current?.getBoundingClientRect();
+              if (rect) triggerZoom(intent, rect);
+            }
+          }}
+        />
       </div>
 
       {/* Layer 3 — Command bar */}

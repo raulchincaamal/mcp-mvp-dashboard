@@ -423,6 +423,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
   return insights;
 }
 
+export const ALEXA_USER_ID = 'alexa-display';
+
 export async function runMockFlow(rawQuery: string) {
   const keywords = rawQuery
     .toLowerCase()
@@ -442,7 +444,7 @@ export async function runMockFlow(rawQuery: string) {
     const res = await fetch(`${API_URL}/api/generate-ui`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery }),
+      body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery, userId: ALEXA_USER_ID }),
     });
     if (!res.ok) {
       const body = await res.text();

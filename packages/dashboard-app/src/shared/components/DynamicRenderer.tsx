@@ -1,15 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
 import AuroraChart from './AuroraChart';
-import ReactECharts from 'echarts-for-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
-
-const HolographicChart3D = dynamic(() => import('./HolographicChart3D'), { ssr: false });
 
 import {
   Button,
@@ -22,9 +18,6 @@ import {
   Avatar,
 } from '@macropaytd/lib-front-ui-components';
 import {
-  D3BarChart,
-  D3LineChart,
-  D3PieChart,
   D3BollingerBands,
   D3StackedArea,
   D3DivergingBar,
@@ -195,100 +188,122 @@ function resolveIcon(icon: string): string {
   return ICON_MAP[key] ?? (icon.length <= 4 ? icon : '📌');
 }
 
+// ─── Ticker: stock-style number that counts up/down fast ──
+
+function StockTicker({ value }: { value: string }) {
+  // Extract numeric part from value string (e.g. "$1,234" → 1234, "156" → 156)
+  const parseNum = (v: string) => {
+    const n = parseFloat(v.replace(/[^0-9.-]/g, ''));
+    return isNaN(n) ? 0 : n;
+  };
+
+  const target = parseNum(value);
+  const [display, setDisplay] = useState(Math.max(0, target - Math.ceil(target * 0.08)));
+  const [dir, setDir] = useState<'up' | 'down' | null>(null);
+  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (target === 0) return;
+    const start = Math.max(0, target - Math.ceil(target * 0.08));
+    setDisplay(start);
+    setDir(null);
+
+    let current = start;
+    const step = Math.max(1, Math.ceil((target - start) / 18));
+
+    const tick = () => {
+      current = Math.min(target, current + step);
+      const going = current < target ? 'up' : null;
+      setDir(going);
+      setDisplay(current);
+      if (current < target) {
+        rafRef.current = setTimeout(tick, 40);
+      } else {
+        // After reaching target, do a few random up/down ticks
+        let bounces = 0;
+        const bounce = () => {
+          if (bounces >= 6) { setDir(null); setDisplay(target); return; }
+          const delta = Math.ceil(target * 0.005) || 1;
+          const goUp = bounces % 2 === 0;
+          setDir(goUp ? 'up' : 'down');
+          setDisplay(target + (goUp ? delta : -delta));
+          bounces++;
+          rafRef.current = setTimeout(bounce, 120);
+        };
+        rafRef.current = setTimeout(bounce, 80);
+      }
+    };
+
+    rafRef.current = setTimeout(tick, 120);
+    return () => { if (rafRef.current) clearTimeout(rafRef.current); };
+  }, [target]);
+
+  // Format display number matching original value format
+  const hasCurrency = /[$€£¥]/.test(value);
+  const hasComma = value.includes(',');
+  const prefix = hasCurrency ? value.match(/^[^0-9]*/)?.[0] ?? '' : '';
+  const suffix = value.match(/[^0-9.,]+$/)?.[0] ?? '';
+
+  const formatted = hasComma
+    ? Math.round(display).toLocaleString('es-MX')
+    : String(Math.round(display));
+
+  const color = dir === 'up' ? '#30d158' : dir === 'down' ? '#ff453a' : 'var(--text-tertiary)';
+
+  return (
+    <span style={{ fontSize: '0.72rem', fontWeight: 700, color, letterSpacing: '0.5px', fontVariantNumeric: 'tabular-nums', transition: 'color 0.1s' }}>
+      {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '●'} {prefix}{formatted}{suffix}
+    </span>
+  );
+}
+
 // ─── Composite: StatCard ───────────────────────────────────
-// Props: { title, value, subtitle?, trend?, trendDirection?, icon? }
+// iOS app-icon style: card with icon + ticker, label+value below
 
 function StatCard({ props }: { props: Record<string, unknown> }) {
   const title = props.title as string;
-  const rawValue = props.value as string;
+  const value = props.value as string;
   const subtitle = props.subtitle as string | undefined;
-  const trend = props.trend as string | undefined;
-  const trendDirection = (props.trendDirection as string | undefined)
-    ?.toLowerCase()
-    .trim() as 'up' | 'down' | 'neutral' | undefined;
-  const validTrend =
-    trendDirection === 'up' ||
-    trendDirection === 'down' ||
-    trendDirection === 'neutral'
-      ? trendDirection
-      : undefined;
-  const trendColor =
-    validTrend === 'up'
-      ? '#30d158'
-      : validTrend === 'down'
-        ? 'var(--danger)'
-        : 'var(--text-tertiary)';
-  const trendIcon =
-    validTrend === 'up' ? '↑' : validTrend === 'down' ? '↓' : '';
-  // Clean trend text — remove if it's just the direction word
-  const trendText =
-    typeof trend === 'string' &&
-    !['up', 'down', 'neutral'].includes(trend.toLowerCase().trim())
-      ? trend
-      : undefined;
+  const icon = typeof props.icon === 'string' ? props.icon : '';
 
   return (
-    <div
-      style={{
-        background: 'var(--surface)',
-        backdropFilter: 'var(--surface-blur)',
-        WebkitBackdropFilter: 'var(--surface-blur)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius)',
-        padding: '1.5rem',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+      {/* Card — icon only */}
       <div
         style={{
+          width: '100%',
+          aspectRatio: '1 / 1',
+          background: 'var(--surface)',
+          backdropFilter: 'var(--surface-blur)',
+          WebkitBackdropFilter: 'var(--surface-blur)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius)',
+          boxShadow: 'var(--shadow-sm)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
+          gap: '0.35rem',
+          padding: '0.75rem',
         }}
       >
-        <p
-          style={{
-            fontSize: '0.82rem',
-            fontWeight: 500,
-            color: 'var(--text-tertiary)',
-          }}
-        >
+        <StockTicker value={value} />
+        <span style={{ fontSize: '2rem', lineHeight: 1 }}>
+          {icon ? resolveIcon(icon) : '📌'}
+        </span>
+      </div>
+      {/* Label below card */}
+      <div style={{ textAlign: 'center', width: '100%' }}>
+        <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}
         </p>
-        {typeof props.icon === 'string' && props.icon && (
-          <span style={{ fontSize: '1.2rem' }}>{resolveIcon(props.icon)}</span>
-        )}
-      </div>
-      <p
-        style={{
-          fontSize: '2rem',
-          fontWeight: 700,
-          letterSpacing: '-0.5px',
-          marginTop: '0.5rem',
-          color: 'var(--text)',
-        }}
-      >
-        {value}
-      </p>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          marginTop: '0.25rem',
-        }}
-      >
-        {trendText && (
-          <span
-            style={{ fontSize: '0.82rem', fontWeight: 600, color: trendColor }}
-          >
-            {trendIcon} {trendText}
-          </span>
-        )}
+        <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px', marginTop: '0.1rem' }}>
+          {value}
+        </p>
         {subtitle && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '0.1rem' }}>
             {subtitle}
-          </span>
+          </p>
         )}
       </div>
     </div>
@@ -318,8 +333,8 @@ function renderKPIGrid(props: Record<string, unknown>) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: '1rem',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+        gap: '1.25rem',
       }}
     >
       {items.map((item, i) => (
@@ -718,9 +733,99 @@ function renderTable(props: Record<string, unknown>) {
   return renderDataSummary({ ...props, columns, rows });
 }
 
-// ─── Standard Chart ────────────────────────────────────────
+// ─── Aurora Reveal Animation ───────────────────────────────
+// Bidirectional scroll animation with Aurora glow effect
 
-function renderChart(props: Record<string, unknown>) {
+function AuroraReveal({ children, index = 0 }: { children: React.ReactNode; index?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+
+    const trigger = ScrollTrigger.create({
+      trigger: el,
+      start: 'top 88%',
+      onEnter: () => {
+        if (hasAnimated.current) return;
+        hasAnimated.current = true;
+        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.7, delay: index * 0.08, ease: 'power3.out' });
+      },
+      onEnterBack: () => {
+        if (!hasAnimated.current) {
+          hasAnimated.current = true;
+          gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out' });
+        }
+      },
+      onLeaveBack: () => {
+        hasAnimated.current = false;
+        gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+      },
+    });
+
+    return () => trigger.kill();
+  }, [index]);
+
+  return (
+    <div ref={ref} style={{ willChange: 'transform, opacity' }}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Standard Chart (Aurora ECharts) ────────────────────────
+
+// Map chart type to AuroraChart type
+const AURORA_TYPE_MAP: Record<string, 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap'> = {
+  bar: 'bar',
+  line: 'line',
+  area: 'area',
+  pie: 'pie',
+  doughnut: 'doughnut',
+  scatter: 'scatter',
+  radar: 'radar',
+  funnel: 'funnel',
+  gauge: 'gauge',
+  heatmap: 'heatmap',
+  treemap: 'treemap',
+};
+
+// Scroll-reveal wrapper for charts
+function ScrollDrivenChart({ type, data, title, height = 320, index = 0 }: {
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+  data: { labels: string[]; datasets: { label?: string; data: number[] }[] };
+  title?: string;
+  height?: number;
+  index?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Mount immediately — AuroraChart handles its own animation
+    setMounted(true);
+
+    const el = ref.current;
+    if (!el) return;
+    gsap.fromTo(el,
+      { opacity: 0, y: 24, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'power3.out', delay: index * 0.06 }
+    );
+  }, [index]);
+
+  return (
+    <div ref={ref} style={{ opacity: 0, willChange: 'transform, opacity' }}>
+      {mounted && (
+        <AuroraChart type={type} data={data} title={title} height={height} gradient="aurora" />
+      )}
+    </div>
+  );
+}
+
+function renderChart(props: Record<string, unknown>, index: number = 0) {
   const type = props.type as string;
   const title = props.title as string | undefined;
   const data = props.data as {
@@ -735,7 +840,6 @@ function renderChart(props: Record<string, unknown>) {
   const yAxisLabel = (options?.yAxis as Record<string, unknown>)?.label as
     | string
     | undefined;
-  const stacked = options?.stacked as boolean | undefined;
 
   // New D3 chart types
   if (type === 'bollinger') {
@@ -1094,7 +1198,7 @@ function renderChart(props: Record<string, unknown>) {
     );
   }
 
-  // Standard chart types (bar, line, area, pie, doughnut)
+  // Standard chart types (bar, line, area, pie, doughnut) — use AuroraChart with scroll-driven building
   if (!data || !data.labels || !data.datasets) {
     return (
       <div style={{ padding: '1rem', color: 'var(--text-tertiary)' }}>
@@ -1103,109 +1207,22 @@ function renderChart(props: Record<string, unknown>) {
     );
   }
 
-  const isPieType = type === 'pie' || type === 'doughnut';
-
-  const renderD3Chart = () => {
-    if (type === 'bar') {
-      return (
-        <D3BarChart
-          labels={data.labels}
-          datasets={data.datasets.map((ds) => ({
-            label: (ds.label as string) || '',
-            data: ds.data as number[],
-            backgroundColor: ds.backgroundColor as
-              | string
-              | string[]
-              | undefined,
-            borderColor: ds.borderColor as string | undefined,
-          }))}
-          xAxisLabel={xAxisLabel}
-          yAxisLabel={yAxisLabel}
-          stacked={stacked}
-          height={280}
-        />
-      );
-    }
-
-    if (type === 'line' || type === 'area') {
-      return (
-        <D3LineChart
-          labels={data.labels}
-          datasets={data.datasets.map((ds) => ({
-            label: (ds.label as string) || '',
-            data: ds.data as number[],
-            borderColor: ds.borderColor as string | undefined,
-            backgroundColor: ds.backgroundColor as string | undefined,
-            fill: type === 'area' || (ds.fill as boolean | undefined),
-          }))}
-          xAxisLabel={xAxisLabel}
-          yAxisLabel={yAxisLabel}
-          area={type === 'area'}
-          height={280}
-        />
-      );
-    }
-
-    if (isPieType) {
-      const firstDs = data.datasets[0];
-      return (
-        <D3PieChart
-          labels={data.labels}
-          data={firstDs.data as number[]}
-          colors={firstDs.backgroundColor as string[] | undefined}
-          doughnut={type === 'doughnut'}
-          height={320}
-        />
-      );
-    }
-
-    return (
-      <p style={{ color: 'var(--text-tertiary)' }}>
-        Unsupported chart type: {type}
-      </p>
-    );
-  };
+  const auroraType = AURORA_TYPE_MAP[type] || 'bar';
 
   return (
-    <div
-      style={{
-        background: 'var(--surface)',
-        backdropFilter: 'var(--surface-blur)',
-        WebkitBackdropFilter: 'var(--surface-blur)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius)',
-        padding: '1.5rem',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-    >
-      {title && (
-        <p
-          style={{
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            color: 'var(--text)',
-            marginBottom: '1rem',
-          }}
-        >
-          {title}
-        </p>
-      )}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          ...(isPieType ? { maxWidth: 360, margin: '0 auto' } : {}),
-        }}
-      >
-        {renderD3Chart()}
-      </div>
-    </div>
+    <ScrollDrivenChart
+      type={auroraType}
+      data={data as { labels: string[]; datasets: { label?: string; data: number[] }[] }}
+      title={title}
+      height={type === 'pie' || type === 'doughnut' ? 340 : 300}
+      index={index}
+    />
   );
 }
 
 // ─── Recursive Component Renderer ──────────────────────────
 
-function RenderComponent({ config }: { config: UIComponentConfig }) {
+function RenderComponent({ config, index = 0 }: { config: UIComponentConfig; index?: number }) {
   const { component, props, children } = config;
 
   // Composite components (custom rich renderers)
@@ -1221,7 +1238,7 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
     case 'Candlestick':
     case 'HierarchicalBar':
     case 'BarChartRace':
-      return renderChart(props);
+      return renderChart(props, index);
     case 'StatCard':
       return renderStatCard(props);
     case 'KPIGrid':
@@ -1266,8 +1283,6 @@ function RenderComponent({ config }: { config: UIComponentConfig }) {
 
 // ─── Main DynamicRenderer ──────────────────────────────────
 
-const STAGGER_STYLES = '';
-
 interface DynamicRendererProps {
   config: UIConfig;
   animated?: boolean;
@@ -1275,7 +1290,6 @@ interface DynamicRendererProps {
 
 export default function DynamicRenderer({
   config,
-  animated = false,
 }: DynamicRendererProps) {
   if (!config || !config.components) {
     return (
@@ -1303,7 +1317,7 @@ export default function DynamicRenderer({
           gap: '1.25rem',
           padding: '4rem 2rem',
           textAlign: 'center',
-          animation: 'fadeSlideUp 0.4s var(--ease-out-expo) both',
+          animation: 'fadeSlideUp 0.4s cubic-bezier(0.16,1,0.3,1) both',
         }}
       >
         <div
@@ -1370,7 +1384,6 @@ export default function DynamicRenderer({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {animated && STAGGER_STYLES && <style>{STAGGER_STYLES}</style>}
       {config.description && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
           {config.description}
@@ -1388,23 +1401,9 @@ export default function DynamicRenderer({
         }
       >
         {config.components.map((comp, i) => (
-          <div
-            key={i}
-            style={
-              animated
-                ? {
-                    opacity: 0,
-                    animationName: 'componentEnter',
-                    animationDuration: '0.7s',
-                    animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-                    animationFillMode: 'forwards',
-                    animationDelay: `${i * 0.14}s`,
-                  }
-                : undefined
-            }
-          >
-            <RenderComponent config={comp} />
-          </div>
+          <AuroraReveal key={i} index={i}>
+            <RenderComponent config={comp} index={i} />
+          </AuroraReveal>
         ))}
       </div>
     </div>

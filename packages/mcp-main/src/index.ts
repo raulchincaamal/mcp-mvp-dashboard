@@ -1,5 +1,4 @@
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -35,9 +34,13 @@ await initCache();
 if (!IS_MCP_MODE) {
   const fastify = Fastify({ logger: true });
 
-  await fastify.register(cors, {
-    origin: true, // Allow all origins in dev
+  // Manual CORS headers for all routes
+  fastify.addHook('onRequest', async (_req, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type');
   });
+  fastify.options('*', async (_req, reply) => reply.status(204).send());
 
   fastify.get('/health', async () => ({
     status: 'ok',

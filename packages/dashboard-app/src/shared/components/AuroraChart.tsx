@@ -5,9 +5,6 @@ import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { assembleECharts } from 'flint-chart';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-
-gsap.registerPlugin(ScrollTrigger);
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -212,10 +209,8 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       itemStyle: {
         color: vGrad(palette[di % palette.length][0], palette[di % palette.length][1]),
         borderRadius: [4, 4, 0, 0],
-        shadowColor: palette[di % palette.length][0] + '44',
-        shadowBlur: 6,
       },
-      emphasis: { itemStyle: { shadowBlur: 18, shadowColor: palette[di % palette.length][0] + '77' } },
+      emphasis: { itemStyle: { opacity: 0.85 } },
     })),
     animationDuration: 900,
     animationEasing: 'cubicOut' as const,
@@ -238,7 +233,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
       axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
+      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
@@ -254,7 +249,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
         smooth: true,
         symbol: 'circle',
         symbolSize: 6,
-        lineStyle: { width: 2.5, color: top, shadowColor: top + '55', shadowBlur: 6 },
+        lineStyle: { width: 2.5, color: top },
         itemStyle: { color: top, borderColor: tk.bg, borderWidth: 2 },
         areaStyle: isArea ? {
           color: {
@@ -294,7 +289,6 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
       labelLine: { show: false },
       emphasis: {
         scale: true, scaleSize: 8,
-        itemStyle: { shadowBlur: 20, shadowColor: palette[0][0] + '55' },
         label: { show: true, color: tk.text, fontSize: 13, fontWeight: 600 },
       },
       data: data.labels.map((label, i) => ({
@@ -302,8 +296,6 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
         value: ds.data[i],
         itemStyle: {
           color: rGrad(palette[i % palette.length][0], palette[i % palette.length][1]),
-          shadowColor: palette[i % palette.length][0] + '33',
-          shadowBlur: 4,
         },
       })),
     }],
@@ -347,8 +339,8 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
         type: 'scatter' as const,
         data: points,
         symbolSize: 10,
-        itemStyle: { color: top, shadowColor: top + '66', shadowBlur: 8 },
-        emphasis: { itemStyle: { shadowBlur: 20 } },
+        itemStyle: { color: top },
+        emphasis: { itemStyle: { opacity: 0.85 } },
       };
     }),
     animationDuration: 800,
@@ -424,8 +416,6 @@ function funnelOption(rawData: AuroraChartData, title: string | undefined, palet
         ...d,
         itemStyle: {
           color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]),
-          shadowColor: palette[i % palette.length][0] + '44',
-          shadowBlur: 6,
         },
       })),
     }],
@@ -518,7 +508,7 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, pale
       type: 'heatmap' as const,
       data: heatData,
       itemStyle: { borderRadius: 3, borderColor: tk.bg, borderWidth: 2 },
-      emphasis: { itemStyle: { shadowBlur: 12, shadowColor: top + '66' } },
+      emphasis: { itemStyle: { opacity: 0.85 } },
     }],
     animationDuration: 800,
     animationEasing: 'cubicOut' as const,
@@ -547,7 +537,7 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
       breadcrumb: { show: false },
       label: { show: true, formatter: '{b}\n{c}', color: '#fff', fontSize: 11, fontWeight: 600 },
       itemStyle: { borderWidth: 2, borderColor: tk.bg, gapWidth: 3 },
-      emphasis: { itemStyle: { shadowBlur: 16, shadowColor: palette[0][0] + '66' } },
+      emphasis: { itemStyle: { opacity: 0.85 } },
       data: data.labels.map((name, i) => ({
         name,
         value: ds.data[i],
@@ -579,34 +569,10 @@ export default function AuroraChart({
     const el = wrapperRef.current;
     if (!el) return;
 
-    // Enfoque 3: GSAP quickTo tilt — much smoother than direct style mutation
     rotY.current = gsap.quickTo(el, 'rotationY', { duration: 0.4, ease: 'power2.out' });
     rotX.current = gsap.quickTo(el, 'rotationX', { duration: 0.4, ease: 'power2.out' });
     gsap.set(el, { transformPerspective: 800, transformStyle: 'preserve-3d' });
 
-    // Enfoque 2: glow pulse on enter
-    const accentColor = (PALETTES[gradient] ?? PALETTES.aurora)[0][0];
-    ScrollTrigger.create({
-      trigger: el,
-      start: 'top 90%',
-      once: true,
-      onEnter: () => {
-        gsap.fromTo(
-          el,
-          { boxShadow: `0 0 0px 0px ${accentColor}00` },
-          {
-            boxShadow: `0 0 28px 4px ${accentColor}55`,
-            duration: 0.5,
-            ease: 'power2.out',
-            yoyo: true,
-            repeat: 1,
-            onComplete: () => gsap.set(el, { clearProps: 'boxShadow' }),
-          }
-        );
-      },
-    });
-
-    // Enfoque 4: title clip-path reveal
     if (titleRef.current) {
       gsap.fromTo(
         titleRef.current,
@@ -614,8 +580,6 @@ export default function AuroraChart({
         { clipPath: 'inset(0 0% 0 0)', opacity: 1, duration: 0.6, ease: 'power3.out', delay: 0.1 }
       );
     }
-
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
   }, [gradient]);
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {

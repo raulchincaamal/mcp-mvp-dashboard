@@ -1,6 +1,8 @@
 import '@macropaytd/lib-front-ui-components/styles.css';
 import './globals.css';
 import { Providers } from './providers';
+import SmoothScroll from '@/shared/components/SmoothScroll';
+import BarbaWrapper from '@/shared/components/BarbaWrapper';
 
 export const metadata = {
   title: 'MCP Dashboard',
@@ -33,12 +35,16 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
       <body className="antialiased">
-        <Providers><SmoothScroll>{children}</SmoothScroll></Providers>
+        <Providers>
+          <SmoothScroll>
+            <BarbaWrapper>{children}</BarbaWrapper>
+          </SmoothScroll>
+        </Providers>
       </body>
     </html>
   );

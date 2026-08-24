@@ -35,11 +35,12 @@ export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
 export interface AuroraChartProps {
   type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
   data: AuroraChartData;
-  flint?: FlintSpec;          // When present, Flint compiles the ECharts option directly
-  flintData?: Record<string, unknown>[];  // Raw rows for Flint assembly
+  flint?: FlintSpec;
+  flintData?: Record<string, unknown>[];
   title?: string;
-  height?: number;
+  height?: number | string;
   gradient?: 'aurora' | 'neon' | 'fire' | 'ocean';
+  bare?: boolean; // strips wrapper card styles — use when embedded in another card
 }
 
 // ─── Flat → Legacy normalizer ───────────────────────────────
@@ -554,7 +555,7 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
 // ─── Main Component ─────────────────────────────────────────
 
 export default function AuroraChart({
-  type, data, flint, flintData, title, height = 300, gradient = 'aurora',
+  type, data, flint, flintData, title, height = 300, gradient = 'aurora', bare = false,
 }: AuroraChartProps) {
   const palette    = (PALETTES[gradient] ?? PALETTES.aurora) as [string, string][];
   const tk         = useThemeTokens();
@@ -626,7 +627,7 @@ export default function AuroraChart({
       ref={wrapperRef}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
-      style={{
+      style={bare ? { width: '100%', height: '100%' } : {
         background: `var(--surface)`,
         backdropFilter: 'var(--surface-blur)',
         WebkitBackdropFilter: 'var(--surface-blur)',
@@ -638,7 +639,18 @@ export default function AuroraChart({
         willChange: 'transform',
       }}
     >
-      {title && (
+      {!bare && title && (
+        <div ref={titleRef} style={{
+          padding: '0.9rem 1.1rem 0',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          color: 'var(--text)',
+          letterSpacing: '-0.01em',
+        }}>
+          {title}
+        </div>
+      )}
+      {bare && title && (
         <div ref={titleRef} style={{
           padding: '0.9rem 1.1rem 0',
           fontSize: '0.82rem',
@@ -653,7 +665,7 @@ export default function AuroraChart({
         <ReactECharts
           key={`${type}-${gradient}-${tk.bg}`}
           option={getOption()}
-          style={{ height, width: '100%' }}
+          style={{ height: bare ? '100%' : height, width: '100%' }}
           opts={{ renderer: 'canvas' }}
           notMerge
         />

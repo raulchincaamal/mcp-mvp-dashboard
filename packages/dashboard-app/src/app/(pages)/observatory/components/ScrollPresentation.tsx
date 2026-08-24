@@ -2,8 +2,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
-import * as echarts from 'echarts';
 import GlassPanel from './GlassPanel';
+import AuroraChart from '@/shared/components/AuroraChart';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
 
@@ -52,6 +52,13 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
   };
 
   const totalSlides = insights.length + 2;
+
+  // After title slide (slide 0), auto-switch to grid
+  useEffect(() => {
+    if (viewMode !== 'presentation' || currentSlide !== 0) return;
+    const timer = setTimeout(() => switchMode('grid'), 3000);
+    return () => clearTimeout(timer);
+  }, [viewMode, currentSlide]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!autoPlay || viewMode !== 'presentation') return;
@@ -148,26 +155,44 @@ function EndContent({ cursor, onReset }: { cursor: CursorState; onReset: () => v
 }
 
 function InsightContent({ insight, cursor, index, total }: { insight: InsightData; cursor: CursorState; index: number; total: number }) {
-  const chartRef = useRef<HTMLDivElement>(null);
   const isList = !!insight.listItems;
   const isStatCard = !insight.chartOptions && !isList;
-  useEffect(() => {
-    if (!insight.chartOptions) return;
-    const el = document.getElementById(`insight-chart-${insight.id}`);
-    if (!el) return;
-    let instance: echarts.ECharts | null = null, ro: ResizeObserver | null = null, initialized = false;
-    function tryInit() {
-      if (initialized || !el || el.clientHeight < 50) return;
-      initialized = true;
-      instance = echarts.init(el, null, { renderer: 'canvas' });
-      instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 900, animationEasing: 'cubicOut' } as echarts.EChartsOption);
-      instance.resize();
-      ro = new ResizeObserver(() => instance?.resize());
-      ro.observe(el);
+
+  // Convert chartOptions back to AuroraChart-compatible data
+  const auroraData = insight.chartOptions ? (() => {
+    const opts = insight.chartOptions as Record<string, unknown>;
+    // bar/line/area: xAxis.data + series[0].data
+    const xAxis = opts.xAxis as { data?: string[] } | undefined;
+    const series = opts.series as { type?: string; data?: unknown[] }[] | undefined;
+    if (xAxis?.data && series?.[0]?.data) {
+      const labels = xAxis.data;
+      const datasets = (series as { type?: string; data?: unknown[]; name?: string }[]).map(s => ({
+        label: s.name ?? '',
+        data: (s.data as ({ value?: number } | number)[]).map(d => typeof d === 'number' ? d : (d as { value?: number }).value ?? 0),
+      }));
+      return { labels, datasets };
     }
-    const poll = setInterval(() => { if (el.clientHeight >= 50) { clearInterval(poll); tryInit(); } }, 50);
-    return () => { clearInterval(poll); ro?.disconnect(); instance?.dispose(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // pie: series[0].data = [{name, value}]
+    const pieSeries = series?.[0] as { type?: string; data?: { name: string; value: number }[] } | undefined;
+    if (pieSeries?.data && Array.isArray(pieSeries.data) && pieSeries.data[0]?.name !== undefined) {
+      return {
+        labels: pieSeries.data.map((d: { name: string }) => d.name),
+        datasets: [{ data: pieSeries.data.map((d: { value: number }) => d.value) }],
+      };
+    }
+    return null;
+  })() : null;
+
+  const chartType = insight.chartOptions ? (() => {
+    const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string }[] | undefined;
+    const t = series?.[0]?.type ?? 'bar';
+    if (t === 'pie') {
+      const r = (series?.[0] as { radius?: unknown })?.radius;
+      return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie';
+    }
+    return t as 'bar' | 'line' | 'area';
+  })() : 'bar';
+
   return (
     <div style={{ width: '100%', maxWidth: isStatCard ? 600 : 1100, marginLeft: 'auto', marginRight: 'auto', display: 'flex', flexDirection: 'column', ...(isStatCard || isList ? {} : { flex: 1, minHeight: 0, alignSelf: 'stretch' }) }}>
       <GlassPanel cursor={cursor} depth={0.2} glowOnHover={false} style={isStatCard || isList ? {} : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -193,7 +218,11 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               })}
             </div>
           )}
-          {insight.chartOptions && <div id={`insight-chart-${insight.id}`} ref={chartRef} style={{ flex: 1, minHeight: 0 }} />}
+          {auroraData && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
+              <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+            </div>
+          )}
         </div>
       </GlassPanel>
     </div>
@@ -207,10 +236,23 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 function getBentoSpan(i: number, insight: InsightData): { col: string; row: string } {
   const hasChart = !!insight.chartOptions && !insight.listItems;
   const isList   = !!insight.listItems;
-  if (hasChart) { const colPatterns = ['span 2','span 1','span 2','span 1','span 1','span 2']; return { col: colPatterns[i % colPatterns.length], row: 'span 2' }; }
+  const isStatCard = !insight.chartOptions && !isList;
+
+  if (isStatCard) {
+    const patterns = [{ col: 'span 1', row: 'span 1' }, { col: 'span 2', row: 'span 1' }, { col: 'span 1', row: 'span 1' }];
+    return patterns[i % patterns.length];
+  }
   if (isList) return { col: 'span 1', row: 'span 2' };
-  const patterns = [{ col: 'span 1', row: 'span 1' }, { col: 'span 2', row: 'span 1' }, { col: 'span 1', row: 'span 1' }];
-  return patterns[i % patterns.length];
+  if (hasChart) {
+    // Detect pie/doughnut — needs square-ish space
+    const series = (insight.chartOptions as Record<string, unknown>)?.series as { type?: string }[] | undefined;
+    const t = series?.[0]?.type;
+    if (t === 'pie') return { col: 'span 1', row: 'span 2' };
+    // bar/line: wide
+    const colPatterns = ['span 2', 'span 1', 'span 2', 'span 1', 'span 1', 'span 2'];
+    return { col: colPatterns[i % colPatterns.length], row: 'span 2' };
+  }
+  return { col: 'span 1', row: 'span 1' };
 }
 
 const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
@@ -243,7 +285,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         </div>
         <button onClick={onReset} style={{ padding: '8px 16px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)', flexShrink: 0 }}>← New Query</button>
       </div>
-      <div ref={gridRef} data-lenis-prevent style={{ flex: 1, overflowY: 'scroll', overflowX: 'hidden', padding: '8px 32px 60px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '160px', gap: 12, alignContent: 'start', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
+      <div ref={gridRef} data-lenis-prevent style={{ flex: 1, overflowY: 'scroll', overflowX: 'hidden', padding: '8px 32px 60px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '140px', gap: 16, alignContent: 'start', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
         {insights.map((insight, i) => { const span = getBentoSpan(i, insight); const accent = ACCENT_COLORS[i % ACCENT_COLORS.length]; return <BentoCard key={insight.id} ref={el => { cardRefs.current[i] = el; }} insight={insight} accent={accent} colSpan={span.col} rowSpan={span.row} onClick={() => onExpand(insight)} />; })}
       </div>
     </div>
@@ -253,11 +295,37 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
 function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cursor: CursorState; onClose: () => void }) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const cardRef     = useRef<HTMLDivElement>(null);
-  const chartRef    = useRef<HTMLDivElement>(null);
   const isList      = !!insight.listItems;
   const isStatCard  = !insight.chartOptions && !isList;
+
+  const auroraData = insight.chartOptions ? (() => {
+    const opts = insight.chartOptions as Record<string, unknown>;
+    const xAxis = opts.xAxis as { data?: string[] } | undefined;
+    const series = opts.series as { type?: string; data?: unknown[]; name?: string }[] | undefined;
+    if (xAxis?.data && series?.[0]?.data) {
+      return {
+        labels: xAxis.data,
+        datasets: series.map(s => ({
+          label: s.name ?? '',
+          data: (s.data as ({ value?: number } | number)[]).map(d => typeof d === 'number' ? d : (d as { value?: number }).value ?? 0),
+        })),
+      };
+    }
+    const pieSeries = series?.[0] as { data?: { name: string; value: number }[] } | undefined;
+    if (pieSeries?.data?.[0]?.name !== undefined) {
+      return { labels: pieSeries.data!.map(d => d.name), datasets: [{ data: pieSeries.data!.map(d => d.value) }] };
+    }
+    return null;
+  })() : null;
+
+  const chartType = insight.chartOptions ? (() => {
+    const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string; radius?: unknown }[] | undefined;
+    const t = series?.[0]?.type ?? 'bar';
+    if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
+    return t as 'bar' | 'line' | 'area';
+  })() : 'bar';
+
   useEffect(() => {
-    // Double rAF ensures element is painted before animating
     requestAnimationFrame(() => requestAnimationFrame(() => {
       gsap.set(backdropRef.current, { opacity: 0 });
       gsap.set(cardRef.current, { opacity: 0, scale: 0.92, y: 24 });
@@ -265,19 +333,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
       gsap.to(cardRef.current, { opacity: 1, scale: 1, y: 0, duration: 0.4, ease: 'back.out(1.3)', delay: 0.05 });
     }));
   }, []);
-  useEffect(() => {
-    if (!chartRef.current || !insight.chartOptions) return;
-    let instance: echarts.ECharts | null = null, ro: ResizeObserver | null = null;
-    const t = setTimeout(() => {
-      if (!chartRef.current) return;
-      instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-      instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 800 } as echarts.EChartsOption);
-      instance.resize();
-      ro = new ResizeObserver(() => instance?.resize());
-      ro.observe(chartRef.current);
-    }, 200);
-    return () => { clearTimeout(t); ro?.disconnect(); instance?.dispose(); };
-  }, [insight.chartOptions]);
+
   const handleClose = () => { gsap.to(backdropRef.current, { opacity: 0, duration: 0.2 }); gsap.to(cardRef.current, { opacity: 0, scale: 0.94, y: 16, duration: 0.2, onComplete: onClose }); };
   return (
     <div ref={backdropRef} onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 200, opacity: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', cursor: 'pointer' }}>
@@ -291,7 +347,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         </div>
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
-          {insight.chartOptions && !isList && <div ref={chartRef} style={{ flex: 1, minHeight: 0 }} />}
+          {auroraData && !isList && <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />}
           {isList && insight.listItems && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {insight.listItems.map((item, i) => (
@@ -311,30 +367,45 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
 
 const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accent: string; colSpan: string; rowSpan: string; onClick: () => void }>(
   ({ insight, accent, colSpan, rowSpan, onClick }, ref) => {
-    const chartRef = useRef<HTMLDivElement>(null);
-    const glowRef  = useRef<HTMLDivElement>(null);
-    const isList   = !!insight.listItems;
+    const isList     = !!insight.listItems;
     const isStatCard = !insight.chartOptions && !isList;
-    useEffect(() => {
-      if (!insight.chartOptions || isList) return;
-      let instance: echarts.ECharts | null = null, ro: ResizeObserver | null = null;
-      const t = setTimeout(() => {
-        if (!chartRef.current) return;
-        instance = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-        instance.setOption({ ...insight.chartOptions, backgroundColor: 'transparent', animation: true, animationDuration: 700 } as echarts.EChartsOption);
-        instance.resize();
-        ro = new ResizeObserver(() => instance?.resize());
-        ro.observe(chartRef.current!);
-      }, 300);
-      return () => { clearTimeout(t); ro?.disconnect(); instance?.dispose(); };
-    }, [insight.chartOptions, isList]);
+
+    const auroraData = insight.chartOptions ? (() => {
+      const opts = insight.chartOptions as Record<string, unknown>;
+      const xAxis = opts.xAxis as { data?: string[] } | undefined;
+      const series = opts.series as { type?: string; data?: unknown[]; name?: string }[] | undefined;
+      if (xAxis?.data && series?.[0]?.data) {
+        return {
+          labels: xAxis.data,
+          datasets: series.map(s => ({
+            label: s.name ?? '',
+            data: (s.data as ({ value?: number } | number)[]).map(d => typeof d === 'number' ? d : (d as { value?: number }).value ?? 0),
+          })),
+        };
+      }
+      const pieSeries = series?.[0] as { data?: { name: string; value: number }[] } | undefined;
+      if (pieSeries?.data?.[0]?.name !== undefined) {
+        return {
+          labels: pieSeries.data!.map(d => d.name),
+          datasets: [{ data: pieSeries.data!.map(d => d.value) }],
+        };
+      }
+      return null;
+    })() : null;
+
+    const chartType = insight.chartOptions ? (() => {
+      const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string; radius?: unknown }[] | undefined;
+      const t = series?.[0]?.type ?? 'bar';
+      if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
+      return t as 'bar' | 'line' | 'area';
+    })() : 'bar';
+
     return (
       <div ref={ref} onClick={onClick}
-        onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.02, duration: 0.35, ease: 'power2.out' }); if (glowRef.current) gsap.to(glowRef.current, { opacity: 1, duration: 0.35 }); }}
-        onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.45, ease: 'power2.out' }); if (glowRef.current) gsap.to(glowRef.current, { opacity: 0, duration: 0.45 }); }}
+        onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.02, duration: 0.35, ease: 'power2.out' })}
+        onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.45, ease: 'power2.out' })}
         style={{ gridColumn: colSpan, gridRow: rowSpan, position: 'relative', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '22px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)', willChange: 'transform' }}
       >
-        <div ref={glowRef} style={{ position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none', background: `radial-gradient(circle at 30% 80%, ${accent}22 0%, transparent 60%)`, borderRadius: 'inherit' }} />
         <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: `linear-gradient(90deg, transparent, ${accent}88, transparent)` }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexShrink: 0 }}>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, margin: 0, opacity: 0.9 }}>{insight.title}</p>
@@ -352,7 +423,13 @@ const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accen
             ))}
           </div>
         )}
-        {insight.chartOptions && !isList && <div ref={chartRef} style={{ flex: 1, minHeight: 0 }} />}
+        {auroraData && !isList && (
+          <div style={{ flex: 1, minHeight: 0, marginTop: 4, position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0 }}>
+              <AuroraChart type={chartType} data={auroraData} gradient="aurora" bare />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

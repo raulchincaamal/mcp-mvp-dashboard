@@ -233,29 +233,25 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 // GRID MODE
 // ═══════════════════════════════════════════════════════════════════════════
 
-function getBentoSpan(i: number, insight: InsightData): { col: string; row: string } {
-  const hasChart = !!insight.chartOptions && !insight.listItems;
-  const isList   = !!insight.listItems;
+// Bento uses 2 row units: small (140px) and large (280px)
+// span 1 = 1 unit, span 2 = 2 units (280px + gap)
+function getBentoSpan(i: number, insight: InsightData): { colSpan: number; rowSpan: number } {
+  const hasChart   = !!insight.chartOptions && !insight.listItems;
+  const isList     = !!insight.listItems;
   const isStatCard = !insight.chartOptions && !isList;
-
-  if (isStatCard) {
-    const patterns = [{ col: 'span 1', row: 'span 1' }, { col: 'span 2', row: 'span 1' }, { col: 'span 1', row: 'span 1' }];
-    return patterns[i % patterns.length];
-  }
-  if (isList) return { col: 'span 1', row: 'span 2' };
+  if (isStatCard) return { colSpan: i % 3 === 1 ? 2 : 1, rowSpan: 1 };
+  if (isList)     return { colSpan: 1, rowSpan: 2 };
   if (hasChart) {
-    // Detect pie/doughnut — needs square-ish space
     const series = (insight.chartOptions as Record<string, unknown>)?.series as { type?: string }[] | undefined;
-    const t = series?.[0]?.type;
-    if (t === 'pie') return { col: 'span 1', row: 'span 2' };
-    // bar/line: wide
-    const colPatterns = ['span 2', 'span 1', 'span 2', 'span 1', 'span 1', 'span 2'];
-    return { col: colPatterns[i % colPatterns.length], row: 'span 2' };
+    if (series?.[0]?.type === 'pie') return { colSpan: 1, rowSpan: 2 };
+    return { colSpan: i % 2 === 0 ? 2 : 1, rowSpan: 2 };
   }
-  return { col: 'span 1', row: 'span 1' };
+  return { colSpan: 1, rowSpan: 1 };
 }
 
 const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
+const ROW_UNIT = 140; // px per row unit
+const GAP = 16;
 
 function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void }) {
   const gridRef = useRef<HTMLDivElement>(null);
@@ -276,17 +272,87 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
       hasAnimated.current = true;
     });
   }, [visible]);
+
+  // Simulate CSS grid auto-placement (dense) to find center cell for header
+  const { placements, headerCol, headerRow, totalRows } = (() => {
+    const COLS = 3;
+    const occupied = new Set<string>();
+    const mark = (c: number, r: number, cs: number, rs: number) => {
+      for (let rr = r; rr < r + rs; rr++)
+        for (let cc = c; cc < c + cs; cc++)
+          occupied.add(`${cc},${rr}`);
+    };
+    const nextFree = (cs: number, rs: number): [number, number] => {
+      for (let r = 1; r < 200; r++)
+        for (let c = 1; c <= COLS - cs + 1; c++) {
+          let ok = true;
+          for (let rr = r; rr < r + rs && ok; rr++)
+            for (let cc = c; cc < c + cs && ok; cc++)
+              if (occupied.has(`${cc},${rr}`)) ok = false;
+          if (ok) return [c, r];
+        }
+      return [1, 1];
+    };
+    const placements: [number, number][] = [];
+    let maxRow = 1;
+    insights.forEach((insight, i) => {
+      const { colSpan: cs, rowSpan: rs } = getBentoSpan(i, insight);
+      const [c, r] = nextFree(cs, rs);
+      mark(c, r, cs, rs);
+      placements.push([c, r]);
+      maxRow = Math.max(maxRow, r + rs - 1);
+    });
+    // Find center: col 2, row closest to middle
+    const midRow = Math.ceil(maxRow / 2);
+    let headerRow = midRow;
+    for (let d = 0; d <= maxRow; d++) {
+      for (const sign of [1, -1]) {
+        const r = midRow + d * sign;
+        if (r >= 1 && !occupied.has(`2,${r}`)) { headerRow = r; mark(2, headerRow, 1, 1); break; }
+      }
+      if (!occupied.has(`2,${headerRow}`) || headerRow !== midRow) break;
+    }
+    return { placements, headerCol: 2, headerRow, totalRows: Math.max(maxRow, headerRow) };
+  })();
+
+  const gridH = totalRows * ROW_UNIT + (totalRows - 1) * GAP;
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: '20px 32px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{query}</h1>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', minHeight: 0, overflow: 'hidden', padding: '16px 32px' }}>
+      <div
+        ref={gridRef}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateRows: `repeat(${totalRows}, ${ROW_UNIT}px)`,
+          gap: GAP,
+          height: gridH,
+          margin: 'auto 0',
+        }}
+      >
+        {/* Header card — pinned to center col/row */}
+        <div style={{ gridColumn: `${headerCol} / ${headerCol + 1}`, gridRow: `${headerRow} / ${headerRow + 1}`, borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
+            <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>
+          </div>
+          <button onClick={onReset} style={{ padding: '7px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>← New Query</button>
         </div>
-        <button onClick={onReset} style={{ padding: '8px 16px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', backdropFilter: 'blur(12px)', flexShrink: 0 }}>← New Query</button>
-      </div>
-      <div ref={gridRef} data-lenis-prevent style={{ flex: 1, overflowY: 'scroll', overflowX: 'hidden', padding: '8px 32px 60px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '140px', gap: 16, alignContent: 'start', minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
-        {insights.map((insight, i) => { const span = getBentoSpan(i, insight); const accent = ACCENT_COLORS[i % ACCENT_COLORS.length]; return <BentoCard key={insight.id} ref={el => { cardRefs.current[i] = el; }} insight={insight} accent={accent} colSpan={span.col} rowSpan={span.row} onClick={() => onExpand(insight)} />; })}
+        {insights.map((insight, i) => {
+          const { colSpan: cs, rowSpan: rs } = getBentoSpan(i, insight);
+          const [c, r] = placements[i];
+          return (
+            <BentoCard
+              key={insight.id}
+              ref={el => { cardRefs.current[i] = el; }}
+              insight={insight}
+              accent={ACCENT_COLORS[i % ACCENT_COLORS.length]}
+              colSpan={`${c} / ${c + cs}`}
+              rowSpan={`${r} / ${r + rs}`}
+              onClick={() => onExpand(insight)}
+            />
+          );
+        })}
       </div>
     </div>
   );

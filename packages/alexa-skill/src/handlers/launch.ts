@@ -20,19 +20,14 @@ export const LaunchRequestHandler: RequestHandler = {
     try {
       const user = await getUserProfile(accessToken);
       return handlerInput.responseBuilder
-        .speak(
-          `Hola ${user.displayName}. Puedes preguntarme sobre el aura, consultar ventas o pedir el mapa de ventas. ¿Qué necesitas?`,
-        )
-        .reprompt('¿Qué quieres consultar?')
+        .speak(`Hola ${user.displayName}. ¿En qué puedo ayudarte?`)
+        .reprompt('¿Qué necesitas?')
         .getResponse();
     } catch {
       return handlerInput.responseBuilder
-        .speak(
-          'Hola, estás autenticado. Puedes preguntarme sobre el aura, consultar ventas o pedir el mapa de ventas. ¿Qué necesitas?',
-        )
-        .reprompt('¿Qué quieres consultar?')
+        .speak('Hola, estás autenticado. ¿En qué puedo ayudarte?')
+        .reprompt('¿Qué necesitas?')
         .getResponse();
     }
   },
 };
-

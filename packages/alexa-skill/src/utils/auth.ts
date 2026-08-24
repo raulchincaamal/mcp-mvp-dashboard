@@ -1,4 +1,5 @@
 import { HandlerInput } from 'ask-sdk-core';
+import { config } from '../config';
 
 interface UserProfile {
   displayName: string;
@@ -18,8 +19,10 @@ export function getAccessToken(handlerInput: HandlerInput): string | undefined {
 /**
  * Obtiene el perfil del usuario desde Microsoft Graph.
  */
-export async function getUserProfile(accessToken: string): Promise<UserProfile> {
-  const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+export async function getUserProfile(
+  accessToken: string,
+): Promise<UserProfile> {
+  const response = await fetch(`${config.GRAPH_API_URL}/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -29,3 +32,4 @@ export async function getUserProfile(accessToken: string): Promise<UserProfile> 
 
   return response.json() as Promise<UserProfile>;
 }
+

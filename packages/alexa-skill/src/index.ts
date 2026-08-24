@@ -2,9 +2,7 @@ import { http } from '@google-cloud/functions-framework';
 import { SkillBuilders } from 'ask-sdk-core';
 
 import { LaunchRequestHandler } from './handlers/launch';
-import { ConsultarVentasIntentHandler } from './handlers/consultar-ventas';
-import { AuraMacropayIntentHandler } from './handlers/aura-macropay';
-import { MapaVentasIntentHandler } from './handlers/mapa-ventas';
+import { CatchAllIntentHandler } from './handlers/catch-all';
 import {
   HelpHandler,
   CancelStopHandler,
@@ -15,9 +13,7 @@ import {
 const skill = SkillBuilders.custom()
   .addRequestHandlers(
     LaunchRequestHandler,
-    ConsultarVentasIntentHandler,
-    AuraMacropayIntentHandler,
-    MapaVentasIntentHandler,
+    CatchAllIntentHandler,
     HelpHandler,
     CancelStopHandler,
     SessionEndedHandler,
@@ -26,7 +22,6 @@ const skill = SkillBuilders.custom()
   .create();
 
 // Cloud Run Functions (2nd gen) entry point
-// Invoca el skill directamente sin ExpressAdapter para evitar conflicto de parsers
 http('alexaSkill', async (req, res) => {
   try {
     const response = await skill.invoke(req.body);
@@ -36,4 +31,3 @@ http('alexaSkill', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-

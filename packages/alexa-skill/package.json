@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsup",
-    "deploy": "npm run build && gcloud functions deploy alexaSkill --source dist --runtime nodejs18 --trigger-http --allow-unauthenticated --region us-central1 --entry-point alexaSkill"
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.3.0",

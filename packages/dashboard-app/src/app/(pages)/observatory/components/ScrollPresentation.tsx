@@ -262,19 +262,30 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
     if (!visible || hasAnimated.current || !gridRef.current) return;
     const allRefs = [headerCardRef.current, ...cardRefs.current];
     allRefs.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+
+    // Use offsetLeft/offsetTop — immune to ancestor GSAP transforms unlike getBoundingClientRect
+    let rafId: number;
+    const tryAnimate = () => {
       if (!gridRef.current) return;
-      const cr = gridRef.current.getBoundingClientRect();
-      const cx = cr.width / 2, cy = cr.height / 2;
-      allRefs.forEach((el, i) => {
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        const dx = (r.left - cr.left + r.width / 2 - cx) * 1.8;
-        const dy = (r.top - cr.top + r.height / 2 - cy) * 1.8;
-        gsap.fromTo(el, { opacity: 0, x: dx, y: dy, scale: 0.82 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.75, delay: i * 0.07, ease: 'power3.out' });
+      const validRefs = allRefs.filter(Boolean) as HTMLElement[];
+      const allReady = validRefs.every(el => el.offsetWidth > 0);
+      if (!allReady) { rafId = requestAnimationFrame(tryAnimate); return; }
+
+      const gw = gridRef.current.offsetWidth;
+      const gh = gridRef.current.offsetHeight;
+      const cx = gw / 2, cy = gh / 2;
+      validRefs.forEach((el, i) => {
+        const ex = el.offsetLeft + el.offsetWidth / 2;
+        const ey = el.offsetTop + el.offsetHeight / 2;
+        const dx = (ex - cx) * 1.8;
+        const dy = (ey - cy) * 1.8;
+        el.dataset.animating = 'true';
+        gsap.fromTo(el, { opacity: 0, x: dx, y: dy, scale: 0.82 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.75, delay: i * 0.07, ease: 'power3.out', onComplete: () => { delete el.dataset.animating; } });
       });
       hasAnimated.current = true;
-    }));
+    };
+    rafId = requestAnimationFrame(tryAnimate);
+    return () => cancelAnimationFrame(rafId);
   }, [visible]);
 
   const handleNewQuery = () => {
@@ -441,8 +452,8 @@ const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accen
 
     return (
       <div ref={ref} onClick={onClick}
-        onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.02, duration: 0.3, ease: 'power2.out', overwrite: true })}
-        onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: true })}
+        onMouseEnter={e => { if ((e.currentTarget as HTMLElement).dataset.animating) return; gsap.to(e.currentTarget, { scale: 1.02, duration: 0.3, ease: 'power2.out', overwrite: 'auto' }); }}
+        onMouseLeave={e => { if ((e.currentTarget as HTMLElement).dataset.animating) return; gsap.to(e.currentTarget, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: 'auto' }); }}
         style={{ gridColumn: colSpan, gridRow: rowSpan, position: 'relative', borderRadius: 20, background: 'rgba(255,255,255,0.06)', outline: '1px solid rgba(255,255,255,0.12)', outlineOffset: '-1px', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '22px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)', willChange: 'transform' }}
       >
         <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: `linear-gradient(90deg, transparent, ${accent}88, transparent)` }} />

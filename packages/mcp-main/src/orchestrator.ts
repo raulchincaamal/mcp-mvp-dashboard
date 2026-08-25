@@ -500,6 +500,14 @@ bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarc
 FILOSOFÍA DE VISUALIZACIÓN:
 Siempre genera dashboards RICOS y COMPLETOS. El usuario quiere entender sus datos en profundidad. Cada dashboard debe contar una historia completa con múltiples perspectivas. NUNCA generes menos de 6 componentes. Más charts = mejor dashboard.
 
+DIVERSIDAD DE CHARTS (obligatorio):
+- NUNCA uses doughnut más de 1 vez por dashboard
+- NUNCA uses bar más de 2 veces por dashboard
+- Prefiere treemap sobre doughnut cuando hay más de 4 categorías
+- Prefiere area/line sobre bar cuando hay datos temporales
+- Usa al menos 2 tipos de chart diferentes por dashboard
+- Si ya usaste doughnut, el siguiente chart de distribución debe ser treemap o bar
+
 REGLAS DE VISUALIZACIÓN (obligatorias):
 1. SIEMPRE incluye un KPIGrid con 4-5 métricas de resumen
 2. SIEMPRE incluye al menos 3 Charts diferentes con perspectivas distintas
@@ -548,14 +556,14 @@ ${
     ? `Genera un dashboard COMPLETO con mínimo 6 componentes:
 1. KPIGrid: total ventas, monto total, promedio precio, % morosidad, total liquidados
 2. Chart bar: ventas por estado (top 10, usa fieldSummaries.estado.topValues)
-3. Chart doughnut: distribución por estatus_credito
+3. Chart doughnut: distribución por estatus_credito (SOLO 1 doughnut permitido)
 4. Chart bar: ventas por canal_venta
-5. Chart doughnut: distribución por categoría (usa fieldSummaries.categoria.topValues)
+5. Chart treemap: distribución por categoría (usa fieldSummaries.categoria.topValues)
 6. TransactionList: últimas 6-8 operaciones de la muestra`
     : parsedIntent.template === 'category'
       ? `Genera mínimo 6 componentes:
 1. KPIGrid: total ventas, monto total, promedio, top categoría
-2. Chart doughnut: distribución por categoría
+2. Chart treemap: distribución por categoría (tamaño = monto total)
 3. Chart bar: monto total por categoría
 4. Chart bar: ventas por estado (top 8)
 5. ProgressGroup: top categorías por cantidad
@@ -565,8 +573,8 @@ ${
 1. KPIGrid: totales por estatus, monto en riesgo, % atrasados
 2. ProgressGroup: distribución de estatus (0-100)
 3. Chart bar: créditos atrasados por estado (top 10)
-4. Chart doughnut: distribución por canal_venta
-5. Chart bar: distribución por categoría
+4. Chart treemap: distribución por categoría de créditos atrasados
+5. Chart bar: distribución por canal_venta
 6. TransactionList: créditos con mayor riesgo`
         : parsedIntent.template === 'candlestick'
           ? `Genera un dashboard de VELAS/CANDLESTICK:

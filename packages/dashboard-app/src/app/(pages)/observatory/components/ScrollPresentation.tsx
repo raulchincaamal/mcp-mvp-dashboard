@@ -278,6 +278,27 @@ function AutoHeightChart({ insight }: { insight: InsightData }) {
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
+
+  const opts = insight.chartOptions as Record<string, unknown>;
+  const usesECharts = !!opts?.series; // EChartsRaw path needs manual wrapper
+
+  if (usesECharts) {
+    return (
+      <div ref={ref} style={{ width: '100%', height: '100%',
+        background: 'var(--surface)',
+        backdropFilter: 'var(--surface-blur)',
+        WebkitBackdropFilter: 'var(--surface-blur)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 'var(--radius)',
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+        <EChartsRaw opts={opts} height={h} />
+      </div>
+    );
+  }
+
+  // AuroraChart handles its own wrapper when bare=false
   return (
     <div ref={ref} style={{ width: '100%', height: '100%' }}>
       {renderChart(insight, h, false)}
@@ -289,14 +310,18 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   const containerRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
 
+  // Split: KPIs, primary chart (first), all secondary charts (rest), lists
   const kpis      = insights.filter(ins => !ins.chartOptions && !ins.listItems);
   const charts    = insights.filter(ins => !!ins.chartOptions);
   const lists     = insights.filter(ins => !!ins.listItems);
   const primary   = charts[0] ?? null;
-  const secondary = charts.slice(1);
+  const secondary = charts.slice(1); // ALL secondary charts go LEFT
   const txList    = lists[0] ?? null;
-  const leftKpis  = kpis.slice(0, 2);
-  const rightKpis = kpis.slice(2, 4);
+
+  // Derived stats from TransactionList
+  const allItems = lists.flatMap(l => l.listItems ?? []);
+  const positiveRate = allItems.length > 0 ? Math.round((allItems.filter(i => i.status === 'positive').length / allItems.length) * 100) : null;
+  const negativeRate = allItems.length > 0 ? Math.round((allItems.filter(i => i.status === 'negative').length / allItems.length) * 100) : null;
 
   useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
   useEffect(() => {
@@ -337,11 +362,15 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
     background: `linear-gradient(90deg, transparent, ${color}66, transparent)`,
   });
 
+  const kpisLeft = kpis.slice(0, 4); // max 4 KPIs en izquierda (2 filas)
+  const kpiRows = Math.ceil(kpisLeft.length / 2);
+  const secRows = secondary.length;
+
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP }}>
 
-      {/* LEFT: header + KPIs (todos) + secondary chart */}
-      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${Math.ceil(kpis.length / 2)}, auto) 1fr`, gap: GAP }}>
+      {/* LEFT: header + KPIs (max 4) + ALL secondary charts */}
+      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${kpiRows}, auto) repeat(${secRows}, minmax(180px, 1fr))`, gap: GAP }}>
 
         {/* Header */}
         <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, position: 'relative' }) }}>
@@ -353,39 +382,39 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>← New</button>
         </div>
 
-        {/* All KPIs — 2 per row */}
-        {kpis.map((ins, i) => {
+        {/* KPIs — max 4, 2 per row, auto height */}
+        {kpisLeft.map((ins, i) => {
           const accent = ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
               onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.03, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; }}
               onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
-              style={{ ...CARD({ padding: '16px 18px', cursor: 'pointer', position: 'relative' }) }}>
+              style={{ ...CARD({ padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', opacity: 0.9 }}>{ins.title}</p>
-              <p style={{ fontSize: 32, fontWeight: 800, color: 'rgba(255,255,255,0.92)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
-              {ins.metricLabel && <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', margin: '6px 0 0' }}>{ins.metricLabel}</p>}
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 6px', opacity: 0.9 }}>{ins.title}</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: 'rgba(255,255,255,0.92)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
+              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', margin: '4px 0 0' }}>{ins.metricLabel}</p>}
             </div>
           );
         })}
 
-        {/* Secondary chart — span 2, fills remaining */}
-        {secondary.slice(0, 1).map(ins => {
-          const accent = ACCENT_COLORS[4];
+        {/* ALL secondary charts — each spans 2 cols, equal height via 1fr rows */}
+        {secondary.map((ins, i) => {
+          const accent = ACCENT_COLORS[(i + 4) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
               onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.01, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}33`; }}
               onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
-              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative' }) }}>
+              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 10px', flexShrink: 0, opacity: 0.9 }}>{ins.title}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0, opacity: 0.9 }}>{ins.title}</p>
               <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} /></div>
             </div>
           );
         })}
       </div>
 
-      {/* RIGHT: primary chart (flex 1) + TransactionList abajo */}
+      {/* RIGHT: primary chart (flex 1) + bottom panel (resumen + tx list) */}
       <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateRows: '1fr auto', gap: GAP }}>
 
         {/* Primary chart */}
@@ -403,32 +432,61 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           </div>
         )}
 
-        {/* TransactionList — bottom */}
-        {txList && (
-          <div data-animate ref={el => { cardRefs.current[insights.indexOf(txList)] = el; }} onClick={() => onExpand(txList)}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[5]}44`; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
-            style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', height: '35%', minHeight: 160 }) }}>
-            <div style={accentLine(ACCENT_COLORS[5])} />
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[5], margin: '0 0 10px', flexShrink: 0, opacity: 0.9 }}>{txList.title}</p>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              {txList.listItems!.slice(0, 6).map((item, j) => (
-                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: j < 5 ? '1px solid rgba(255,255,255,0.05)' : 'none', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
-                    {item.subtitle && <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', margin: '1px 0 0' }}>{item.subtitle}</p>}
-                  </div>
-                  <p style={{ fontSize: 12, fontWeight: 700, margin: 0, flexShrink: 0, color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.75)' }}>{item.amount}</p>
+        {/* Bottom panel: resumen + tx list */}
+        <div style={{ display: 'grid', gridTemplateColumns: txList ? '1fr 1.6fr' : '1fr', gap: GAP, minHeight: 180 }}>
+
+          {/* Resumen derivado */}
+          <div data-animate style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '14px 16px', position: 'relative' }) }}>
+            <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: `linear-gradient(90deg, transparent, ${ACCENT_COLORS[6]}66, transparent)` }} />
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[6], margin: '0 0 8px', opacity: 0.9 }}>Resumen</p>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around' }}>
+              {positiveRate !== null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', margin: 0 }}>Al corriente</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#34d399', margin: 0 }}>{positiveRate}%</p>
+                </div>
+              )}
+              {negativeRate !== null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', margin: 0 }}>En riesgo</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#f87171', margin: 0 }}>{negativeRate}%</p>
+                </div>
+              )}
+              {kpis.slice(0, 4).map((kpi, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{kpi.title}</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0, flexShrink: 0 }}>{kpi.metric}</p>
                 </div>
               ))}
             </div>
           </div>
-        )}
+
+          {/* TransactionList */}
+          {txList && (
+            <div data-animate ref={el => { cardRefs.current[insights.indexOf(txList)] = el; }} onClick={() => onExpand(txList)}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[5]}44`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
+              <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: `linear-gradient(90deg, transparent, ${ACCENT_COLORS[5]}66, transparent)` }} />
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[5], margin: '0 0 8px', flexShrink: 0, opacity: 0.9 }}>{txList.title}</p>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                {txList.listItems!.slice(0, 6).map((item, j) => (
+                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: j < 5 ? '1px solid rgba(255,255,255,0.05)' : 'none', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
+                      {item.subtitle && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', margin: '1px 0 0' }}>{item.subtitle}</p>}
+                    </div>
+                    <p style={{ fontSize: 11, fontWeight: 700, margin: 0, flexShrink: 0, color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.75)' }}>{item.amount}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
+}
 function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cursor: CursorState; onClose: () => void }) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const cardRef     = useRef<HTMLDivElement>(null);

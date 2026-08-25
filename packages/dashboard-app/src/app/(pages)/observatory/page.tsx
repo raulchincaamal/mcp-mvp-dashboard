@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { useCursor } from './hooks/useCursor';
-import { observatory, runMockFlow, ALEXA_USER_ID } from './state-machine';
+import { observatory, runMockFlow, ALEXA_USER_ID, ENV_USER_ID } from './state-machine';
 import type { ObservatoryContext, InsightData } from './state-machine';
 import AmbientBackground from './components/AmbientBackground';
 import CursorLight from './components/CursorLight';
@@ -37,7 +37,8 @@ export default function ObservatoryPage() {
   const [apiOnline, setApiOnline] = useState(false);
   const [zoomKey, setZoomKey] = useState(0);
   const [coreLightTriggered, setCoreLightTriggered] = useState(false);
-  const pendingIntentRef = useRef<string | null>(null);
+  const pendingIntentRef = useRef<{ intent: string; userId: string } | null>(null);
+  const activeUserIdRef = useRef<string>(ALEXA_USER_ID);
 
   const zoomOverlayRef = useRef<HTMLDivElement>(null);
   const buildingRef    = useRef<HTMLDivElement>(null);
@@ -136,7 +137,7 @@ export default function ObservatoryPage() {
     const tl = gsap.timeline();
     tl.to(el, { left: 0, top: 0, width: '100vw', height: '100vh', borderRadius: 0, duration: 0.55, ease: 'power3.inOut' });
     tl.fromTo(buildingRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power2.out' }, '-=0.1');
-    tl.call(() => runMockFlow(zoomQuery), [], 0.2);
+    tl.call(() => runMockFlow(zoomQuery, activeUserIdRef.current), [], 0.2);
   }, [zoomQuery]);
 
   // State transitions
@@ -183,7 +184,8 @@ export default function ObservatoryPage() {
     gsap.to(buildingRef.current, { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' });
   }, [ctx.error]);
 
-  const triggerZoom = useCallback((query: string, rect: DOMRect) => {
+  const triggerZoom = useCallback((query: string, rect: DOMRect, userId?: string) => {
+    if (userId) activeUserIdRef.current = userId;
     setShowPresentation(false);
     setZoomQuery(null);
     pendingRect.current = rect;
@@ -193,19 +195,25 @@ export default function ObservatoryPage() {
   // SSE: detectar intent externo (Alexa) via /api/stream
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
-    const es = new EventSource(`${API_URL}/api/stream?userId=${ALEXA_USER_ID}`);
 
-    es.onmessage = (e) => {
-      try {
-        const { intent, status } = JSON.parse(e.data);
-        if (status === 'processing' && intent && observatory.getContext().state === 'IDLE') {
-          pendingIntentRef.current = intent;
-          setCoreLightTriggered(true);
-        }
-      } catch { /* silencioso */ }
-    };
+    function connectSSE(userId: string) {
+      const es = new EventSource(`${API_URL}/api/stream?userId=${userId}`);
+      es.onmessage = (e) => {
+        try {
+          const { intent, status } = JSON.parse(e.data);
+          if (status === 'processing' && intent && observatory.getContext().state === 'IDLE') {
+            pendingIntentRef.current = { intent, userId };
+            setCoreLightTriggered(true);
+          }
+        } catch { /* silencioso */ }
+      };
+      return es;
+    }
 
-    return () => es.close();
+    const connections = [connectSSE(ALEXA_USER_ID)];
+    if (ENV_USER_ID && ENV_USER_ID !== ALEXA_USER_ID) connections.push(connectSSE(ENV_USER_ID));
+
+    return () => connections.forEach(es => es.close());
   }, [triggerZoom]);
 
   const handleCategoryClick = useCallback((label: string, rect: DOMRect) => {
@@ -380,6 +388,20 @@ export default function ObservatoryPage() {
       {/* Inicializa cursorRef sin causar re-renders */}
       <CursorBootstrap />
 
+      {/* Logo — top left */}
+      <div style={{
+        position: 'fixed', top: 20, left: 24, zIndex: 10,
+        display: 'flex', alignItems: 'center', gap: 8,
+        pointerEvents: 'none',
+      }}>
+        <img src="/macropay-happy.svg" alt="Macropay" style={{ width: 22, height: 18 }} />
+        <span style={{
+          fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.01em',
+          color: 'rgba(255,255,255,0.55)',
+          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+        }}>Macropay AI Diagrams | Ventas</span>
+      </div>
+
       {/* Layer 0 — Three.js + widgets */}
       <AmbientBackground onCategoryClick={handleCategoryClick} />
 
@@ -424,11 +446,11 @@ export default function ObservatoryPage() {
           triggered={coreLightTriggered}
           onTriggerComplete={() => {
             setCoreLightTriggered(false);
-            const intent = pendingIntentRef.current;
+            const pending = pendingIntentRef.current;
             pendingIntentRef.current = null;
-            if (intent) {
+            if (pending) {
               const rect = coreLightRef.current?.getBoundingClientRect();
-              if (rect) triggerZoom(intent, rect);
+              if (rect) triggerZoom(pending.intent, rect, pending.userId);
             }
           }}
         />

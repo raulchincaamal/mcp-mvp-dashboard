@@ -3,7 +3,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
-import { assembleECharts } from 'flint-chart';
 import gsap from 'gsap';
 
 // ─── Types ─────────────────────────────────────────────────
@@ -143,31 +142,6 @@ function rGrad(top: string, bot: string) {
     type: 'radial' as const, x: 0.5, y: 0.4, r: 0.7,
     colorStops: [{ offset: 0, color: top }, { offset: 1, color: bot }],
   };
-}
-
-// ─── Flint compiler ────────────────────────────────────────
-
-function buildFlintOption(
-  spec: FlintSpec,
-  rows: Record<string, unknown>[],
-): EChartsOption | null {
-  try {
-    const result = assembleECharts({
-      data: { values: rows },
-      semantic_types: spec.semantic_types ?? {},
-      chart_spec: {
-        chartType: spec.chartType,
-        title: spec.title,
-        encodings: spec.encodings,
-        baseSize: spec.baseSize ?? { width: 600, height: 320 },
-      },
-    });
-    // assembleECharts returns { option, warnings } or the option directly
-    return (result as { option: EChartsOption }).option ?? (result as EChartsOption);
-  } catch (e) {
-    console.warn('[AuroraChart] Flint compile failed, falling back to Aurora:', e);
-    return null;
-  }
 }
 
 // ─── Option builders ────────────────────────────────────────
@@ -600,12 +574,6 @@ export default function AuroraChart({
   }, []);
 
   const getOption = (): EChartsOption => {
-    // Flint path: highest quality — semantic compiler
-    if (flint && flintData?.length) {
-      const flintOption = buildFlintOption(flint, flintData);
-      if (flintOption) return flintOption;
-    }
-    // Flat array / legacy path
     switch (type) {
       case 'bar':      return barOption(data, title, palette, tk!);
       case 'line':     return lineOption(data, title, palette, tk!, false);

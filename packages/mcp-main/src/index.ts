@@ -148,7 +148,6 @@ if (!IS_MCP_MODE) {
 
       // Save final result
       const cacheKey = generateCacheKey('ui', {
-        userId,
         dataset,
         intent,
         filters,
@@ -160,6 +159,7 @@ if (!IS_MCP_MODE) {
         { hash, status: 'ready', uiConfig },
         TTL.INTENT,
       );
+      console.error(`[generate-ui] saved ready → key: ${latestKey}, hash: ${hash}`);
       await cacheSet(cacheKey, uiConfig, TTL.INTENT);
 
       return {

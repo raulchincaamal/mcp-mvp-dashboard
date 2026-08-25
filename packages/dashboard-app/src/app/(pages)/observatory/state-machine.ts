@@ -195,7 +195,79 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
       let chartOptions: Record<string, unknown> = {};
 
-      if (type === 'pie' || type === 'doughnut') {
+      // ── Tipos nativos de AuroraChart (no necesitan conversión a ECharts) ──
+      const AURORA_NATIVE = ['scatter','radar','funnel','gauge','heatmap','treemap'];
+      if (AURORA_NATIVE.includes(type)) {
+        // Pasar datos tal cual — AuroraChart los consume directamente
+        const datasets = rawData?.datasets ?? (Array.isArray(rawData)
+          ? [{ data: rawData.map((d: Record<string,unknown>) => Number(d.value ?? d.count ?? 0)) }]
+          : [{ data: values }]);
+        chartOptions = {
+          // Usamos _auroraType para que ScrollPresentation lo lea sin depender de series[0].type
+          _auroraType: type,
+          _auroraData: { labels, datasets },
+        };
+      } else if (type === 'candlestick') {
+        // Bedrock genera datasets[0].data = [{date, open, high, low, close}]
+        const ohlcRaw = rawData?.datasets?.[0]?.data ?? (Array.isArray(rawData) ? rawData : []);
+        const ohlcLabels: string[] = [];
+        const ohlcData: number[][] = [];
+        for (const d of ohlcRaw) {
+          const item = d as Record<string, unknown>;
+          ohlcLabels.push(String(item.date ?? item.label ?? ''));
+          ohlcData.push([
+            Number(item.open ?? 0),
+            Number(item.close ?? 0),
+            Number(item.low ?? 0),
+            Number(item.high ?? 0),
+          ]);
+        }
+        const upColor = '#34d399';
+        const downColor = '#f87171';
+        chartOptions = {
+          _auroraType: 'candlestick',
+          _auroraData: { labels: ohlcLabels, datasets: [{ data: ohlcData.map(d => d[1]) }] }, // fallback
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'axis',
+            backgroundColor: TOOLTIP_STYLE.backgroundColor,
+            borderColor: TOOLTIP_STYLE.borderColor,
+            borderWidth: 1,
+            textStyle: TOOLTIP_STYLE.textStyle,
+            extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+            formatter: (params: unknown[]) => {
+              const p = (params as {name:string;data:number[]}[])[0];
+              if (!p) return '';
+              return `${p.name}<br/>O: ${p.data[1].toLocaleString('es-MX')}<br/>C: ${p.data[2].toLocaleString('es-MX')}<br/>L: ${p.data[3].toLocaleString('es-MX')}<br/>H: ${p.data[4].toLocaleString('es-MX')}`;
+            },
+          },
+          grid: { left: 16, right: 16, bottom: 40, top: 16, containLabel: true },
+          xAxis: {
+            type: 'category',
+            data: ohlcLabels,
+            axisLine: { lineStyle: { color: AXIS_STYLE.axisLine.lineStyle.color } },
+            axisTick: { show: false },
+            axisLabel: { color: AXIS_STYLE.axisLabel.color, fontSize: 10, rotate: ohlcLabels.length > 12 ? 35 : 0 },
+          },
+          yAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: AXIS_STYLE.axisLabel.color, fontSize: 10 },
+            splitLine: { lineStyle: { color: AXIS_STYLE.splitLine.lineStyle.color, type: 'dashed' } },
+          },
+          series: [{
+            type: 'candlestick',
+            data: ohlcData,
+            itemStyle: {
+              color: upColor,
+              color0: downColor,
+              borderColor: upColor,
+              borderColor0: downColor,
+            },
+          }],
+        };
+      } else if (type === 'pie' || type === 'doughnut') {
         const total = values.reduce((a, b) => a + b, 0);
         chartOptions = {
           backgroundColor: 'transparent',
@@ -252,6 +324,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         };
       } else if (type === 'line' || type === 'area') {
         chartOptions = {
+          _auroraType: type,
+          _auroraData: { labels, datasets: rawData?.datasets ?? [{ label: '', data: values }] },
           grid: { top: 24, right: 20, bottom: 36, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
@@ -272,6 +346,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       } else {
         // bar - vertical
         chartOptions = {
+          _auroraType: 'bar',
+          _auroraData: { labels, datasets: rawData?.datasets ?? [{ label: '', data: values }] },
           grid: { top: 16, right: 16, bottom: 40, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
@@ -298,7 +374,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         };
       }
 
-      const eType = (type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar';
+      const eType = (chartOptions._auroraType as string) ||
+        ((type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar');
       insights.push({
         id: `chart-${idx}`,
         title: props.title ?? uiConfig.title ?? 'Chart',
@@ -340,6 +417,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         title: props.title ?? 'Progress',
         chartType: 'bar',
         chartOptions: {
+          _auroraType: 'bar',
+          _auroraData: { labels: pgLabels, datasets: [{ label: '', data: pgValues }] },
           backgroundColor: 'transparent',
           grid: { top: 4, right: 52, bottom: 4, left: 4, containLabel: true },
           xAxis: { type: 'value', max: 100, show: false },

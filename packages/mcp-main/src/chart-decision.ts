@@ -3,9 +3,6 @@
  *
  * Modelo de decisión analítico para selección de chart type.
  * Lógica: objetivo × dimensiones × cardinalidad.
- *
- * Dimensión de análisis = lo que se quiere visualizar (se pierde el análisis si se elimina)
- * Filtro = limita el dataset pero NO es la dimensión principal
  */
 
 // ─── Types ────────────────────────────────────────────────────
@@ -16,7 +13,10 @@ export type ChartObjective =
   | 'distribucion_geografica'
   | 'relacion'
   | 'participacion'
-  | 'ranking';
+  | 'ranking'
+  | 'conversion'
+  | 'desempeno'
+  | 'correlacion';
 
 export interface ChartDimensions {
   hasTiempo: boolean;
@@ -42,11 +42,17 @@ const OBJECTIVE_KEYWORDS: Record<ChartObjective, RegExp> = {
   distribucion_geografica:
     /por\s+estado|d[oó]nde|regi[oó]n|zona|ubicaci[oó]n|mapa|geogr[aá]f/i,
   relacion:
-    /relaci[oó]n|afecta|dependencia|conexi[oó]n|correlaci[oó]n|influye|impacto/i,
+    /relaci[oó]n|afecta|dependencia|conexi[oó]n|influye|impacto/i,
   participacion:
     /participaci[oó]n|distribuci[oó]n|proporci[oó]n|porcentaje|parte\s+del\s+total|composici[oó]n|breakdown/i,
   ranking:
     /ranking|top\s+\d|mejores|peores|primeros|[uú]ltimos|m[aá]s\s+vendidos|menos\s+vendidos/i,
+  conversion:
+    /embudo|funnel|conversi[oó]n|etapa|paso|proceso|flujo|pipeline/i,
+  desempeno:
+    /gauge|medidor|veloc[ií]metro|indicador\s+de\s+meta|cumplimiento|porcentaje\s+de\s+meta|kpi\s+circular/i,
+  correlacion:
+    /correlaci[oó]n|scatter|dispersi[oó]n|relaci[oó]n\s+entre|precio\s+vs|monto\s+vs|edad\s+vs/i,
 };
 
 const TIEMPO_KEYWORDS =
@@ -102,29 +108,22 @@ function detectExplicitChartRequest(intent: string): string | null {
   if (/[aá]rea\s+apilada|stacked.area/.test(lower)) return 'stacked-area';
   if (/divergen|diverging/.test(lower)) return 'diverging-bar';
   if (/radial|polar|nightingale/.test(lower)) return 'radial-stacked-bar';
-  if (/jer[aá]rquic|drill.?down|hierarchical|treemap/.test(lower)) return 'hierarchical-bar';
+  if (/jer[aá]rquic|drill.?down|hierarchical/.test(lower)) return 'hierarchical-bar';
+  if (/treemap|mapa\s+de\s+[aá]rbol|cuadros/.test(lower)) return 'treemap';
   if (/carrera|bar.?race|animad/.test(lower)) return 'bar-race';
   if (/vela|candlestick|ohlc/.test(lower)) return 'candlestick';
   if (/bollinger|banda/.test(lower)) return 'bollinger';
-  if (/heatmap|calor/.test(lower)) return 'stacked-area'; // fallback: heatmap → stacked-area
+  if (/heatmap|mapa\s+de\s+calor/.test(lower)) return 'heatmap';
+  if (/embudo|funnel|conversi[oó]n/.test(lower)) return 'funnel';
+  if (/gauge|medidor|veloc[ií]metro/.test(lower)) return 'gauge';
+  if (/scatter|dispersi[oó]n|nube\s+de\s+puntos/.test(lower)) return 'scatter';
+  if (/radar|ara[ñn]a|tela\s+de\s+ara[ñn]a/.test(lower)) return 'radar';
   if (/barra|bar\s+chart|columna/.test(lower)) return 'bar';
   if (/[aá]rea/.test(lower)) return 'area';
   return null;
 }
 
 // ─── Decision tree ────────────────────────────────────────────
-//
-// Prioridades según el modelo:
-//
-// 1 dimensión producto/tipo  → bar (o radial-stacked-bar para ranking)
-// 1 dimensión temporal       → area o line
-// 1 dimensión estado         → bar (mapa no disponible aún)
-// Producto + tiempo          → stacked-area
-// Producto + estado          → bar (heatmap cuando esté disponible)
-// Estado + tiempo            → area (línea por estado)
-// 3+ dimensiones             → stacked-area o hierarchical-bar
-// Participación              → hierarchical-bar (treemap) o doughnut
-// Ranking                    → radial-stacked-bar o bar
 
 export function selectChartType(
   intent: string,
@@ -134,7 +133,6 @@ export function selectChartType(
   const dims = detectDimensions(intent, groupBy);
   const objective = detectObjective(intent);
 
-  // Respetar siempre lo que el usuario pidió explícitamente
   const explicit = detectExplicitChartRequest(intent);
   if (explicit) {
     return {
@@ -145,130 +143,63 @@ export function selectChartType(
     };
   }
 
-  // ─── Árbol de decisión ────────────────────────────────────
-
   switch (objective) {
 
     case 'tendencia': {
-      // Producto + tiempo → área apilada (ver evolución por categoría)
       if (dims.hasProducto && dims.hasTiempo && !dims.hasEstado) {
-        return {
-          chartType: 'stacked-area',
-          objective,
-          confidence: 'high',
-          reason: 'Producto + tiempo → área apilada',
-        };
+        return { chartType: 'stacked-area', objective, confidence: 'high', reason: 'Producto + tiempo → área apilada' };
       }
-      // Solo tiempo (o tiempo + estado como filtro) → área
-      return {
-        chartType: 'area',
-        objective,
-        confidence: 'high',
-        reason: 'Tendencia temporal → área',
-      };
+      return { chartType: 'area', objective, confidence: 'high', reason: 'Tendencia temporal → área' };
     }
 
     case 'distribucion_geografica': {
-      // Estado + producto → barras agrupadas (heatmap cuando esté disponible)
       if (dims.hasProducto) {
-        return {
-          chartType: 'bar',
-          objective,
-          confidence: 'medium',
-          reason: 'Estado + producto → barras (heatmap pendiente)',
-        };
+        return { chartType: 'heatmap', objective, confidence: 'high', reason: 'Estado + producto → heatmap' };
       }
-      // Solo estado → barras por estado (mapa pendiente)
-      return {
-        chartType: 'bar',
-        objective,
-        confidence: 'medium',
-        reason: 'Distribución geográfica → barras por estado (mapa pendiente)',
-      };
+      return { chartType: 'bar', objective, confidence: 'medium', reason: 'Distribución geográfica → barras por estado' };
     }
 
     case 'comparacion': {
-      // 3+ dimensiones → barras
       if (dims.extraDimensions >= 2) {
-        return {
-          chartType: 'bar',
-          objective,
-          confidence: 'high',
-          reason: '3+ dimensiones → barras para comparación clara',
-        };
+        return { chartType: 'radar', objective, confidence: 'medium', reason: '3+ dimensiones → radar' };
       }
-      // Producto + estado → barras agrupadas
       if (dims.hasProducto && dims.hasEstado) {
-        return {
-          chartType: 'bar',
-          objective,
-          confidence: 'high',
-          reason: 'Producto + estado → barras agrupadas',
-        };
+        return { chartType: 'bar', objective, confidence: 'high', reason: 'Producto + estado → barras agrupadas' };
       }
-      // Solo producto o tipo de venta → barras
-      return {
-        chartType: 'bar',
-        objective,
-        confidence: 'high',
-        reason: 'Comparación → barras',
-      };
+      return { chartType: 'bar', objective, confidence: 'high', reason: 'Comparación → barras' };
     }
 
     case 'ranking': {
-      // Ranking → polar bar (radial) o barras ordenadas
-      return {
-        chartType: 'radial-stacked-bar',
-        objective,
-        confidence: 'high',
-        reason: 'Ranking → polar bar (Nightingale)',
-      };
+      return { chartType: 'bar', objective, confidence: 'high', reason: 'Ranking → barras ordenadas' };
     }
 
     case 'participacion': {
-      // Producto + tiempo → área apilada
       if (dims.hasProducto && dims.hasTiempo) {
-        return {
-          chartType: 'stacked-area',
-          objective,
-          confidence: 'high',
-          reason: 'Participación en el tiempo → área apilada',
-        };
+        return { chartType: 'stacked-area', objective, confidence: 'high', reason: 'Participación en el tiempo → área apilada' };
       }
-      // Múltiples dimensiones → treemap (hierarchical-bar)
       if (dims.extraDimensions >= 1) {
-        return {
-          chartType: 'hierarchical-bar',
-          objective,
-          confidence: 'medium',
-          reason: 'Participación con múltiples dimensiones → treemap',
-        };
+        return { chartType: 'treemap', objective, confidence: 'high', reason: 'Participación con múltiples dimensiones → treemap' };
       }
-      // Simple → dona
-      return {
-        chartType: 'doughnut',
-        objective,
-        confidence: 'high',
-        reason: 'Participación simple → dona',
-      };
+      return { chartType: 'doughnut', objective, confidence: 'high', reason: 'Participación simple → dona' };
     }
 
     case 'relacion': {
-      // Producto + estado → barras (heatmap pendiente)
       if (dims.hasEstado && dims.hasProducto) {
-        return {
-          chartType: 'bar',
-          objective,
-          confidence: 'medium',
-          reason: 'Relación producto-estado → heatmap (fallback: barras)',
-        };
+        return { chartType: 'heatmap', objective, confidence: 'high', reason: 'Relación producto-estado → heatmap' };
       }
-      return {
-        chartType: 'line',
-        objective,
-        confidence: 'medium',
-        reason: 'Relación entre variables → línea',
-      };
+      return { chartType: 'scatter', objective, confidence: 'medium', reason: 'Relación entre variables → scatter' };
+    }
+
+    case 'conversion': {
+      return { chartType: 'funnel', objective, confidence: 'high', reason: 'Proceso/embudo → funnel' };
+    }
+
+    case 'desempeno': {
+      return { chartType: 'gauge', objective, confidence: 'high', reason: 'Indicador de desempeño → gauge' };
+    }
+
+    case 'correlacion': {
+      return { chartType: 'scatter', objective, confidence: 'high', reason: 'Correlación entre variables → scatter' };
     }
   }
 }
@@ -292,12 +223,17 @@ FILTROS (limitan datos pero NO son la dimensión principal):
 REGLAS DE SELECCIÓN:
 - 1 dimensión temporal → area o line
 - 1 dimensión estado (como análisis) → bar por estado
-- 1 dimensión producto/tipo → bar o radial-stacked-bar
+- 1 dimensión producto/tipo → bar
 - Producto + tiempo → stacked-area (área apilada)
-- Producto + estado → bar agrupado (heatmap pendiente)
-- Participación/distribución → doughnut (≤5 categorías) o hierarchical-bar
+- Producto + estado → heatmap (mapa de calor categoría × estado)
+- Participación/distribución → doughnut (≤5 categorías) o treemap (>5)
 - Ranking/top N → radial-stacked-bar o bar ordenado
-- 3+ dimensiones → stacked-area o hierarchical-bar
+- 3+ dimensiones → radar o stacked-area
+- Embudo/conversión/etapas → funnel
+- Indicador/meta/cumplimiento → gauge
+- Correlación/dispersión entre 2 variables numéricas → scatter
+- Comparación multidimensional por categoría → radar
+- Distribución 2D (campo × campo) → heatmap
 
 IMPORTANTE: Si el usuario menciona un estado específico (ej: "en Yucatán"),
 ese estado es un FILTRO, no la dimensión de análisis.

@@ -90,7 +90,7 @@ const COMPONENT_CATALOG = [
   {
     name: 'Chart',
     description:
-      'D3 chart (bar, line, pie, doughnut, area, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race)',
+      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
   },
   { name: 'DataSummary', description: 'Styled data table with hover effects' },
   {
@@ -398,6 +398,14 @@ ${CHART_DECISION_PROMPT}`,
       parsed.chartType = decision.chartType;
       console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`);
     }
+
+    // Si el chartType es especializado, forzar template:chart para que no lo sobreescriban
+    const STANDARD_TYPES = ['bar', 'line', 'area', 'pie', 'doughnut'];
+    if (parsed.chartType && !STANDARD_TYPES.includes(parsed.chartType) &&
+        !['candlestick','bollinger','stacked-area','diverging-bar','radial-stacked-bar','hierarchical-bar','bar-race'].includes(parsed.template)) {
+      parsed.template = 'chart';
+      console.log(`[orchestrator] template forced to 'chart' for specialized chartType: ${parsed.chartType}`);
+    }
     return parsed;
   } catch (err) {
     console.log(
@@ -447,7 +455,18 @@ UIConfig schema:
 Props por componente:
 - KPIGrid: { items: [{ title, value, subtitle?, trend?, trendDirection?: "up"|"down"|"neutral", icon? }] }
 - Chart (standard): { type: "bar"|"line"|"pie"|"doughnut"|"area", title?, data: { labels: [], datasets: [{ label, data: [], backgroundColor }] } }
-- Chart (candlestick): { type: "candlestick", title?, data: [{ date: "YYYY-MM-DD", open: number, high: number, low: number, close: number }] }
+- Chart (scatter): { type: "scatter", title?, data: { labels: ["x1","x2",...], datasets: [{ label, data: [y1,y2,...] }] } }
+  labels = valores del eje X (numéricos como strings), data = valores del eje Y. Usa 2 campos numéricos del dataset.
+- Chart (radar): { type: "radar", title?, data: { labels: ["dim1","dim2",...], datasets: [{ label: "serie", data: [v1,v2,...] }] } }
+  labels = dimensiones/categorías (eje radial), cada dataset es una serie. Ideal para comparar múltiples categorías en varias métricas.
+- Chart (funnel): { type: "funnel", title?, data: { labels: ["Etapa1","Etapa2",...], datasets: [{ data: [v1,v2,...] }] } }
+  Ordena de mayor a menor automáticamente. Usa para mostrar conversión por etapas (ej: total → activos → al_corriente → liquidados).
+- Chart (gauge): { type: "gauge", title?, data: { labels: ["Nombre del indicador"], datasets: [{ data: [valor_0_a_100] }] } }
+  Un solo valor entre 0 y 100. Ideal para % de cumplimiento, % morosidad, % liquidados.
+- Chart (heatmap): { type: "heatmap", title?, data: { labels: ["col1","col2",...], datasets: [{ label: "fila1", data: [v1,v2,...] }, { label: "fila2", data: [...] }] } }
+  labels = eje X (ej: categorías), datasets[i].label = eje Y (ej: estados), datasets[i].data = valores por columna.
+- Chart (treemap): { type: "treemap", title?, data: { labels: ["nombre1","nombre2",...], datasets: [{ data: [v1,v2,...] }] } }
+  labels = nombres de los nodos, data = tamaños. Ideal para distribución proporcional de categorías.
   Para generar OHLC: agrupa registros por fecha. open=primer valor del día, high=máximo, low=mínimo, close=último valor. USA LOS DATOS REALES de aggregations.
 - Chart (bollinger): { type: "bollinger", title?, data: [{ date: "YYYY-MM-DD", value: number }], n?: 20, k?: 2 }
   Genera una serie temporal con un valor por fecha (suma o promedio del campo numérico por día).
@@ -471,6 +490,12 @@ IMPORTANTE PARA CHARTS ESPECIALIZADOS:
 - Para hierarchical-bar: Usa 2 campos categóricos para crear padre → hijos.
 - Para stacked-area y radial-stacked-bar: Usa un campo temporal como eje X y un campo categórico para las series.
 - Si el filtro no encuentra datos, OMITE el filtro y usa todos los registros disponibles.
+
+REGLA CRÍTICA — CHART TYPE OBLIGATORIO:
+Si el userMessage especifica un "ChartType forzado", DEBES usar ESE tipo en el Chart principal, sin excepción.
+Esta regla tiene prioridad sobre cualquier template o instrucción posterior.
+Los tipos válidos son: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap,
+bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race.
 
 FILOSOFÍA DE VISUALIZACIÓN:
 Siempre genera dashboards RICOS y COMPLETOS. Más información es mejor que menos. El usuario quiere entender sus datos en profundidad, no solo ver un número. Cada dashboard debe contar una historia completa: qué pasó, dónde, cuánto, y cómo se distribuye. Nunca generes menos de 4 componentes para cualquier template.
@@ -498,6 +523,7 @@ COLORES para charts (usa estos exactos):
 Template sugerido: ${parsedIntent.template}
 GroupBy detectado: ${parsedIntent.groupBy ?? 'ninguno'}
 Métrica: ${parsedIntent.metric}${parsedIntent.metricField ? ` de ${parsedIntent.metricField}` : ''}
+${parsedIntent.chartType ? `ChartType forzado: ${parsedIntent.chartType} — USA ESTE TIPO en el Chart principal, es OBLIGATORIO. No uses bar ni doughnut si el tipo forzado es diferente.` : ''}
 ${topN ? `Top N solicitado: ${topN} — muestra SOLO los ${topN} primeros grupos en el chart (ordenados de mayor a menor). El KPIGrid debe reflejar el total de todos los registros, no solo los top ${topN}.` : ''}
 
 CONTEXTO DE LOS DATOS (${totalRecords} registros totales):
@@ -508,7 +534,14 @@ ${JSON.stringify(sampleRecords, null, 2)}
 
 INSTRUCCIONES SEGÚN TEMPLATE:
 ${
-  parsedIntent.template === 'executive'
+  parsedIntent.chartType && !['bar','line','area','pie','doughnut'].includes(parsedIntent.chartType)
+    ? `El ChartType forzado es "${parsedIntent.chartType}". IGNORA las instrucciones de template y genera:
+1. KPIGrid: 3-4 métricas de resumen (total registros, monto total, promedio)
+2. Chart ${parsedIntent.chartType}: chart principal con los datos más relevantes para el intent.
+   Usa el schema correcto para este tipo según las Props definidas arriba.
+   Usa aggregations para poblar los datos reales.
+3. Un componente adicional relevante (ProgressGroup, TransactionList o DataSummary según el contexto)`
+    : parsedIntent.template === 'executive'
     ? `Genera un dashboard COMPLETO con:
 1. KPIGrid: total ventas, monto total, promedio precio, tasa morosidad (si aplica)
 2. Chart bar: ventas/monto por estado (usa fieldSummaries.estado.topValues)
@@ -582,7 +615,13 @@ ${
 1. KPIGrid: 3 métricas de resumen (total registros, monto total, promedio)
 2. Chart principal usando aggregations.groupBy.data para labels y values.
    - Si granularity es "month" o "week" o "year" → usa type:"${parsedIntent.chartType ?? 'area'}" con eje X temporal
-   - labels = aggregations.groupBy.data[].label (ordenados cronológicamente)
+   - Si chartType es "scatter" → usa labels=valores de un campo numérico (ej: precio_contado), data=valores de otro campo numérico (ej: monto_total_credito)
+   - Si chartType es "radar" → usa labels=categorías/estados (top 6-8), datasets=una serie por métrica relevante
+   - Si chartType es "funnel" → usa labels=etapas de crédito ordenadas de mayor a menor, data=conteos
+   - Si chartType es "gauge" → usa labels=["% Morosidad"] o la métrica más relevante, data=[valor 0-100]
+   - Si chartType es "heatmap" → usa labels=categorías (eje X), datasets=estados top 8 (eje Y) con conteos
+   - Si chartType es "treemap" → usa labels=categorías/productos, data=montos o conteos
+   - labels = aggregations.groupBy.data[].label (ordenados cronológicamente si es temporal)
    - data = aggregations.groupBy.data[].value
    NUNCA uses fieldSummaries.estado para una gráfica temporal.`
                         : parsedIntent.template === 'table'

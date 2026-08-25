@@ -2,11 +2,26 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
+import ReactECharts from 'echarts-for-react';
 import GlassPanel from './GlassPanel';
 import AuroraChart from '@/shared/components/AuroraChart';
 import AuroraBackground from './AuroraBackground';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
+
+// Renders raw ECharts options — used for candlestick, ProgressGroup horizontal, etc.
+function EChartsRaw({ opts, height }: { opts: Record<string, unknown>; height: number }) {
+  // Strip internal keys before passing to ECharts
+  const { _auroraType: _t, _auroraData: _d, ...echartsOpts } = opts;
+  return (
+    <ReactECharts
+      option={echartsOpts as never}
+      style={{ height, width: '100%' }}
+      opts={{ renderer: 'canvas' }}
+      notMerge
+    />
+  );
+}
 
 interface Props {
   insights: InsightData[];
@@ -163,6 +178,8 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
   // Convert chartOptions back to AuroraChart-compatible data
   const auroraData = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
+    // Tipos nativos: datos ya en formato AuroraChart
+    if (opts._auroraData) return opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] };
     // bar/line/area: xAxis.data + series[0].data
     const xAxis = opts.xAxis as { data?: string[] } | undefined;
     const series = opts.series as { type?: string; data?: unknown[] }[] | undefined;
@@ -186,13 +203,13 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
   })() : null;
 
   const chartType = insight.chartOptions ? (() => {
-    const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string }[] | undefined;
+    const opts = insight.chartOptions as Record<string, unknown>;
+    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
     const t = series?.[0]?.type ?? 'bar';
-    if (t === 'pie') {
-      const r = (series?.[0] as { radius?: unknown })?.radius;
-      return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie';
-    }
-    return t as 'bar' | 'line' | 'area';
+    if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
+    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
+    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
   })() : 'bar';
 
   return (
@@ -222,7 +239,9 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
           )}
           {auroraData && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
-              <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+              {insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series
+                ? <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
+                : <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />}
             </div>
           )}
         </div>
@@ -350,6 +369,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
 
   const auroraData = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
+    if (opts._auroraData) return opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] };
     const xAxis = opts.xAxis as { data?: string[] } | undefined;
     const series = opts.series as { type?: string; data?: unknown[]; name?: string }[] | undefined;
     if (xAxis?.data && series?.[0]?.data) {
@@ -369,10 +389,13 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
   })() : null;
 
   const chartType = insight.chartOptions ? (() => {
-    const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string; radius?: unknown }[] | undefined;
+    const opts = insight.chartOptions as Record<string, unknown>;
+    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
     const t = series?.[0]?.type ?? 'bar';
     if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
-    return t as 'bar' | 'line' | 'area';
+    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
+    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
   })() : 'bar';
 
   useEffect(() => {
@@ -397,7 +420,11 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         </div>
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
-          {auroraData && !isList && <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />}
+          {auroraData && !isList && (
+            insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series
+              ? <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
+              : <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+          )}
           {isList && insight.listItems && (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {insight.listItems.map((item, i) => (
@@ -422,6 +449,7 @@ const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accen
 
     const auroraData = insight.chartOptions ? (() => {
       const opts = insight.chartOptions as Record<string, unknown>;
+      if (opts._auroraData) return opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] };
       const xAxis = opts.xAxis as { data?: string[] } | undefined;
       const series = opts.series as { type?: string; data?: unknown[]; name?: string }[] | undefined;
       if (xAxis?.data && series?.[0]?.data) {
@@ -444,10 +472,13 @@ const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accen
     })() : null;
 
     const chartType = insight.chartOptions ? (() => {
-      const series = (insight.chartOptions as Record<string, unknown>).series as { type?: string; radius?: unknown }[] | undefined;
+      const opts = insight.chartOptions as Record<string, unknown>;
+      if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+      const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
       const t = series?.[0]?.type ?? 'bar';
       if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
-      return t as 'bar' | 'line' | 'area';
+      const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
+      return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
     })() : 'bar';
 
     return (

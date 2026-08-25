@@ -286,10 +286,16 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
 
 function scatterOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
+  const allNumeric = data.labels.every(l => !isNaN(parseFloat(l)) && isFinite(Number(l)));
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      trigger: 'item', formatter: ((p: unknown) => { const v = (p as {value: number[]}).value; return `${v[0]}, ${v[1]}`; }) as never,
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const v = (p as { value: number[]; name?: string }).value;
+        const label = allNumeric ? '' : data.labels[v[2] as number] ?? '';
+        return label ? `${label}<br/>X: ${v[0]}, Y: ${v[1]}` : `X: ${v[0]}, Y: ${v[1]}`;
+      }) as never,
       backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
@@ -299,6 +305,7 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
       type: 'value', axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
       axisLabel: { color: tk.textTertiary, fontSize: 11 },
       splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      name: allNumeric ? '' : 'X',
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
@@ -307,15 +314,18 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
     },
     series: data.datasets.map((ds, di) => {
       const [top] = palette[di % palette.length];
-      // pair up labels (x) with data (y)
-      const points = data.labels.map((x, i) => [parseFloat(x) || i, ds.data[i]]);
+      const points = data.labels.map((x, i) => {
+        const xVal = parseFloat(x);
+        // Store index as 3rd element for tooltip label lookup
+        return [isNaN(xVal) ? i : xVal, ds.data[i] ?? 0, i];
+      });
       return {
         name: ds.label ?? '',
         type: 'scatter' as const,
         data: points,
-        symbolSize: 10,
-        itemStyle: { color: top },
-        emphasis: { itemStyle: { opacity: 0.85 } },
+        symbolSize: 8,
+        itemStyle: { color: top, opacity: 0.8 },
+        emphasis: { itemStyle: { opacity: 1, shadowBlur: 6, shadowColor: top } },
       };
     }),
     animationDuration: 800,

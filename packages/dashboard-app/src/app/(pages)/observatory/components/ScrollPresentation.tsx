@@ -254,53 +254,60 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 // GRID MODE
 // ═══════════════════════════════════════════════════════════════════════════
 
-function getBentoSpan(insight: InsightData): { colSpan: number; rowSpan: number } {
-  const hasChart   = !!insight.chartOptions && !insight.listItems;
-  const isList     = !!insight.listItems;
-  const isStatCard = !insight.chartOptions && !isList;
-  if (isStatCard) return { colSpan: 1, rowSpan: 1 };
-  if (isList)     return { colSpan: 1, rowSpan: 2 };
-  if (hasChart) {
-    const series = (insight.chartOptions as Record<string, unknown>)?.series as { type?: string }[] | undefined;
-    if (series?.[0]?.type === 'pie') return { colSpan: 1, rowSpan: 2 };
-    return { colSpan: 2, rowSpan: 2 };
-  }
-  return { colSpan: 1, rowSpan: 1 };
+const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
+const GAP = 14;
+
+function renderChart(insight: InsightData, height: number, bare = false) {
+  const opts = insight.chartOptions as Record<string, unknown>;
+  const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
+  const chartType = (opts._auroraType as string) ?? 'bar';
+  if (opts.series) return <EChartsRaw opts={opts} height={height || 200} />;
+  if (auroraData) return <AuroraChart type={chartType as never} data={auroraData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;
+  return null;
 }
 
-const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
-const ROW_UNIT = 140; // px per row unit
-const GAP = 16;
+function AutoHeightChart({ insight }: { insight: InsightData }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(200);
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(entries => {
+      const height = entries[0]?.contentRect.height;
+      if (height > 10) setH(height);
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {renderChart(insight, h, false)}
+    </div>
+  );
+}
 
 function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void; onReset: () => void }) {
-  const gridRef = useRef<HTMLDivElement>(null);
-  const headerCardRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
+
+  const kpis      = insights.filter(ins => !ins.chartOptions && !ins.listItems);
+  const charts    = insights.filter(ins => !!ins.chartOptions);
+  const lists     = insights.filter(ins => !!ins.listItems);
+  const primary   = charts[0] ?? null;
+  const secondary = charts.slice(1);
+  const txList    = lists[0] ?? null;
+  const leftKpis  = kpis.slice(0, 2);
+  const rightKpis = kpis.slice(2, 4);
+
   useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
   useEffect(() => {
-    if (!visible || hasAnimated.current || !gridRef.current) return;
-    const allRefs = [headerCardRef.current, ...cardRefs.current];
-    allRefs.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
-
-    // Use offsetLeft/offsetTop — immune to ancestor GSAP transforms unlike getBoundingClientRect
+    if (!visible || hasAnimated.current || !containerRef.current) return;
+    const allEls = containerRef.current.querySelectorAll<HTMLElement>('[data-animate]');
+    allEls.forEach(el => gsap.set(el, { opacity: 0, y: 20, scale: 0.97 }));
     let rafId: number;
     const tryAnimate = () => {
-      if (!gridRef.current) return;
-      const validRefs = allRefs.filter(Boolean) as HTMLElement[];
-      const allReady = validRefs.every(el => el.offsetWidth > 0);
+      const allReady = Array.from(allEls).every(el => el.offsetWidth > 0);
       if (!allReady) { rafId = requestAnimationFrame(tryAnimate); return; }
-
-      const gw = gridRef.current.offsetWidth;
-      const gh = gridRef.current.offsetHeight;
-      const cx = gw / 2, cy = gh / 2;
-      validRefs.forEach((el, i) => {
-        const ex = el.offsetLeft + el.offsetWidth / 2;
-        const ey = el.offsetTop + el.offsetHeight / 2;
-        const dx = (ex - cx) * 1.8;
-        const dy = (ey - cy) * 1.8;
-        el.dataset.animating = 'true';
-        gsap.fromTo(el, { opacity: 0, x: dx, y: dy, scale: 0.82 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.75, delay: i * 0.07, ease: 'power3.out', onComplete: () => { delete el.dataset.animating; } });
-      });
+      allEls.forEach((el, i) => gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.55, delay: i * 0.07, ease: 'power3.out' }));
       hasAnimated.current = true;
     };
     rafId = requestAnimationFrame(tryAnimate);
@@ -308,54 +315,115 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   }, [visible]);
 
   const handleNewQuery = () => {
-    if (!gridRef.current) { onReset(); return; }
-    const allRefs = [headerCardRef.current, ...cardRefs.current].filter(Boolean) as HTMLDivElement[];
-    allRefs.forEach((el, i) => {
-      gsap.killTweensOf(el);
-      gsap.to(el, {
-        opacity: 0, scale: 0.7, y: 20,
-        duration: 0.4, delay: i * 0.02,
-        ease: 'power2.in', overwrite: true,
-      });
-    });
-    gsap.delayedCall(0.4 + allRefs.length * 0.02, onReset);
+    if (!containerRef.current) { onReset(); return; }
+    const allEls = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-animate]'));
+    allEls.forEach((el, i) => gsap.to(el, { opacity: 0, scale: 0.88, y: 12, duration: 0.3, delay: i * 0.02, ease: 'power2.in', overwrite: true }));
+    gsap.delayedCall(0.3 + allEls.length * 0.02, onReset);
   };
 
+  const CARD = (extra?: React.CSSProperties): React.CSSProperties => ({
+    borderRadius: 20,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+    transition: 'border-color 0.2s ease',
+    ...extra,
+  });
+
+  const accentLine = (color: string) => ({
+    position: 'absolute' as const,
+    top: 0, left: '15%', right: '15%', height: 1,
+    background: `linear-gradient(90deg, transparent, ${color}66, transparent)`,
+  });
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto', padding: '16px 32px', position: 'relative' }}>
-      <div
-        ref={gridRef}
-        style={{
-          position: 'relative', zIndex: 1,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gridAutoRows: `${ROW_UNIT}px`,
-          gridAutoFlow: 'dense',
-          gap: GAP,
-        }}
-      >
-        {/* Header card */}
-        <div ref={headerCardRef} data-header-card style={{ borderRadius: 20, background: 'rgba(255,255,255,0.06)', outline: '1px solid rgba(255,255,255,0.12)', outlineOffset: '-1px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '16px 20px', boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
-            <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP }}>
+
+      {/* LEFT: header + KPIs (todos) + secondary chart */}
+      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${Math.ceil(kpis.length / 2)}, auto) 1fr`, gap: GAP }}>
+
+        {/* Header */}
+        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, position: 'relative' }) }}>
+          <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)66, transparent)' }} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 5px', opacity: 0.8 }}>Executive Intelligence</p>
+            <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
           </div>
-          <button onClick={handleNewQuery} style={{ padding: '7px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>← New Query</button>
+          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>← New</button>
         </div>
-        {insights.map((insight, i) => {
-          const { colSpan: cs, rowSpan: rs } = getBentoSpan(insight);
+
+        {/* All KPIs — 2 per row */}
+        {kpis.map((ins, i) => {
+          const accent = ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length];
           return (
-            <BentoCard
-              key={insight.id}
-              ref={el => { cardRefs.current[i] = el; }}
-              insight={insight}
-              accent={ACCENT_COLORS[i % ACCENT_COLORS.length]}
-              colSpan={`span ${cs}`}
-              rowSpan={`span ${rs}`}
-              onClick={() => onExpand(insight)}
-            />
+            <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.03, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              style={{ ...CARD({ padding: '16px 18px', cursor: 'pointer', position: 'relative' }) }}>
+              <div style={accentLine(accent)} />
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', opacity: 0.9 }}>{ins.title}</p>
+              <p style={{ fontSize: 32, fontWeight: 800, color: 'rgba(255,255,255,0.92)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
+              {ins.metricLabel && <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', margin: '6px 0 0' }}>{ins.metricLabel}</p>}
+            </div>
           );
         })}
+
+        {/* Secondary chart — span 2, fills remaining */}
+        {secondary.slice(0, 1).map(ins => {
+          const accent = ACCENT_COLORS[4];
+          return (
+            <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.01, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}33`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative' }) }}>
+              <div style={accentLine(accent)} />
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 10px', flexShrink: 0, opacity: 0.9 }}>{ins.title}</p>
+              <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} /></div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* RIGHT: primary chart (flex 1) + TransactionList abajo */}
+      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateRows: '1fr auto', gap: GAP }}>
+
+        {/* Primary chart */}
+        {primary && (
+          <div data-animate ref={el => { cardRefs.current[insights.indexOf(primary)] = el; }} onClick={() => onExpand(primary)}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.005, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}33`; }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
+            <div style={accentLine(ACCENT_COLORS[0])} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0, opacity: 0.9 }}>{primary.title}</p>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>click to expand</span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={primary} /></div>
+          </div>
+        )}
+
+        {/* TransactionList — bottom */}
+        {txList && (
+          <div data-animate ref={el => { cardRefs.current[insights.indexOf(txList)] = el; }} onClick={() => onExpand(txList)}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[5]}44`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', height: '35%', minHeight: 160 }) }}>
+            <div style={accentLine(ACCENT_COLORS[5])} />
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[5], margin: '0 0 10px', flexShrink: 0, opacity: 0.9 }}>{txList.title}</p>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {txList.listItems!.slice(0, 6).map((item, j) => (
+                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: j < 5 ? '1px solid rgba(255,255,255,0.05)' : 'none', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
+                    {item.subtitle && <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', margin: '1px 0 0' }}>{item.subtitle}</p>}
+                  </div>
+                  <p style={{ fontSize: 12, fontWeight: 700, margin: 0, flexShrink: 0, color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.75)' }}>{item.amount}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -442,77 +510,3 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
   );
 }
 
-const BentoCard = React.forwardRef<HTMLDivElement, { insight: InsightData; accent: string; colSpan: string; rowSpan: string; onClick: () => void }>(
-  ({ insight, accent, colSpan, rowSpan, onClick }, ref) => {
-    const isList     = !!insight.listItems;
-    const isStatCard = !insight.chartOptions && !isList;
-
-    const auroraData = insight.chartOptions ? (() => {
-      const opts = insight.chartOptions as Record<string, unknown>;
-      if (opts._auroraData) return opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] };
-      const xAxis = opts.xAxis as { data?: string[] } | undefined;
-      const series = opts.series as { type?: string; data?: unknown[]; name?: string }[] | undefined;
-      if (xAxis?.data && series?.[0]?.data) {
-        return {
-          labels: xAxis.data,
-          datasets: series.map(s => ({
-            label: s.name ?? '',
-            data: (s.data as ({ value?: number } | number)[]).map(d => typeof d === 'number' ? d : (d as { value?: number }).value ?? 0),
-          })),
-        };
-      }
-      const pieSeries = series?.[0] as { data?: { name: string; value: number }[] } | undefined;
-      if (pieSeries?.data?.[0]?.name !== undefined) {
-        return {
-          labels: pieSeries.data!.map(d => d.name),
-          datasets: [{ data: pieSeries.data!.map(d => d.value) }],
-        };
-      }
-      return null;
-    })() : null;
-
-    const chartType = insight.chartOptions ? (() => {
-      const opts = insight.chartOptions as Record<string, unknown>;
-      if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
-      const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
-      const t = series?.[0]?.type ?? 'bar';
-      if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
-      const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
-      return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
-    })() : 'bar';
-
-    return (
-      <div ref={ref} onClick={onClick}
-        onMouseEnter={e => { if ((e.currentTarget as HTMLElement).dataset.animating) return; gsap.to(e.currentTarget, { scale: 1.02, duration: 0.3, ease: 'power2.out', overwrite: 'auto' }); }}
-        onMouseLeave={e => { if ((e.currentTarget as HTMLElement).dataset.animating) return; gsap.to(e.currentTarget, { scale: 1, duration: 0.4, ease: 'power2.out', overwrite: 'auto' }); }}
-        style={{ gridColumn: colSpan, gridRow: rowSpan, position: 'relative', borderRadius: 20, background: 'rgba(255,255,255,0.06)', outline: '1px solid rgba(255,255,255,0.12)', outlineOffset: '-1px', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '22px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)', willChange: 'transform' }}
-      >
-        <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: `linear-gradient(90deg, transparent, ${accent}88, transparent)` }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexShrink: 0 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, margin: 0, opacity: 0.9 }}>{insight.title}</p>
-          {insight.metric && isStatCard && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{insight.metricLabel}</p>}
-        </div>
-        {insight.metric && <p style={{ fontSize: isStatCard ? 52 : 32, fontWeight: 800, color: 'rgba(255,255,255,0.92)', margin: '0 0 8px', lineHeight: 1, letterSpacing: '-0.03em', flexShrink: 0 }}>{insight.metric}</p>}
-        {insight.subtitle && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: '0 0 10px', flexShrink: 0 }}>{insight.subtitle}</p>}
-        {isList && insight.listItems && (
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {insight.listItems.slice(0, 5).map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < 4 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{item.title}</p>
-                <p style={{ fontSize: 12, fontWeight: 700, margin: 0, flexShrink: 0, marginLeft: 8, color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.8)' }}>{item.amount}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {auroraData && !isList && (
-          <div style={{ flex: 1, minHeight: 0, marginTop: 4, position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <AuroraChart type={chartType} data={auroraData} gradient="aurora" bare />
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-);
-BentoCard.displayName = 'BentoCard';

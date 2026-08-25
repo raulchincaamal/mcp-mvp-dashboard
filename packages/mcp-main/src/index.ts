@@ -168,10 +168,12 @@ if (!IS_MCP_MODE) {
         url: `${DASHBOARD_BASE_URL}/dashboard?key=${hash}`,
       };
     } catch (error) {
-      fastify.log.error(error);
+      const err = error as Error;
+      fastify.log.error({ msg: err.message, stack: err.stack });
+      console.error('[generate-ui] ERROR:', err.message, err.stack);
       return reply
         .status(500)
-        .send({ success: false, error: (error as Error).message });
+        .send({ success: false, error: err.message });
     }
   });
 

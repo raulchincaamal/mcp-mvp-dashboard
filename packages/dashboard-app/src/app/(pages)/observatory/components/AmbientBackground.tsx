@@ -146,10 +146,23 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
         <span style={{
           position: 'absolute',
           right: `calc(50% - ${num.length * 7 + 13}px)`,
-          fontSize: 14, color: pctCol,
+          display: 'flex', alignItems: 'center',
+          color: pctCol,
           lineHeight: 1,
         }}>
-          {isUp ? '▲' : '▼'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            {isUp ? (
+              <>
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </>
+            ) : (
+              <>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <polyline points="5 12 12 19 19 12" />
+              </>
+            )}
+          </svg>
         </span>
       </div>
     </div>

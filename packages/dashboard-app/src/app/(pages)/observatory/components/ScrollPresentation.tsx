@@ -91,10 +91,11 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
       <div ref={presentationRef} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1 }}>
         <PresentationMode insights={insights} cursor={cursor} query={query} onReset={onReset} currentSlide={currentSlide} totalSlides={totalSlides} />
       </div>
-      <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', visibility: 'hidden', opacity: 0, pointerEvents: 'none', zIndex: 1 }}>
+      <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', visibility: 'hidden', opacity: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }}>
         <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} />
       </div>
-      <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Controls — position:absolute to avoid being clipped by ancestor transforms */}
+      <div style={{ position: 'absolute', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {viewMode === 'presentation' && (
           <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {autoPlay ? '⏸' : '▶'} {currentSlide + 1}/{totalSlides}
@@ -105,7 +106,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
         </button>
       </div>
       {viewMode === 'presentation' && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, display: 'flex', gap: 6 }}>
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, display: 'flex', gap: 6 }}>
           {Array.from({ length: totalSlides }).map((_, i) => (
             <button key={i} onClick={() => goToSlide(i)} style={{ width: currentSlide === i ? 20 : 8, height: 8, borderRadius: 4, border: 'none', background: currentSlide === i ? 'var(--primary)' : 'var(--border-color)', cursor: 'pointer', transition: 'all 0.25s ease' }} />
           ))}
@@ -113,8 +114,8 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
       )}
       {viewMode === 'presentation' && (
         <>
-          {currentSlide > 0 && <button onClick={prevSlide} style={{ position: 'fixed', left: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 100, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>}
-          {currentSlide < totalSlides - 1 && <button onClick={nextSlide} style={{ position: 'fixed', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 100, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>}
+          {currentSlide > 0 && <button onClick={prevSlide} style={{ position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 100, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg></button>}
+          {currentSlide < totalSlides - 1 && <button onClick={nextSlide} style={{ position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 100, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg></button>}
         </>
       )}
       {expandedInsight && <ExpandedModal insight={expandedInsight} cursor={cursor} onClose={() => setExpandedInsight(null)} />}
@@ -257,7 +258,7 @@ const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bf
 const ROW_UNIT = 140; // px per row unit
 const GAP = 16;
 
-function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void }) {
+function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void; onReset: () => void }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const headerCardRef = useRef<HTMLDivElement>(null);
   const hasAnimated = useRef(false);
@@ -265,9 +266,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   useEffect(() => {
     if (!visible || hasAnimated.current || !gridRef.current) return;
     const allRefs = [headerCardRef.current, ...cardRefs.current];
-    // Frame 1: hide everything
     allRefs.forEach(el => { if (el) gsap.set(el, { opacity: 0, x: 0, y: 0, scale: 1 }); });
-    // Frame 2: read positions and animate in
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!gridRef.current) return;
       const cr = gridRef.current.getBoundingClientRect();
@@ -282,6 +281,20 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
       hasAnimated.current = true;
     }));
   }, [visible]);
+
+  const handleNewQuery = () => {
+    if (!gridRef.current) { onReset(); return; }
+    const allRefs = [headerCardRef.current, ...cardRefs.current].filter(Boolean) as HTMLDivElement[];
+    allRefs.forEach((el, i) => {
+      gsap.killTweensOf(el);
+      gsap.to(el, {
+        opacity: 0, scale: 0.7, y: 20,
+        duration: 0.4, delay: i * 0.02,
+        ease: 'power2.in', overwrite: true,
+      });
+    });
+    gsap.delayedCall(0.4 + allRefs.length * 0.02, onReset);
+  };
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto', padding: '16px 32px', position: 'relative' }}>
@@ -302,7 +315,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px' }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{query}</h1>
           </div>
-          <button onClick={onReset} style={{ padding: '7px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>← New Query</button>
+          <button onClick={handleNewQuery} style={{ padding: '7px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border-color)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>← New Query</button>
         </div>
         {insights.map((insight, i) => {
           const { colSpan: cs, rowSpan: rs } = getBentoSpan(insight);

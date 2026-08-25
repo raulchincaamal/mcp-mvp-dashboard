@@ -18,9 +18,9 @@ interface Props {
 type ViewMode = 'presentation' | 'grid';
 
 export default function ScrollPresentation({ insights, cursor, query, onReset }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>('presentation');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [autoPlay, setAutoPlay] = useState(true);
+  const [autoPlay, setAutoPlay] = useState(false);
   const [expandedInsight, setExpandedInsight] = useState<InsightData | null>(null);
   const presentationRef = useRef<HTMLDivElement>(null);
   const gridRef2        = useRef<HTMLDivElement>(null);
@@ -35,8 +35,8 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
   }, [expandedInsight]);
 
   useEffect(() => {
-    if (presentationRef.current) gsap.set(presentationRef.current, { opacity: 1, visibility: 'visible', pointerEvents: 'auto', y: 0, scale: 1 });
-    if (gridRef2.current)        gsap.set(gridRef2.current,        { opacity: 0, visibility: 'hidden',  pointerEvents: 'none', y: 0, scale: 1 });
+    if (presentationRef.current) gsap.set(presentationRef.current, { opacity: 0, visibility: 'hidden', pointerEvents: 'none', y: 0, scale: 1 });
+    if (gridRef2.current)        gsap.set(gridRef2.current,        { opacity: 1, visibility: 'visible', pointerEvents: 'auto', y: 0, scale: 1 });
   }, []);
 
   const switchMode = (next: ViewMode) => {
@@ -58,12 +58,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
 
   const totalSlides = insights.length + 2;
 
-  // After title slide (slide 0), auto-switch to grid
-  useEffect(() => {
-    if (viewMode !== 'presentation' || currentSlide !== 0) return;
-    const timer = setTimeout(() => switchMode('grid'), 3000);
-    return () => clearTimeout(timer);
-  }, [viewMode, currentSlide]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   useEffect(() => {
     if (!autoPlay || viewMode !== 'presentation') return;
@@ -88,10 +83,10 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <AuroraBackground />
-      <div ref={presentationRef} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1 }}>
+      <div ref={presentationRef} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', visibility: 'hidden', opacity: 0, pointerEvents: 'none', zIndex: 1 }}>
         <PresentationMode insights={insights} cursor={cursor} query={query} onReset={onReset} currentSlide={currentSlide} totalSlides={totalSlides} />
       </div>
-      <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', visibility: 'hidden', opacity: 0, pointerEvents: 'none', zIndex: 1, overflow: 'hidden' }}>
+      <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1, overflow: 'hidden' }}>
         <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} />
       </div>
       {/* Controls — position:absolute to avoid being clipped by ancestor transforms */}

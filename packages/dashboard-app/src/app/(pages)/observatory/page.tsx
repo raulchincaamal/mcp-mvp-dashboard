@@ -382,7 +382,7 @@ export default function ObservatoryPage() {
     <div style={{
       width: '100vw', height: '100vh',
       background: 'var(--bg)', color: 'var(--text)',
-      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+      fontFamily: '"Chivo Mono", monospace',
       position: 'relative', overflow: 'hidden', cursor: 'default',
     }}>
       {/* Inicializa cursorRef sin causar re-renders */}
@@ -398,7 +398,7 @@ export default function ObservatoryPage() {
         <span style={{
           fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.01em',
           color: 'rgba(255,255,255,0.55)',
-          fontFamily: '"Space Grotesk", system-ui, sans-serif',
+          fontFamily: '"Chivo Mono", monospace',
         }}>Macropay AI Diagrams | Ventas</span>
       </div>
 

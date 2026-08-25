@@ -18,8 +18,8 @@ const CATEGORY_SVGS: Record<string, string> = {
   'Pantallas/TV': `<svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.66667 2C2.3 2 2 2.3 2 2.66667V13.3333C2 13.7 2.3 14 2.66667 14H21.3333C21.7 14 22 13.7 22 13.3333V2.66667C22 2.3 21.7 2 21.3333 2H2.66667ZM0 2.66667C0 1.19583 1.19583 0 2.66667 0H21.3333C22.8042 0 24 1.19583 24 2.66667V13.3333C24 14.8042 22.8042 16 21.3333 16H2.66667C1.19583 16 0 14.8042 0 13.3333V2.66667ZM6.3333 18H17.6667C18.2208 18 18.6667 18.4458 18.6667 19C18.6667 19.5542 18.2208 20 17.6667 20H6.3333C5.7792 20 5.3333 19.5542 5.3333 19C5.3333 18.4458 5.7792 18 6.3333 18Z" fill="white"/></svg>`,
   Audio: `<svg width="19" height="20" viewBox="0 0 19 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.03571 9.33338C2.03571 5.28338 5.37768 2.00001 9.5 2.00001C13.6223 2.00001 16.9643 5.28338 16.9643 9.33338V11.2C16.3663 10.8584 15.6708 10.6667 14.9286 10.6667H14.25C13.1261 10.6667 12.2143 11.5625 12.2143 12.6667V18C12.2143 19.1042 13.1261 20 14.25 20H14.9286C17.1763 20 19 18.2084 19 16V9.33338C19 4.17917 14.7462 0 9.5 0C4.25379 0 0 4.17917 0 9.33338V16C0 18.2084 1.82366 20 4.07143 20H4.75C5.8739 20 6.7857 19.1042 6.7857 18V12.6667C6.7857 11.5625 5.8739 10.6667 4.75 10.6667H4.07143C3.32924 10.6667 2.63371 10.8625 2.03571 11.2V9.33338ZM2.03571 14.6667C2.03571 13.5625 2.94754 12.6667 4.07143 12.6667H4.75V18H4.07143C2.94754 18 2.03571 17.1042 2.03571 16V14.6667ZM16.9643 14.6667V16C16.9643 17.1042 16.0525 18 14.9286 18H14.25V12.6667H14.9286C16.0525 12.6667 16.9643 13.5625 16.9643 14.6667Z" fill="white"/></svg>`,
   Tablets: `<svg width="26" height="20" viewBox="0 0 26 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.3889 2.14286C9.3889 3.71876 8.0934 4.99998 6.5 4.99998V10.7143C8.0934 10.7143 9.3889 11.9956 9.3889 13.5715H20.9444C20.9444 11.9956 22.2399 10.7143 23.8333 10.7143V4.99998C22.2399 4.99998 20.9444 3.71876 20.9444 2.14286H9.3889ZM4.33333 2.85715C4.33333 1.28126 5.6288 0 7.2222 0H23.1111C24.7045 0 26 1.28126 26 2.85715V12.8572C26 14.4331 24.7045 15.7143 23.1111 15.7143H7.2222C5.6288 15.7143 4.33333 14.4331 4.33333 12.8572V2.85715ZM15.1667 4.28572C16.1244 4.28572 17.0429 4.66198 17.7201 5.33178C18.3973 6.00158 18.7778 6.90998 18.7778 7.85718C18.7778 8.80438 18.3973 9.71278 17.7201 10.3825C17.0429 11.0523 16.1244 11.4286 15.1667 11.4286C14.2089 11.4286 13.2904 11.0523 12.6132 10.3825C11.936 9.71278 11.5556 8.80438 11.5556 7.85718C11.5556 6.90998 11.936 6.00158 12.6132 5.33178C13.2904 4.66198 14.2089 4.28572 15.1667 4.28572ZM1.08333 4.28572C1.68368 4.28572 2.16667 4.76338 2.16667 5.35718V17.1429C2.16667 17.5357 2.49167 17.8572 2.88889 17.8572H20.5833C21.1837 17.8572 21.6667 18.3348 21.6667 18.9286C21.6667 19.5223 21.1837 20 20.5833 20H2.88889C1.29549 20 0 18.7188 0 17.1429V5.35718C0 4.76338 0.48299 4.28572 1.08333 4.28572Z" fill="white"/></svg>`,
-  Consolas: `<svg width="24" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="16" width="36" height="20" rx="8" stroke="white" stroke-width="2.5" fill="none"/><circle cx="32" cy="24" r="2.5" fill="white" opacity="0.8"/><circle cx="38" cy="24" r="2.5" fill="white" opacity="0.8"/><line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
-  'Climatización': `<svg width="24" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="16" rx="4" stroke="white" stroke-width="2.5" fill="none"/><line x1="6" y1="20" x2="42" y2="20" stroke="white" stroke-width="1.5" opacity="0.4"/><path d="M12 28 L10 36 M18 28 L16 36 M24 28 L24 36 M30 28 L32 36 M36 28 L38 36" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/><circle cx="35" cy="16" r="2.5" fill="white" opacity="0.8"/></svg>`,
+  Consolas: `<svg width="64" height="54" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="16" width="36" height="20" rx="8" stroke="white" stroke-width="2.5" fill="none"/><circle cx="32" cy="24" r="2.5" fill="white" opacity="0.8"/><circle cx="38" cy="24" r="2.5" fill="white" opacity="0.8"/><line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
+  'Climatización': `<svg width="64" height="54" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="16" rx="4" stroke="white" stroke-width="2.5" fill="none"/><line x1="6" y1="20" x2="42" y2="20" stroke="white" stroke-width="1.5" opacity="0.4"/><path d="M12 28 L10 36 M18 28 L16 36 M24 28 L24 36 M30 28 L32 36 M36 28 L38 36" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/><circle cx="35" cy="16" r="2.5" fill="white" opacity="0.8"/></svg>`,
 };
 
 const N = 8;
@@ -104,6 +104,8 @@ function useTicker(label: string) {
   return { display, dir };
 }
 
+const ICON_SIZE: Record<string, number> = { Consolas: 72, 'Climatización': 72 };
+
 function WidgetCard({ label, accent }: { label: string; accent: string }) {
   const { display } = useTicker(label);
   const pct    = MOCK_CHANGE[label] ?? 0;
@@ -118,14 +120,14 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
       gridTemplateRows: '1fr auto',
       alignItems: 'center',
       justifyItems: 'center',
-      padding: '12px 8px 10px',
+      padding: '8px 8px 14px',
       boxSizing: 'border-box',
       zIndex: 2,
     }}>
       {/* Icon */}
       <div
         style={{
-          width: 44, height: 44,
+          width: ICON_SIZE[label] ?? 56, height: ICON_SIZE[label] ?? 56,
           opacity: 0.8,
           filter: `drop-shadow(0 0 8px ${accent})`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',

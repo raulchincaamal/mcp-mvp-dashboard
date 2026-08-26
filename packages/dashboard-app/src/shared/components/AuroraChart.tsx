@@ -175,7 +175,9 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       type: 'category', data: data.labels,
       axisLine: { lineStyle: { color: tk.border } },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0 },
+      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0,
+        formatter: (v: string) => v.length > 14 ? v.slice(0, 13) + '…' : v,
+      },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
@@ -343,6 +345,7 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
 function radarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const maxVal = Math.max(...data.datasets.flatMap(d => d.data)) * 1.2;
+  const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -350,9 +353,18 @@ function radarOption(rawData: AuroraChartData, title: string | undefined, palett
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
     },
-    legend: data.datasets.length > 1 ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 } } : undefined,
+    legend: multi ? {
+      orient: 'vertical',
+      right: 8,
+      top: 'middle',
+      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      icon: 'circle',
+      itemGap: 10,
+    } : undefined,
     radar: {
-      indicator: data.labels.map(l => ({ name: l, max: maxVal })),
+      center: multi ? ['36%', '50%'] : ['50%', '50%'],
+      radius: '60%',
+      indicator: data.labels.map(l => ({ name: l.length > 12 ? l.slice(0, 11) + '…' : l, max: maxVal })),
       axisName: { color: tk.textTertiary, fontSize: 11 },
       splitLine: { lineStyle: { color: tk.border } },
       splitArea: { show: false },

@@ -313,11 +313,13 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
   }
 
   // Heatmap preview: slice to max 4 rows × 6 cols so it fits the card
-  const displayData = (chartType === 'heatmap' && preview && auroraData)
-    ? {
-        labels: auroraData.labels.slice(0, 6),
-        datasets: auroraData.datasets.slice(0, 4).map(ds => ({ ...ds, data: ds.data.slice(0, 6) })),
-      }
+  // Radar preview: slice to max 4 indicators
+  const displayData = preview && auroraData
+    ? chartType === 'heatmap'
+      ? { labels: auroraData.labels.slice(0, 6), datasets: auroraData.datasets.slice(0, 4).map(ds => ({ ...ds, data: ds.data.slice(0, 6) })) }
+      : chartType === 'radar'
+      ? { labels: auroraData.labels.slice(0, 4), datasets: auroraData.datasets.map(ds => ({ ...ds, data: ds.data.slice(0, 4) })) }
+      : auroraData
     : auroraData;
 
   if (displayData) return <AuroraChart type={chartType as never} data={displayData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;

@@ -239,9 +239,12 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
           )}
           {auroraData && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
-              {insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series
-                ? <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
-                : <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />}
+              <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+            </div>
+          )}
+          {!auroraData && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
+              <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
             </div>
           )}
         </div>
@@ -261,8 +264,8 @@ function renderChart(insight: InsightData, height: number, bare = false) {
   const opts = insight.chartOptions as Record<string, unknown>;
   const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
   const chartType = (opts._auroraType as string) ?? 'bar';
-  if (opts.series) return <EChartsRaw opts={opts} height={height || 200} />;
   if (auroraData) return <AuroraChart type={chartType as never} data={auroraData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;
+  if (opts.series) return <EChartsRaw opts={opts} height={height || 200} />;
   return null;
 }
 
@@ -280,28 +283,10 @@ function AutoHeightChart({ insight }: { insight: InsightData }) {
   }, []);
 
   const opts = insight.chartOptions as Record<string, unknown>;
-  const usesECharts = !!opts?.series; // EChartsRaw path needs manual wrapper
-
-  if (usesECharts) {
-    return (
-      <div ref={ref} style={{ width: '100%', height: '100%',
-        background: 'var(--surface)',
-        backdropFilter: 'var(--surface-blur)',
-        WebkitBackdropFilter: 'var(--surface-blur)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius)',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-sm)',
-      }}>
-        <EChartsRaw opts={opts} height={h} />
-      </div>
-    );
-  }
-
   // AuroraChart handles its own wrapper when bare=false
   return (
     <div ref={ref} style={{ width: '100%', height: '100%' }}>
-      {renderChart(insight, h, false)}
+      {renderChart(insight, h, true)}
     </div>
   );
 }
@@ -547,9 +532,10 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
           {auroraData && !isList && (
-            insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series
-              ? <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
-              : <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+            <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+          )}
+          {!auroraData && !isList && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (
+            <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
           )}
           {isList && insight.listItems && (
             <div style={{ flex: 1, overflowY: 'auto' }}>

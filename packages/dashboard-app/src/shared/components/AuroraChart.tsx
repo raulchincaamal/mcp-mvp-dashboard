@@ -178,13 +178,12 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
     series: data.datasets.map((ds, di) => ({
       name: ds.label ?? '',
       type: 'bar' as const,
-      data: ds.data,
+      data: multi
+        ? ds.data.map(v => ({ value: v, itemStyle: { color: vGrad(palette[di % palette.length][0], palette[di % palette.length][1]), borderRadius: [4, 4, 0, 0] } }))
+        : ds.data.map((v, i) => ({ value: v, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [4, 4, 0, 0] } })),
       barMaxWidth: 48,
       barCategoryGap: '35%',
-      itemStyle: {
-        color: vGrad(palette[di % palette.length][0], palette[di % palette.length][1]),
-        borderRadius: [4, 4, 0, 0],
-      },
+      itemStyle: { borderRadius: [4, 4, 0, 0] },
       emphasis: { itemStyle: { opacity: 0.85 } },
     })),
     animationDuration: 900,
@@ -521,7 +520,7 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
       nodeClick: false,
       breadcrumb: { show: false },
       label: { show: true, formatter: '{b}\n{c}', color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 2, borderColor: tk.bg, gapWidth: 3 },
+      itemStyle: { borderWidth: 1, borderColor: tk.border, gapWidth: 2 },
       emphasis: { itemStyle: { opacity: 0.85 } },
       data: data.labels.map((name, i) => ({
         name,

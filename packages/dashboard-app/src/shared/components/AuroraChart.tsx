@@ -29,11 +29,18 @@ export interface LegacyChartData {
   datasets: Array<{ label?: string; data: number[] }>;
 }
 
-export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
+export type AuroraChartData = FlatDataPoint[] | LegacyChartData | CandlestickMAData;
+
+// Candlestick-MA specific data format
+export interface CandlestickMAData {
+  dates: string[];
+  // Each item: [open, close, low, high]
+  ohlc: [number, number, number, number][];
+}
 
 export interface AuroraChartProps {
-  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
-  data: AuroraChartData;
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma';
+  data: AuroraChartData | CandlestickMAData;
   flint?: FlintSpec;
   flintData?: Record<string, unknown>[];
   title?: string;
@@ -498,6 +505,135 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, pale
   };
 }
 
+// ─── Candlestick + MA ─────────────────────────────────────
+
+function calculateMA(dayCount: number, ohlc: [number, number, number, number][]): (number | '-')[] {
+  return ohlc.map((_, i) => {
+    if (i < dayCount) return '-';
+    const sum = ohlc.slice(i - dayCount, i).reduce((acc, d) => acc + d[1], 0);
+    return sum / dayCount;
+  });
+}
+
+function candlestickMAOption(rawData: CandlestickMAData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const { dates, ohlc } = rawData;
+  const [p0, p1, p2, p3] = palette;
+  const bullColor = '#0CF49B';
+  const bearColor = '#FD1050';
+
+  return {
+    backgroundColor: 'transparent',
+    legend: {
+      data: ['K', 'MA5', 'MA10', 'MA20', 'MA30'],
+      top: 8,
+      inactiveColor: tk.textTertiary,
+      textStyle: { color: tk.textTertiary, fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        animation: false,
+        type: 'cross',
+        lineStyle: { color: p0[0], width: 1.5, opacity: 0.8 },
+      },
+      backgroundColor: tk.surface,
+      borderColor: tk.border,
+      borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+    },
+    grid: { left: 16, right: 16, bottom: 80, top: title ? 56 : 40, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: tk.border } },
+      axisTick: { show: false },
+      axisLabel: { color: tk.textTertiary, fontSize: 10, fontFamily: 'inherit' },
+    },
+    yAxis: {
+      scale: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: tk.textTertiary, fontSize: 10, fontFamily: 'inherit' },
+      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+    },
+    dataZoom: [
+      {
+        type: 'slider',
+        bottom: 8,
+        height: 28,
+        textStyle: { color: tk.textTertiary, fontSize: 10 },
+        dataBackground: {
+          areaStyle: { color: tk.border },
+          lineStyle: { opacity: 0.6, color: tk.border },
+        },
+        selectedDataBackground: {
+          areaStyle: { color: p0[0] + '44' },
+          lineStyle: { color: p0[0] },
+        },
+        fillerColor: p0[0] + '18',
+        borderColor: tk.border,
+        handleStyle: { color: p0[0], borderColor: p0[0] },
+        brushSelect: true,
+        start: 60,
+        end: 100,
+      },
+      { type: 'inside' },
+    ],
+    series: [
+      {
+        name: 'K',
+        type: 'candlestick',
+        data: ohlc,
+        itemStyle: {
+          color: bullColor,
+          color0: bearColor,
+          borderColor: bullColor,
+          borderColor0: bearColor,
+        },
+      },
+      {
+        name: 'MA5',
+        type: 'line',
+        data: calculateMA(5, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p0[0] },
+        itemStyle: { color: p0[0] },
+      },
+      {
+        name: 'MA10',
+        type: 'line',
+        data: calculateMA(10, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p1[0] },
+        itemStyle: { color: p1[0] },
+      },
+      {
+        name: 'MA20',
+        type: 'line',
+        data: calculateMA(20, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p2[0] },
+        itemStyle: { color: p2[0] },
+      },
+      {
+        name: 'MA30',
+        type: 'line',
+        data: calculateMA(30, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p3[0] },
+        itemStyle: { color: p3[0] },
+      },
+    ],
+    animationDuration: 800,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
 // ─── Treemap ───────────────────────────────────────────────
 // data.labels = names, data.datasets[0].data = values
 
@@ -583,18 +719,19 @@ export default function AuroraChart({
 
   const getOption = (): EChartsOption => {
     switch (type) {
-      case 'bar':      return barOption(data, title, palette, tk!);
-      case 'line':     return lineOption(data, title, palette, tk!, false);
-      case 'area':     return lineOption(data, title, palette, tk!, true);
-      case 'pie':      return pieOption(data, title, palette, tk!, false);
-      case 'doughnut': return pieOption(data, title, palette, tk!, true);
-      case 'scatter':  return scatterOption(data, title, palette, tk!);
-      case 'radar':    return radarOption(data, title, palette, tk!);
-      case 'funnel':   return funnelOption(data, title, palette, tk!);
-      case 'gauge':    return gaugeOption(data, title, palette, tk!);
-      case 'heatmap':  return heatmapOption(data, title, palette, tk!);
-      case 'treemap':  return treemapOption(data, title, palette, tk!);
-      default:         return barOption(data, title, palette, tk!);
+      case 'bar':             return barOption(data as AuroraChartData, title, palette, tk!);
+      case 'line':            return lineOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'area':            return lineOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'pie':             return pieOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'doughnut':        return pieOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'scatter':         return scatterOption(data as AuroraChartData, title, palette, tk!);
+      case 'radar':           return radarOption(data as AuroraChartData, title, palette, tk!);
+      case 'funnel':          return funnelOption(data as AuroraChartData, title, palette, tk!);
+      case 'gauge':           return gaugeOption(data as AuroraChartData, title, palette, tk!);
+      case 'heatmap':         return heatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'treemap':         return treemapOption(data as AuroraChartData, title, palette, tk!);
+      case 'candlestick-ma':  return candlestickMAOption(data as CandlestickMAData, title, palette, tk!);
+      default:                return barOption(data as AuroraChartData, title, palette, tk!);
     }
   };
 

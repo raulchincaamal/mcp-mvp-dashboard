@@ -129,9 +129,27 @@ export function selectChartType(
   intent: string,
   groupBy?: string | null,
   currentChartType?: string | null,
+  filters?: Record<string, unknown>,
 ): ChartDecision {
   const dims = detectDimensions(intent, groupBy);
   const objective = detectObjective(intent);
+
+  // Multi-value filter → always comparison mode
+  const filterCategoria = filters?.categoria;
+  const filterEstado = filters?.estado;
+  const isMultiComparison =
+    (Array.isArray(filterCategoria) && filterCategoria.length > 1) ||
+    (Array.isArray(filterEstado) && filterEstado.length > 1);
+
+  if (isMultiComparison) {
+    const hasTiempo = TIEMPO_KEYWORDS.test(intent) || groupBy === 'fecha_venta';
+    return {
+      chartType: hasTiempo ? 'line' : 'bar',
+      objective: 'comparacion',
+      confidence: 'high',
+      reason: 'Múltiples valores en filtro → comparación multi-dataset',
+    };
+  }
 
   const explicit = detectExplicitChartRequest(intent);
   if (explicit) {

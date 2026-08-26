@@ -469,8 +469,6 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
   });
   const allVals = heatData.map(d => d[2]);
   const maxVal = Math.max(...allVals, 1);
-  // threshold: cells above 40% of max get dark text, below get light text
-  const threshold = maxVal * 0.4;
 
   return {
     backgroundColor: 'transparent',
@@ -529,19 +527,14 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
       type: 'heatmap' as const,
       data: heatData,
       label: {
-        show: data.labels.length <= 12 && yLabels.length <= 6,
-        fontSize: 10,
+        show: yLabels.length <= 10,
+        fontSize: 11,
         fontWeight: 700,
-        // dark text on bright cells, white on dark cells
         formatter: ((p: unknown) => {
           const v = (p as { value: [number, number, number] }).value[2];
           return v === 0 ? '' : String(v);
         }) as never,
-        color: ((p: unknown) => {
-          const v = (p as { value: [number, number, number] }).value[2];
-          if (v === 0) return 'transparent';
-          return v >= threshold ? '#0f172a' : '#ffffff';
-        }) as never,
+        color: '#ffffff',
       },
       itemStyle: {
         borderColor: 'rgba(15,23,42,0.6)',

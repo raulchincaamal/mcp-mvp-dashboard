@@ -594,7 +594,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
             />
           )}
           {auroraData && !isList && chartType !== 'map' && (
-            <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
+            <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={chartType === 'heatmap' ? Math.max(400, (auroraData.datasets?.length ?? 4) * 40 + 80) : 340} />
           )}
           {!auroraData && !isList && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (
             <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />

@@ -607,9 +607,12 @@ ${
 2. Chart ${parsedIntent.chartType}: chart principal con los datos más relevantes para el intent.
    Usa el schema correcto para este tipo según las Props definidas arriba.
    Usa aggregations para poblar los datos reales.
-3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#0CF49B", liquidado="#60a5fa", atrasado="#fb923c", cancelado="#f472b6"
+${parsedIntent.chartType === 'map' ? `3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#0CF49B", liquidado="#60a5fa", atrasado="#fb923c", cancelado="#f472b6"
+4. ProgressGroup: distribución por canal_venta — calcula % reales desde fieldSummaries.canal_venta.topValues, colores: ["#c084fc","#67e8f9","#fcd34d"]
+5. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
+6. TransactionList: últimas 6 operaciones` : `3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#0CF49B", liquidado="#60a5fa", atrasado="#fb923c", cancelado="#f472b6"
 4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
-5. TransactionList: últimas 6 operaciones`
+5. TransactionList: últimas 6 operaciones`}`
     : parsedIntent.template === 'executive'
     ? `Genera un dashboard COMPLETO con mínimo 6 componentes:
 1. KPIGrid: total ventas, monto total, promedio precio, % morosidad, total liquidados
@@ -733,22 +736,237 @@ Genera el UIConfig JSON ahora.`;
   try {
     const parsed = JSON.parse(raw);
     const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
-    return repairEmptyCharts(uiConfig, aggregations, parsedIntent);
+    const repaired = repairEmptyCharts(uiConfig, aggregations, parsedIntent);
+    return sanitizeUIConfig(repaired, parsedIntent, aggregations);
   } catch {
-    // Try to recover truncated JSON by finding the last complete component
     const lastBracket = raw.lastIndexOf('},');
     if (lastBracket > 0) {
       try {
         const recovered = raw.slice(0, lastBracket + 1) + ']}';
         const parsed = JSON.parse(recovered);
         const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
-        return repairEmptyCharts(uiConfig, aggregations, parsedIntent);
+        const repaired = repairEmptyCharts(uiConfig, aggregations, parsedIntent);
+        return sanitizeUIConfig(repaired, parsedIntent, aggregations);
       } catch {
         /* fall through */
       }
     }
     throw new Error(`Bedrock returned invalid JSON: ${raw.slice(0, 200)}`);
   }
+}
+
+// ─── All 32 Mexico states ───────────────────────────────────────────────
+
+const ALL_ESTADOS = [
+  'Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua',
+  'Ciudad de México','Coahuila','Colima','Durango','Guanajuato','Guerrero','Hidalgo','Jalisco',
+  'México','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro',
+  'Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala',
+  'Veracruz','Yucatán','Zacatecas',
+];
+
+// ─── Post-processor: remove charts that make no sense given active filters ──
+
+function sanitizeUIConfig(
+  uiConfig: unknown,
+  parsedIntent: { filters: Record<string, unknown>; groupBy: string | null },
+  aggregations: Record<string, unknown>,
+): unknown {
+  const config = uiConfig as Record<string, unknown>;
+  if (!Array.isArray(config?.components)) return uiConfig;
+
+  const filterCategoria = parsedIntent.filters.categoria;
+  const filterEstado    = parsedIntent.filters.estado;
+  const filterEstatus   = parsedIntent.filters.estatus_credito;
+  const singleCategoria = typeof filterCategoria === 'string';
+  const singleEstado    = typeof filterEstado === 'string';
+  const singleEstatus   = typeof filterEstatus === 'string';
+
+  // Pre-compute fallback data for replacements
+  const fieldSummaries = (aggregations.fieldSummaries ?? {}) as Record<string, { topValues: { value: string; count: number }[] }>;
+  const productoTop = fieldSummaries.producto?.topValues?.slice(0, 8) ?? [];
+  const estadoTop   = fieldSummaries.estado?.topValues?.slice(0, 10) ?? [];
+  const canalTop    = fieldSummaries.canal_venta?.topValues?.slice(0, 3) ?? [];
+  const estatusTop  = fieldSummaries.estatus_credito?.topValues ?? [];
+
+  config.components = (config.components as Record<string, unknown>[]).map(comp => {
+    if (comp.component !== 'Chart') return comp;
+    const props = comp.props as Record<string, unknown>;
+    const type  = props.type as string;
+    const data  = props.data as { labels?: unknown[]; datasets?: unknown[] } | undefined;
+    const labels = data?.labels ?? [];
+
+    // ── Rule 0: map with < 32 states — fill missing states with real data or 0 ──
+    if (type === 'map') {
+      const existingLabels = (labels as string[]);
+      const existingValues = (data?.datasets?.[0] as { data?: number[] } | undefined)?.data ?? [];
+      // Build lookup from existing data
+      const valueMap: Record<string, number> = {};
+      existingLabels.forEach((l, i) => { valueMap[l] = existingValues[i] ?? 0; });
+      // Also pull from fieldSummaries.estado if available
+      const estadoSummary = fieldSummaries.estado?.topValues ?? [];
+      estadoSummary.forEach(({ value: v, count: c }) => {
+        if (!(v in valueMap)) valueMap[v] = c;
+      });
+      // Fill all 32 states
+      const fullLabels = ALL_ESTADOS;
+      const fullValues = fullLabels.map(s => valueMap[s] ?? 0);
+      if (existingLabels.length < 32) {
+        console.log(`[sanitize] expanding map from ${existingLabels.length} → 32 states`);
+        return {
+          ...comp,
+          props: {
+            ...props,
+            data: {
+              labels: fullLabels,
+              datasets: [{ label: (data?.datasets?.[0] as { label?: string } | undefined)?.label ?? 'Ventas', data: fullValues }],
+            },
+          },
+        };
+      }
+    }
+
+    // ── Rule 1: treemap/doughnut/pie/radar with 1 label and singleCategoria filter ──
+    // Replace with bar chart grouped by producto or estado
+    if (singleCategoria && ['treemap', 'doughnut', 'pie', 'radar'].includes(type) && (labels as unknown[]).length <= 1) {
+      console.log(`[sanitize] replacing ${type} (1 label, single categoria) → bar by producto`);
+      if (productoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: productoTop.map(p => p.value),
+              datasets: [{ label: 'Ventas', data: productoTop.map(p => p.count), backgroundColor: '#49a4d8' }],
+            },
+            title: props.title ?? `Ventas por Producto — ${filterCategoria}`,
+          },
+        };
+      }
+      if (estadoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: estadoTop.map(e => e.value),
+              datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#7C3AED' }],
+            },
+            title: props.title ?? `Ventas por Estado — ${filterCategoria}`,
+          },
+        };
+      }
+    }
+
+    // ── Rule 2: treemap/doughnut/pie with singleCategoria and all labels = that category ──
+    if (singleCategoria && ['treemap', 'doughnut', 'pie'].includes(type)) {
+      const allSame = (labels as string[]).every(l =>
+        typeof l === 'string' && l.toLowerCase().includes((filterCategoria as string).toLowerCase().split(' ')[0])
+      );
+      if (allSame && (labels as unknown[]).length <= 2) {
+        console.log(`[sanitize] replacing ${type} (all labels = single categoria) → bar by estado`);
+        if (estadoTop.length > 0) {
+          return {
+            ...comp,
+            props: {
+              ...props,
+              type: 'bar',
+              data: {
+                labels: estadoTop.map(e => e.value),
+                datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#059669' }],
+              },
+              title: `Ventas por Estado — ${filterCategoria}`,
+            },
+          };
+        }
+      }
+    }
+
+    // ── Rule 3: ProgressGroup with singleEstatus — replace with canal_venta ──
+    if (singleEstatus && comp.component === 'ProgressGroup') {
+      const items = (props.items ?? []) as { label: string }[];
+      const allSameEstatus = items.length <= 1 || items.every(it =>
+        it.label?.toLowerCase().replace(/\s/g, '_') === (filterEstatus as string)
+      );
+      if (allSameEstatus && canalTop.length > 0) {
+        console.log(`[sanitize] replacing ProgressGroup (single estatus) → canal_venta`);
+        const total = canalTop.reduce((s, c) => s + c.count, 0) || 1;
+        const CANAL_COLORS = ['#c084fc', '#67e8f9', '#fcd34d'];
+        return {
+          ...comp,
+          props: {
+            ...props,
+            title: 'Distribución por Canal de Venta',
+            items: canalTop.map((c, i) => ({
+              label: c.value,
+              value: Math.round((c.count / total) * 100),
+              color: CANAL_COLORS[i % CANAL_COLORS.length],
+            })),
+          },
+        };
+      }
+    }
+
+    // ── Rule 4: singleEstado — bar/heatmap grouped by estado with 1 label ──
+    if (singleEstado && ['bar', 'heatmap'].includes(type) && (labels as unknown[]).length <= 1) {
+      console.log(`[sanitize] replacing ${type} (1 label, single estado) → bar by categoria`);
+      const catTop = fieldSummaries.categoria?.topValues?.slice(0, 8) ?? [];
+      if (catTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: catTop.map(c => c.value),
+              datasets: [{ label: 'Ventas', data: catTop.map(c => c.count), backgroundColor: '#D97706' }],
+            },
+            title: `Ventas por Categoría — ${filterEstado}`,
+          },
+        };
+      }
+    }
+
+    // ── Rule 5: heatmap with singleCategoria — replace with treemap by producto ──
+    if (singleCategoria && type === 'heatmap') {
+      console.log(`[sanitize] replacing heatmap (single categoria) → treemap by producto`);
+      if (productoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'treemap',
+            data: {
+              labels: productoTop.map(p => p.value),
+              datasets: [{ data: productoTop.map(p => p.count) }],
+            },
+            title: `Distribución por Producto — ${filterCategoria}`,
+          },
+        };
+      }
+      // fallback: bar by estado
+      if (estadoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: estadoTop.map(e => e.value),
+              datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#0891B2' }],
+            },
+            title: `Ventas por Estado — ${filterCategoria}`,
+          },
+        };
+      }
+    }
+
+    return comp;
+  });
+
+  return config;
 }
 
 // ─── Repair empty charts using pre-computed aggregations ──────

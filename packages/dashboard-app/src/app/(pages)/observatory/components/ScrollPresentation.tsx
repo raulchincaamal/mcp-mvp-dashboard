@@ -5,6 +5,7 @@ import { gsap } from 'gsap';
 import ReactECharts from 'echarts-for-react';
 import GlassPanel from './GlassPanel';
 import AuroraChart from '@/shared/components/AuroraChart';
+import MexicoMapChart from '@/shared/components/MexicoMapChart';
 import AuroraBackground from './AuroraBackground';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
@@ -237,7 +238,17 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               })}
             </div>
           )}
-          {auroraData && (
+          {auroraData && chartType === 'map' && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
+              <MexicoMapChart
+                data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
+                height={340}
+                gradient="aurora"
+                bare
+              />
+            </div>
+          )}
+          {auroraData && chartType !== 'map' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
             </div>
@@ -264,6 +275,13 @@ function renderChart(insight: InsightData, height: number, bare = false) {
   const opts = insight.chartOptions as Record<string, unknown>;
   const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
   const chartType = (opts._auroraType as string) ?? 'bar';
+  if (chartType === 'map' && auroraData) {
+    const mapData = auroraData.labels.map((name, i) => ({
+      name,
+      value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0,
+    }));
+    return <MexicoMapChart data={mapData} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
+  }
   if (auroraData) return <AuroraChart type={chartType as never} data={auroraData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;
   if (opts.series) return <EChartsRaw opts={opts} height={height || 200} />;
   return null;
@@ -360,7 +378,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         {/* Header */}
         <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
           <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)66, transparent)' }} />
-          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>New</button>
+          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg><span>New</span></button>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 5px', opacity: 0.8 }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
@@ -531,7 +549,15 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         </div>
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
-          {auroraData && !isList && (
+          {auroraData && !isList && chartType === 'map' && (
+            <MexicoMapChart
+              data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
+              height={340}
+              gradient="aurora"
+              bare
+            />
+          )}
+          {auroraData && !isList && chartType !== 'map' && (
             <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
           )}
           {!auroraData && !isList && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (

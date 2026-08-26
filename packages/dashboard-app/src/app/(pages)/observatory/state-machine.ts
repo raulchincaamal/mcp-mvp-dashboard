@@ -197,7 +197,14 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
       // ── Tipos nativos de AuroraChart (no necesitan conversión a ECharts) ──
       const AURORA_NATIVE = ['scatter','radar','funnel','gauge','heatmap','treemap'];
-      if (AURORA_NATIVE.includes(type)) {
+      if (type === 'map') {
+        // Mexico choropleth map — pass labels+values directly, MexicoMapChart handles rendering
+        const datasets = rawData?.datasets ?? [{ data: values }];
+        chartOptions = {
+          _auroraType: 'map',
+          _auroraData: { labels, datasets },
+        };
+      } else if (AURORA_NATIVE.includes(type)) {
         // Pasar datos tal cual — AuroraChart los consume directamente
         const datasets = rawData?.datasets ?? (Array.isArray(rawData)
           ? [{ data: rawData.map((d: Record<string,unknown>) => Number(d.value ?? d.count ?? 0)) }]

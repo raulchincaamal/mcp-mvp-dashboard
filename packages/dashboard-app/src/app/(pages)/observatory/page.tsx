@@ -490,7 +490,7 @@ export default function ObservatoryPage() {
             }}>
               <input
                 autoFocus={inputOpen} value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
+                onChange={e => { const v = e.target.value; setInputValue(v.length === 1 ? v.toUpperCase() : v); }}
                 placeholder="Ask Alexa..."
                 style={{ flex: 1, padding: '16px 20px', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
               />

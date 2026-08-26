@@ -1,6 +1,7 @@
 'use client';
 
 import AuroraChart, { type CandlestickMAData } from '@/shared/components/AuroraChart';
+import MexicoMapChart from '@/shared/components/MexicoMapChart';
 
 // ─── Datasets ──────────────────────────────────────────────
 
@@ -346,6 +347,58 @@ export default function ChartsDemoPage() {
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <AuroraChart type="candlestick-ma" data={CANDLESTICK_MA_DATA} title="Candlestick + MA — Neon" gradient="neon" height={420} />
+        </div>
+
+        <Section label="Mapa de México — coroplético + transición a barras" />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MexicoMapChart
+            title="Ventas por Estado — Mapa → Barras (Aurora)"
+            gradient="aurora"
+            height={460}
+            data={[
+              { name: 'Aguascalientes', value: 142 }, { name: 'Baja California', value: 198 },
+              { name: 'Baja California Sur', value: 87 }, { name: 'Campeche', value: 63 },
+              { name: 'Chiapas', value: 174 }, { name: 'Chihuahua', value: 221 },
+              { name: 'Ciudad de México', value: 412 }, { name: 'Coahuila', value: 189 },
+              { name: 'Colima', value: 54 }, { name: 'Durango', value: 118 },
+              { name: 'Guanajuato', value: 267 }, { name: 'Guerrero', value: 143 },
+              { name: 'Hidalgo', value: 131 }, { name: 'Jalisco', value: 334 },
+              { name: 'México', value: 389 }, { name: 'Michoacán', value: 178 },
+              { name: 'Morelos', value: 112 }, { name: 'Nayarit', value: 76 },
+              { name: 'Nuevo León', value: 298 }, { name: 'Oaxaca', value: 156 },
+              { name: 'Puebla', value: 243 }, { name: 'Querétaro', value: 167 },
+              { name: 'Quintana Roo', value: 134 }, { name: 'San Luis Potosí', value: 145 },
+              { name: 'Sinaloa', value: 187 }, { name: 'Sonora', value: 203 },
+              { name: 'Tabasco', value: 98 }, { name: 'Tamaulipas', value: 211 },
+              { name: 'Tlaxcala', value: 89 }, { name: 'Veracruz', value: 276 },
+              { name: 'Yucatán', value: 159 }, { name: 'Zacatecas', value: 102 },
+            ]}
+          />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MexicoMapChart
+            title="Monto Financiado por Estado — Ocean"
+            gradient="ocean"
+            height={460}
+            data={[
+              { name: 'Aguascalientes', value: 2840000 }, { name: 'Baja California', value: 3960000 },
+              { name: 'Baja California Sur', value: 1740000 }, { name: 'Campeche', value: 1260000 },
+              { name: 'Chiapas', value: 3480000 }, { name: 'Chihuahua', value: 4420000 },
+              { name: 'Ciudad de México', value: 8240000 }, { name: 'Coahuila', value: 3780000 },
+              { name: 'Colima', value: 1080000 }, { name: 'Durango', value: 2360000 },
+              { name: 'Guanajuato', value: 5340000 }, { name: 'Guerrero', value: 2860000 },
+              { name: 'Hidalgo', value: 2620000 }, { name: 'Jalisco', value: 6680000 },
+              { name: 'México', value: 7780000 }, { name: 'Michoacán', value: 3560000 },
+              { name: 'Morelos', value: 2240000 }, { name: 'Nayarit', value: 1520000 },
+              { name: 'Nuevo León', value: 5960000 }, { name: 'Oaxaca', value: 3120000 },
+              { name: 'Puebla', value: 4860000 }, { name: 'Querétaro', value: 3340000 },
+              { name: 'Quintana Roo', value: 2680000 }, { name: 'San Luis Potosí', value: 2900000 },
+              { name: 'Sinaloa', value: 3740000 }, { name: 'Sonora', value: 4060000 },
+              { name: 'Tabasco', value: 1960000 }, { name: 'Tamaulipas', value: 4220000 },
+              { name: 'Tlaxcala', value: 1780000 }, { name: 'Veracruz', value: 5520000 },
+              { name: 'Yucatán', value: 3180000 }, { name: 'Zacatecas', value: 2040000 },
+            ]}
+          />
         </div>
 
       </div>

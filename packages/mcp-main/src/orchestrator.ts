@@ -90,7 +90,7 @@ const COMPONENT_CATALOG = [
   {
     name: 'Chart',
     description:
-      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
+      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap, map, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
   },
   { name: 'DataSummary', description: 'Styled data table with hover effects' },
   {
@@ -396,7 +396,8 @@ ${CHART_DECISION_PROMPT}`,
     const decision = selectChartType(intent, parsed.groupBy, parsed.chartType, parsed.filters);
     if (!parsed.chartType || decision.confidence === 'high') {
       parsed.chartType = decision.chartType;
-      console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) — ${decision.reason}`);
+      parsed.multiDataset = decision.multiDataset;
+      console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) multiDataset=${decision.multiDataset} — ${decision.reason}`);
     }
 
     // Si el chartType es especializado, forzar template:chart para que no lo sobreescriban
@@ -467,6 +468,10 @@ Props por componente:
   labels = eje X (ej: categorías), datasets[i].label = eje Y (ej: estados), datasets[i].data = valores por columna.
 - Chart (treemap): { type: "treemap", title?, data: { labels: ["nombre1","nombre2",...], datasets: [{ data: [v1,v2,...] }] } }
   labels = nombres de los nodos, data = tamaños. Ideal para distribución proporcional de categorías.
+- Chart (map): { type: "map", title?, data: { labels: ["Estado1","Estado2",...], datasets: [{ data: [v1,v2,...] }] } }
+  labels = nombres exactos de los 32 estados de México (con acento), data = valores numéricos por estado.
+  Usa SOLO cuando el groupBy o el análisis principal sea por estado geográfico sin otra dimensión.
+  Nombres válidos: Aguascalientes, Baja California, Baja California Sur, Campeche, Chiapas, Chihuahua, Ciudad de México, Coahuila, Colima, Durango, Guanajuato, Guerrero, Hidalgo, Jalisco, México, Michoacán, Morelos, Nayarit, Nuevo León, Oaxaca, Puebla, Querétaro, Quintana Roo, San Luis Potosí, Sinaloa, Sonora, Tabasco, Tamaulipas, Tlaxcala, Veracruz, Yucatán, Zacatecas.
   Para generar OHLC: agrupa registros por fecha. open=primer valor del día, high=máximo, low=mínimo, close=último valor. USA LOS DATOS REALES de aggregations.
 - Chart (bollinger): { type: "bollinger", title?, data: [{ date: "YYYY-MM-DD", value: number }], n?: 20, k?: 2 }
   Genera una serie temporal con un valor por fecha (suma o promedio del campo numérico por día).
@@ -547,24 +552,35 @@ COLORES para charts (usa estos exactos):
   // Multi-value filters → comparison mode: generate multi-dataset charts
   const multiCategoriaList = multiCategoria ? (filterCategoria as string[]).join(', ') : '';
   const multiEstadoList = multiEstado ? (filterEstado as string[]).join(', ') : '';
+  const isMultiDataset = (parsedIntent as Record<string, unknown>).multiDataset === true;
+  const hasTiempoFilter = (parsedIntent as Record<string, unknown>).granularity != null ||
+    parsedIntent.groupBy === 'fecha_venta';
+
   const comparisonCtx = multiCategoria
     ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterCategoria as string[]).length} categorías: [${multiCategoriaList}].
 REGLAS OBLIGATORIAS para el dashboard de comparación:
-1. El Chart PRINCIPAL debe ser multi-dataset: un dataset por cada categoría (${multiCategoriaList}). Usa type "bar" (barras agrupadas) o "line" (líneas) con datasets separados, uno por categoría.
-   Ejemplo: datasets: [{ label: "Motos", data: [...] }, { label: "Celulares", data: [...] }]
-   El eje X debe ser el groupBy (estado, mes, canal_venta, etc.) o fieldSummaries del campo más relevante.
-2. Incluye un Chart "area" o "line" multi-dataset mostrando la evolución/tendencia de cada categoría.
-3. Incluye un Chart "radar" comparando las categorías en múltiples métricas (conteo, monto promedio, % al_corriente, % atrasado).
+1. El Chart PRINCIPAL debe ser multi-dataset — un dataset por cada categoría (${multiCategoriaList}).
+   - Si hay dimensión temporal (groupBy=fecha_venta) → usa type "line" con una línea por categoría.
+   - Si no hay tiempo → usa type "bar" con barras agrupadas, eje X = estado/canal_venta/producto.
+   Ejemplo multi-dataset: datasets: [{ label: "Motos", data: [...] }, { label: "Celulares", data: [...] }]
+2. Incluye un segundo Chart de tipo diferente también multi-dataset:
+   - Con tiempo: "area" multi-dataset mostrando la evolución de cada categoría.
+   - Sin tiempo: "radar" comparando las categorías en múltiples métricas (conteo, monto promedio, % al_corriente, % atrasado).
+3. El KPIGrid debe tener una StatCard por categoría con su total individual (usa fieldSummaries.categoria.topValues).
 4. NUNCA uses treemap ni doughnut de una sola serie para comparar — siempre multi-dataset.
-5. El KPIGrid debe tener una StatCard por categoría con su total individual.
-6. Para calcular los valores por categoría usa fieldSummaries.categoria.topValues filtrando solo las categorías del filtro.`
+5. Para calcular valores por categoría filtra fieldSummaries.categoria.topValues a las categorías del filtro.`
     : multiEstado
     ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterEstado as string[]).length} estados: [${multiEstadoList}].
 REGLAS OBLIGATORIAS para el dashboard de comparación:
-1. El Chart PRINCIPAL debe ser multi-dataset: un dataset por cada estado (${multiEstadoList}). Usa type "bar" agrupado o "line" con datasets separados.
+1. El Chart PRINCIPAL debe ser multi-dataset — un dataset por cada estado (${multiEstadoList}).
+   - Con tiempo → type "line", una línea por estado.
+   - Sin tiempo → type "bar" agrupado, eje X = categoria o canal_venta.
 2. Incluye un Chart "radar" comparando los estados en múltiples métricas.
 3. El KPIGrid debe tener una StatCard por estado con su total individual.
 4. NUNCA uses un chart de un solo dataset cuando hay múltiples estados a comparar.`
+    : isMultiDataset
+    ? `MODO MULTI-DATASET ACTIVO: el chart principal debe tener datasets separados por cada serie detectada.
+   Usa fieldSummaries para calcular los valores por serie.`
     : '';
 
   const filterCtxBlock = [categoriaCtx, estadoCtx, estatusCtx, comparisonCtx].filter(Boolean).join('\n');

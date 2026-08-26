@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import AuroraChart from './AuroraChart';
+import MexicoMapChart from './MexicoMapChart';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -1183,6 +1184,21 @@ function renderChart(props: Record<string, unknown>, index: number = 0) {
           xAxisLabel={xAxisLabel}
         />
       </div>
+    );
+  }
+
+  if (type === 'map') {
+    const mapData = (data?.labels ?? []).map((name: string, i: number) => ({
+      name,
+      value: (data.datasets?.[0]?.data?.[i] as number) ?? 0,
+    }));
+    return (
+      <MexicoMapChart
+        data={mapData}
+        title={title}
+        height={420}
+        gradient="aurora"
+      />
     );
   }
 

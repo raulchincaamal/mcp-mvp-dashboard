@@ -358,13 +358,13 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
       <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${kpiRows}, auto) repeat(${secRows}, minmax(180px, 1fr))`, gap: GAP }}>
 
         {/* Header */}
-        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, position: 'relative' }) }}>
+        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
           <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)66, transparent)' }} />
+          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>New</button>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 5px', opacity: 0.8 }}>Executive Intelligence</p>
             <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
           </div>
-          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>← New</button>
         </div>
 
         {/* KPIs — max 4, 2 per row, auto height */}

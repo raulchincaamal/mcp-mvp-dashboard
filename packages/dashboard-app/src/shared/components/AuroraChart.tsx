@@ -29,7 +29,7 @@ export interface LegacyChartData {
   datasets: Array<{ label?: string; data: number[] }>;
 }
 
-export type AuroraChartData = FlatDataPoint[] | LegacyChartData | CandlestickMAData;
+export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
 
 // Candlestick-MA specific data format
 export interface CandlestickMAData {
@@ -468,7 +468,14 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, pale
   data.datasets.forEach((ds, yi) => {
     ds.data.forEach((val, xi) => heatData.push([xi, yi, val]));
   });
-  const maxVal = Math.max(...heatData.map(d => d[2]), 1);
+  const allVals = heatData.map(d => d[2]);
+  const maxVal = Math.max(...allVals, 1);
+  const minVal = Math.min(...allVals, 0);
+  const mean = allVals.reduce((a, b) => a + b, 0) / (allVals.length || 1);
+  const cv = mean > 0 ? (maxVal - minVal) / mean : 1;
+  // If coefficient of variation < 0.2 (values too similar), expand range from actual min
+  // so the color scale uses the full spectrum instead of a tiny slice
+  const vizMin = cv < 0.2 ? Math.max(0, minVal - (maxVal - minVal) * 3) : 0;
 
   return {
     backgroundColor: 'transparent',
@@ -491,7 +498,7 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, pale
       axisLabel: { color: tk.textTertiary, fontSize: 11 },
     },
     visualMap: {
-      min: 0, max: maxVal, show: false,
+      min: vizMin, max: maxVal, show: false,
       inRange: { color: [tk.border, bot, top] },
     },
     series: [{

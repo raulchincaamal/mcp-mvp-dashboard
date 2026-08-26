@@ -510,18 +510,13 @@ DIVERSIDAD DE CHARTS (obligatorio):
 
 REGLAS DE VISUALIZACIÓN (obligatorias):
 1. SIEMPRE incluye un KPIGrid con 4-5 métricas de resumen
-2. SIEMPRE incluye al menos 3 Charts diferentes con perspectivas distintas
+2. SIEMPRE incluye al menos 3 Charts de TIPOS DIFERENTES con perspectivas distintas
 3. SIEMPRE incluye un TransactionList con las últimas 6-8 operaciones
-4. Para template "category" o "executive": KPIGrid + Chart bar(estado) + Chart doughnut(estatus) + Chart bar(canal) + Chart doughnut(categoria) + TransactionList
-5. Para template "credit": KPIGrid + ProgressGroup(estatus) + Chart bar(atrasados por estado) + Chart doughnut(distribución) + TransactionList
-6. Para template "chart": KPIGrid + Chart principal + Chart doughnut(distribución por categoría) + Chart bar(top estados) + TransactionList
-7. Para template "table": KPIGrid + DataSummary + Chart bar(resumen) + Chart doughnut(distribución)
-8. Para template "category": KPIGrid + Chart doughnut(categoría) + Chart bar(monto por categoría) + Chart bar(por estado) + ProgressGroup + TransactionList
-9. Usa aggregations.groupBy.data para labels/values del Chart principal
-10. Usa aggregations.numericSummaries para los valores de KPIGrid
-11. Usa aggregations.fieldSummaries[campo].topValues para charts de distribución
-12. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
-13. Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K", resto → "$1,234"
+4. Usa aggregations.groupBy.data para labels/values del Chart principal
+5. Usa aggregations.numericSummaries para los valores de KPIGrid
+6. Usa aggregations.fieldSummaries[campo].topValues para charts de distribución
+7. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
+8. Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K", resto → "$1,234"
 
 COLORES para charts (usa estos exactos):
 ["#49a4d8","#7C3AED","#059669","#D97706","#DC2626","#2563EB","#6366F1","#0891B2","#10B981","#F59E0B","#EF4444","#EC4899","#14B8A6","#8B5CF6","#F97316"]`;
@@ -549,32 +544,32 @@ ${
 2. Chart ${parsedIntent.chartType}: chart principal con los datos más relevantes para el intent.
    Usa el schema correcto para este tipo según las Props definidas arriba.
    Usa aggregations para poblar los datos reales.
-3. Chart doughnut: distribución por estatus_credito
-4. Chart bar: top 8 estados por volumen (usa fieldSummaries.estado.topValues)
+3. Chart funnel: embudo de estatus_credito (total → al_corriente → liquidado → atrasado → cancelado)
+4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
 5. TransactionList: últimas 6 operaciones`
     : parsedIntent.template === 'executive'
     ? `Genera un dashboard COMPLETO con mínimo 6 componentes:
 1. KPIGrid: total ventas, monto total, promedio precio, % morosidad, total liquidados
 2. Chart bar: ventas por estado (top 10, usa fieldSummaries.estado.topValues)
-3. Chart doughnut: distribución por estatus_credito (SOLO 1 doughnut permitido)
-4. Chart bar: ventas por canal_venta
+3. Chart funnel: embudo de estatus_credito (total → al_corriente → liquidado → atrasado → cancelado)
+4. Chart area: evolución mensual de ventas (usa aggregations.groupBy si hay datos temporales, si no usa fieldSummaries.fecha_venta o genera tendencia con los datos disponibles)
 5. Chart treemap: distribución por categoría (usa fieldSummaries.categoria.topValues)
 6. TransactionList: últimas 6-8 operaciones de la muestra`
     : parsedIntent.template === 'category'
       ? `Genera mínimo 6 componentes:
 1. KPIGrid: total ventas, monto total, promedio, top categoría
 2. Chart treemap: distribución por categoría (tamaño = monto total)
-3. Chart bar: monto total por categoría
-4. Chart bar: ventas por estado (top 8)
+3. Chart radar: comparación multidimensional por categoría (usa top 6 categorías, métricas: conteo, monto promedio, % al_corriente)
+4. Chart heatmap: categoría × estado (top 6 categorías × top 8 estados, valor = conteo)
 5. ProgressGroup: top categorías por cantidad
 6. TransactionList: últimas 6 operaciones`
       : parsedIntent.template === 'credit'
         ? `Genera mínimo 6 componentes:
 1. KPIGrid: totales por estatus, monto en riesgo, % atrasados
 2. ProgressGroup: distribución de estatus (0-100)
-3. Chart bar: créditos atrasados por estado (top 10)
+3. Chart diverging-bar: salud crediticia por estado (top 10 estados, keys: ["cancelado","atrasado","al_corriente","liquidado"], negativeLabel: "← Más riesgo", positiveLabel: "Más salud →")
 4. Chart treemap: distribución por categoría de créditos atrasados
-5. Chart bar: distribución por canal_venta
+5. Chart funnel: embudo de recuperación (total → atrasado → al_corriente → liquidado)
 6. TransactionList: créditos con mayor riesgo`
         : parsedIntent.template === 'candlestick'
           ? `Genera un dashboard de VELAS/CANDLESTICK:
@@ -638,15 +633,15 @@ ${
    - Si chartType es "heatmap" → labels=categorías (eje X), datasets=estados top 8 (eje Y)
    - Si chartType es "treemap" → labels=categorías/productos, data=montos o conteos
    NUNCA uses fieldSummaries.estado para una gráfica temporal.
-3. Chart doughnut: distribución por estatus_credito
-4. Chart bar: top 8 estados por volumen
+3. Chart funnel: embudo de estatus_credito (total → al_corriente → liquidado → atrasado → cancelado)
+4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
 5. TransactionList: últimas 6 operaciones`
                         : parsedIntent.template === 'table'
                           ? `Genera mínimo 4 componentes:
 1. KPIGrid: 3 métricas de resumen
 2. DataSummary con las columnas más relevantes
-3. Chart bar: distribución por categoría
-4. Chart doughnut: distribución por estatus_credito`
+3. Chart treemap: distribución por categoría (usa fieldSummaries.categoria.topValues)
+4. Chart funnel: embudo de estatus_credito (total → al_corriente → liquidado → atrasado → cancelado)`
                           : 'Genera el dashboard más útil posible para este intent.'
 }
 

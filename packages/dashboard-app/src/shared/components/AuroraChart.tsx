@@ -258,12 +258,11 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
       type: 'pie' as const,
       radius: isDoughnut ? ['42%', '70%'] : ['0%', '70%'],
       center: ['50%', '46%'],
-      itemStyle: { borderRadius: isDoughnut ? 6 : 3, borderColor: tk.bg, borderWidth: 2 },
+      itemStyle: { borderRadius: isDoughnut ? 4 : 2, borderColor: 'transparent', borderWidth: 0 },
       label: { show: false },
       labelLine: { show: false },
       emphasis: {
         scale: true, scaleSize: 8,
-        label: { show: true, color: tk.text, fontSize: 13, fontWeight: 600 },
       },
       data: data.labels.map((label, i) => ({
         name: label,
@@ -394,7 +393,7 @@ function funnelOption(rawData: AuroraChartData, title: string | undefined, palet
       sort: 'descending',
       gap: 3,
       label: { show: true, position: 'inside', color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 0 },
+      itemStyle: { borderWidth: 0, borderColor: 'transparent' },
       emphasis: { label: { fontSize: 13 } },
       data: sorted.map((d, i) => ({
         ...d,

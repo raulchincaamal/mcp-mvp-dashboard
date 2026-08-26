@@ -457,55 +457,105 @@ function gaugeOption(rawData: AuroraChartData, title: string | undefined, palett
   };
 }
 
-// ─── Heatmap ───────────────────────────────────────────────
-// data.labels = x axis, data.datasets[i].label = y axis label, data.datasets[i].data = values per x
+// ─── Heatmap (Punch Card style) ────────────────────────────
+// data.labels = x axis (hours), data.datasets[i].label = y axis (days), data.datasets[i].data = values per x
 
-function heatmapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function heatmapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
-  const [top, bot] = palette[0];
   const yLabels = data.datasets.map(ds => ds.label ?? '');
   const heatData: [number, number, number][] = [];
   data.datasets.forEach((ds, yi) => {
-    ds.data.forEach((val, xi) => heatData.push([xi, yi, val]));
+    ds.data.forEach((val, xi) => heatData.push([xi, yi, val ?? 0]));
   });
   const allVals = heatData.map(d => d[2]);
   const maxVal = Math.max(...allVals, 1);
-  const minVal = Math.min(...allVals, 0);
-  const mean = allVals.reduce((a, b) => a + b, 0) / (allVals.length || 1);
-  const cv = mean > 0 ? (maxVal - minVal) / mean : 1;
-  // If coefficient of variation < 0.2 (values too similar), expand range from actual min
-  // so the color scale uses the full spectrum instead of a tiny slice
-  const vizMin = cv < 0.2 ? Math.max(0, minVal - (maxVal - minVal) * 3) : 0;
+  // threshold: cells above 40% of max get dark text, below get light text
+  const threshold = maxVal * 0.4;
 
   return {
     backgroundColor: 'transparent',
     tooltip: {
       position: 'top',
-      formatter: ((p: unknown) => { const v = (p as {value: [number,number,number]}).value; return `${data.labels[v[0]]} / ${yLabels[v[1]]}: <b>${v[2]}</b>`; }) as never,
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
-      textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      formatter: ((p: unknown) => {
+        const v = (p as { value: [number, number, number] }).value;
+        const xLabel = data.labels[v[0]] ?? v[0];
+        const yLabel = yLabels[v[1]] ?? v[1];
+        return `<b>${xLabel} / ${yLabel}</b><br/>Valor: <b>${v[2]}</b>`;
+      }) as never,
+      backgroundColor: 'rgba(15,23,42,0.92)',
+      borderColor: 'rgba(59,130,246,0.4)',
+      borderWidth: 1,
+      textStyle: { color: '#e2e8f0', fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;padding:10px 14px;',
     },
-    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 80, right: 20, top: 12, bottom: 56, containLabel: false },
     xAxis: {
-      type: 'category', data: data.labels, splitArea: { show: true, areaStyle: { color: ['transparent','transparent'] } },
-      axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, rotate: data.labels.length > 6 ? 35 : 0 },
+      type: 'category',
+      data: data.labels,
+      splitArea: { show: true, areaStyle: { color: ['rgba(30,64,175,0.04)', 'rgba(30,64,175,0.09)'] } },
+      axisLine: { lineStyle: { color: 'rgba(59,130,246,0.2)' } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: tk.textTertiary, fontSize: 10,
+        rotate: data.labels.length > 12 ? 40 : 0,
+        interval: data.labels.length > 20 ? 1 : 0,
+      },
     },
     yAxis: {
-      type: 'category', data: yLabels, splitArea: { show: true, areaStyle: { color: ['transparent','transparent'] } },
-      axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
+      type: 'category',
+      data: yLabels,
+      splitArea: { show: true, areaStyle: { color: ['rgba(30,64,175,0.04)', 'rgba(30,64,175,0.09)'] } },
+      axisLine: { lineStyle: { color: 'rgba(59,130,246,0.2)' } },
+      axisTick: { show: false },
+      axisLabel: { color: tk.textTertiary, fontSize: 10 },
     },
     visualMap: {
-      min: vizMin, max: maxVal, show: false,
-      inRange: { color: [tk.border, bot, top] },
+      min: 0,
+      max: maxVal,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 2,
+      itemHeight: 100,
+      itemWidth: 14,
+      // dark navy → mid blue → bright blue → light blue (no whites — keeps text always readable)
+      inRange: { color: ['#0f172a', '#1e3a8a', '#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd'] },
+      textStyle: { color: tk.textTertiary, fontSize: 10 },
+      borderColor: 'rgba(59,130,246,0.2)',
+      borderWidth: 1,
     },
     series: [{
+      name: title ?? 'Heatmap',
       type: 'heatmap' as const,
       data: heatData,
-      itemStyle: { borderRadius: 3, borderColor: tk.bg, borderWidth: 2 },
-      emphasis: { itemStyle: { opacity: 0.85 } },
+      label: {
+        show: data.labels.length <= 12 && yLabels.length <= 6,
+        fontSize: 10,
+        fontWeight: 700,
+        // dark text on bright cells, white on dark cells
+        formatter: ((p: unknown) => {
+          const v = (p as { value: [number, number, number] }).value[2];
+          return v === 0 ? '' : String(v);
+        }) as never,
+        color: ((p: unknown) => {
+          const v = (p as { value: [number, number, number] }).value[2];
+          if (v === 0) return 'transparent';
+          return v >= threshold ? '#0f172a' : '#ffffff';
+        }) as never,
+      },
+      itemStyle: {
+        borderColor: 'rgba(15,23,42,0.6)',
+        borderWidth: 1,
+        borderRadius: 2,
+      },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 12,
+          shadowColor: 'rgba(59,130,246,0.7)',
+          borderColor: '#60a5fa',
+          borderWidth: 2,
+        },
+      },
     }],
     animationDuration: 800,
     animationEasing: 'cubicOut' as const,

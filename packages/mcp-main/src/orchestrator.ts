@@ -966,6 +966,41 @@ function sanitizeUIConfig(
     return comp;
   });
 
+  // ── Rule 6: 2+ consecutive bar charts — convert second onward to ProgressGroup ──
+  let barCount = 0;
+  config.components = (config.components as Record<string, unknown>[]).map(comp => {
+    if (comp.component !== 'Chart') { barCount = 0; return comp; }
+    const props = comp.props as Record<string, unknown>;
+    const type = props.type as string;
+    const data = props.data as { labels?: string[]; datasets?: { data?: number[] }[] } | undefined;
+    const labels = data?.labels ?? [];
+
+    if (type === 'bar' && (labels as unknown[]).length <= 6) {
+      barCount++;
+      if (barCount >= 2) {
+        const values = data?.datasets?.[0]?.data ?? [];
+        const maxVal = Math.max(...values, 1);
+        const PROGRESS_COLORS = ['#0CF49B','#60a5fa','#fb923c','#f472b6','#c084fc','#67e8f9'];
+        console.log(`[sanitize] converting duplicate bar → ProgressGroup`);
+        return {
+          ...comp,
+          component: 'ProgressGroup',
+          props: {
+            title: props.title,
+            items: (labels as string[]).map((label, i) => ({
+              label,
+              value: Math.round((values[i] ?? 0) / maxVal * 100),
+              color: PROGRESS_COLORS[i % PROGRESS_COLORS.length],
+            })),
+          },
+        };
+      }
+    } else {
+      barCount = 0;
+    }
+    return comp;
+  });
+
   return config;
 }
 

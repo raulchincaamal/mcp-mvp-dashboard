@@ -248,7 +248,12 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               />
             </div>
           )}
-          {auroraData && chartType !== 'map' && (
+          {auroraData && chartType === 'progress' && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8, overflowY: 'auto' }}>
+              {renderChart(insight, 340, true)}
+            </div>
+          )}
+          {auroraData && chartType !== 'map' && chartType !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
             </div>
@@ -271,10 +276,11 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
 const GAP = 14;
 
-function renderChart(insight: InsightData, height: number, bare = false) {
+function renderChart(insight: InsightData, height: number, bare = false, preview = false) {
   const opts = insight.chartOptions as Record<string, unknown>;
   const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
   const chartType = (opts._auroraType as string) ?? 'bar';
+
   if (chartType === 'map' && auroraData) {
     const mapData = auroraData.labels.map((name, i) => ({
       name,
@@ -282,12 +288,44 @@ function renderChart(insight: InsightData, height: number, bare = false) {
     }));
     return <MexicoMapChart data={mapData} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
   }
-  if (auroraData) return <AuroraChart type={chartType as never} data={auroraData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;
+
+  if (chartType === 'progress' && auroraData) {
+    const PROGRESS_COLORS = ['#0CF49B','#60a5fa','#fb923c','#f472b6','#c084fc','#67e8f9','#fcd34d','#818cf8'];
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
+        {auroraData.labels.map((label, i) => {
+          const value = Math.min(100, Math.max(0, auroraData.datasets?.[0]?.data?.[i] ?? 0));
+          const color = PROGRESS_COLORS[i % PROGRESS_COLORS.length];
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text-secondary, rgba(230,236,244,0.8))' }}>{label}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary, rgba(170,185,210,0.6))' }}>{value}%</span>
+              </div>
+              <div style={{ height: 8, width: '100%', borderRadius: 99, background: 'rgba(255,255,255,0.06)' }}>
+                <div style={{ height: '100%', borderRadius: 99, width: `${value}%`, background: color, transition: 'width 0.6s ease' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Heatmap preview: slice to max 4 rows × 6 cols so it fits the card
+  const displayData = (chartType === 'heatmap' && preview && auroraData)
+    ? {
+        labels: auroraData.labels.slice(0, 6),
+        datasets: auroraData.datasets.slice(0, 4).map(ds => ({ ...ds, data: ds.data.slice(0, 6) })),
+      }
+    : auroraData;
+
+  if (displayData) return <AuroraChart type={chartType as never} data={displayData} gradient="aurora" height={bare ? '100%' : height} bare={bare} />;
   if (opts.series) return <EChartsRaw opts={opts} height={height || 200} />;
   return null;
 }
 
-function AutoHeightChart({ insight }: { insight: InsightData }) {
+function AutoHeightChart({ insight, preview = false }: { insight: InsightData; preview?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(200);
   useEffect(() => {
@@ -300,11 +338,9 @@ function AutoHeightChart({ insight }: { insight: InsightData }) {
     return () => ro.disconnect();
   }, []);
 
-  const opts = insight.chartOptions as Record<string, unknown>;
-  // AuroraChart handles its own wrapper when bare=false
   return (
     <div ref={ref} style={{ width: '100%', height: '100%' }}>
-      {renderChart(insight, h, true)}
+      {renderChart(insight, h, true, preview)}
     </div>
   );
 }
@@ -411,7 +447,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
               style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
               <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0, opacity: 0.9 }}>{ins.title}</p>
-              <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} /></div>
+              <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview /></div>
             </div>
           );
         })}

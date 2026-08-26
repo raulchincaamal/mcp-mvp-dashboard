@@ -166,6 +166,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
   const AXIS_STYLE = getAxisStyle(isDark);
   const TOOLTIP_STYLE = getTooltipStyle(isDark);
 
+  let progressGroupCount = 0;
+
   for (const comp of components) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = comp as any;
@@ -412,12 +414,28 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── ProgressGroup → barras horizontales con labels y porcentaje ────────
+    // ── ProgressGroup → primero = barras, segundo+ = doughnut ────────────
     if (component === 'ProgressGroup') {
       const items: { label?: string; value?: number }[] = props.items ?? [];
       const pgItems = items.slice(0, 8);
       const pgLabels = pgItems.map(it => it.label ?? '');
       const pgValues = pgItems.map(it => Math.min(100, Math.max(0, it.value ?? 0)));
+
+      progressGroupCount++;
+
+      if (progressGroupCount >= 2) {
+        insights.push({
+          id: `progress-${idx}`,
+          title: props.title ?? 'Progress',
+          chartType: 'bar',
+          chartOptions: {
+            _auroraType: 'progress',
+            _auroraData: { labels: pgLabels, datasets: [{ data: pgValues }] },
+          },
+        });
+        continue;
+      }
+
       const barH = Math.max(18, Math.min(32, Math.floor(260 / pgItems.length)));
       insights.push({
         id: `progress-${idx}`,

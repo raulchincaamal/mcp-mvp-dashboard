@@ -243,6 +243,47 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     }
     lineGeosRef.current = lineGeos;
 
+    // ── Light pulses traveling center → card (mini CoreLight style) ──────────────────────────────
+    type PulseGroup = THREE.Group & { _coreMat: THREE.SpriteMaterial };
+    interface Pulse { lineIdx: number; t: number; speed: number; group: PulseGroup; }
+    const pulses: Pulse[] = [];
+
+    function makeGlowTex(): THREE.Texture {
+      const size = 128;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d')!;
+      const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      g.addColorStop(0,    'rgba(255,255,255,1)');
+      g.addColorStop(0.12, 'rgba(180,210,255,0.9)');
+      g.addColorStop(0.35, 'rgba(100,150,255,0.5)');
+      g.addColorStop(0.7,  'rgba(60,100,255,0.15)');
+      g.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(cv);
+    }
+
+    const sharedGlowTex = makeGlowTex();
+
+    function makePulseGroup(): PulseGroup {
+      const group = new THREE.Group() as PulseGroup;
+      const coreMat = new THREE.SpriteMaterial({ map: sharedGlowTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+      const core = new THREE.Sprite(coreMat);
+      core.scale.set(18, 18, 1);
+      group.add(core);
+      group._coreMat = coreMat;
+      scene.add(group);
+      return group;
+    }
+
+    // Spawn a pulse on a random line every 1.2–2.8s
+    let nextSpawnTime = performance.now() + 800;
+    const spawnPulse = () => {
+      const idx = Math.floor(Math.random() * N);
+      pulses.push({ lineIdx: idx, t: 0, speed: 0.006 + Math.random() * 0.006, group: makePulseGroup() });
+    };
+
     // ── Resize ─────────────────────────────────────────────────────────────
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -278,6 +319,36 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         arr[i * 3 + 1] = y;
       }
       pp.needsUpdate = true;
+
+      // Spawn pulses on timer
+      const now = performance.now();
+      if (now >= nextSpawnTime) {
+        spawnPulse();
+        nextSpawnTime = now + 1200 + Math.random() * 1600;
+      }
+
+      // Animate pulses
+      for (let p = pulses.length - 1; p >= 0; p--) {
+        const pulse = pulses[p];
+        pulse.t += pulse.speed;
+        const a = angleRef.current + pulse.lineIdx * DELTA_ANGLE;
+        const wx = RX * Math.cos(a);
+        const wy = RY * Math.sin(a) * Math.cos(TILT);
+        const wz = RY * Math.sin(a) * Math.sin(TILT);
+        const lp = lineProgresses[pulse.lineIdx];
+        const tt = Math.min(pulse.t, 1);
+        pulse.group.position.set(wx * lp * tt, wy * lp * tt, wz * lp * tt);
+
+        // Fade in/out
+        const fade = tt < 0.15 ? tt / 0.15 : tt > 0.8 ? (1 - tt) / 0.2 : 1;
+        pulse.group._coreMat.opacity = fade * 0.95;
+
+        if (pulse.t >= 1) {
+          scene.remove(pulse.group);
+          pulse.group._coreMat.dispose();
+          pulses.splice(p, 1);
+        }
+      }
 
       // Widgets — GSAP 3D billboard (always flat, facing viewer)
       for (let i = 0; i < N; i++) {
@@ -355,6 +426,11 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', onResize);
+      pulses.forEach(p => {
+        scene.remove(p.group);
+        p.group._coreMat?.dispose();
+      });
+      sharedGlowTex.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };

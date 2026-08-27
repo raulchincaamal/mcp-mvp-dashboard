@@ -359,11 +359,6 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   const secondary = charts.slice(1); // ALL secondary charts go LEFT
   const txList    = lists[0] ?? null;
 
-  // Derived stats from TransactionList
-  const allItems = lists.flatMap(l => l.listItems ?? []);
-  const positiveRate = allItems.length > 0 ? Math.round((allItems.filter(i => i.status === 'positive').length / allItems.length) * 100) : null;
-  const negativeRate = allItems.length > 0 ? Math.round((allItems.filter(i => i.status === 'negative').length / allItems.length) * 100) : null;
-
   useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
   useEffect(() => {
     if (!visible || hasAnimated.current || !containerRef.current) return;
@@ -459,15 +454,15 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         })}
       </div>
 
-      {/* RIGHT: primary chart (flex 1) + bottom panel (resumen + tx list) */}
-      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateRows: '1fr auto', gap: GAP }}>
+      {/* RIGHT: primary chart */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
 
         {/* Primary chart */}
         {primary && (
           <div data-animate ref={el => { cardRefs.current[insights.indexOf(primary)] = el; }} onClick={() => onExpand(primary)}
             onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.005, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}33`; }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
-            style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
+            style={{ ...CARD({ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
             <div style={accentLine(ACCENT_COLORS[0])} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
               <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0, opacity: 0.9 }}>{primary.title}</p>
@@ -476,58 +471,6 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
             <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={primary} /></div>
           </div>
         )}
-
-        {/* Bottom panel: resumen + tx list */}
-        <div style={{ display: 'grid', gridTemplateColumns: txList ? '1fr 1.6fr' : '1fr', gap: GAP, minHeight: 180 }}>
-
-          {/* Resumen derivado */}
-          <div data-animate style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '14px 16px', position: 'relative' }) }}>
-            <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: `linear-gradient(90deg, transparent, ${ACCENT_COLORS[6]}66, transparent)` }} />
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[6], margin: '0 0 8px', opacity: 0.9 }}>Resumen</p>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-around' }}>
-              {positiveRate !== null && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', margin: 0 }}>Al corriente</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: '#34d399', margin: 0 }}>{positiveRate}%</p>
-                </div>
-              )}
-              {negativeRate !== null && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', margin: 0 }}>En riesgo</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: '#f87171', margin: 0 }}>{negativeRate}%</p>
-                </div>
-              )}
-              {kpis.slice(0, 4).map((kpi, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{kpi.title}</p>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)', margin: 0, flexShrink: 0 }}>{kpi.metric}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* TransactionList */}
-          {txList && (
-            <div data-animate ref={el => { cardRefs.current[insights.indexOf(txList)] = el; }} onClick={() => onExpand(txList)}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[5]}44`; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
-              style={{ ...CARD({ display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
-              <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: `linear-gradient(90deg, transparent, ${ACCENT_COLORS[5]}66, transparent)` }} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[5], margin: '0 0 8px', flexShrink: 0, opacity: 0.9 }}>{txList.title}</p>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                {txList.listItems!.slice(0, 6).map((item, j) => (
-                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: j < 5 ? '1px solid rgba(255,255,255,0.05)' : 'none', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
-                      {item.subtitle && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', margin: '1px 0 0' }}>{item.subtitle}</p>}
-                    </div>
-                    <p style={{ fontSize: 11, fontWeight: 700, margin: 0, flexShrink: 0, color: item.status === 'positive' ? '#34d399' : item.status === 'negative' ? '#f87171' : 'rgba(255,255,255,0.75)' }}>{item.amount}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

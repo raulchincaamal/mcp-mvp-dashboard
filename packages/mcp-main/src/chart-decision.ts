@@ -196,8 +196,14 @@ export function selectChartType(
     case 'tendencia':
       return { chartType: 'area', objective, confidence: 'high', reason: 'Tendencia temporal → área', multiDataset: false };
 
-    case 'participacion_temporal':
+    case 'participacion_temporal': {
+      // If filtered to a single categoria or single estado, there's only 1 series → use area
+      const singleFilter = (filters?.categoria && !Array.isArray(filters.categoria)) ||
+                           (filters?.estado && !Array.isArray(filters.estado));
+      if (singleFilter)
+        return { chartType: 'area', objective, confidence: 'high', reason: 'Participación temporal con filtro único → área simple', multiDataset: false };
       return { chartType: 'stacked-area', objective, confidence: 'high', reason: 'Participación temporal → área apilada', multiDataset: false };
+    }
 
     case 'participacion': {
       if (dims.hasProducto && dims.hasTiempo)

@@ -407,8 +407,12 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   const kpiRows = Math.ceil(kpisLeft.length / 2);
   const secRows = secondary.length;
 
+  // Auto-zoom: scale up by default, reduce when many components
+  const totalComponents = kpisLeft.length + secondary.length + (primary ? 1 : 0) + (txList ? 1 : 0);
+  const zoom = totalComponents <= 4 ? 1.4 : totalComponents <= 6 ? 1.2 : totalComponents <= 8 ? 1.0 : totalComponents <= 10 ? 0.85 : 0.75;
+
   return (
-    <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP }}>
+    <div ref={containerRef} key={totalComponents} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom }}>
 
       {/* LEFT: header + KPIs (max 4) + ALL secondary charts */}
       <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${kpiRows}, auto) repeat(${secRows}, minmax(180px, 1fr))`, gap: GAP }}>

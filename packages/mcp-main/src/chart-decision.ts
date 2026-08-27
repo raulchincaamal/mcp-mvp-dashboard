@@ -188,7 +188,9 @@ export function selectChartType(
         return { chartType: 'radar', objective, confidence: 'medium', reason: '3+ dimensiones → radar', multiDataset: false };
       if (dims.hasProducto && dims.hasEstado)
         return { chartType: 'bar', objective, confidence: 'high', reason: 'Producto + estado → barras agrupadas', multiDataset: true };
-      return { chartType: 'bar', objective, confidence: 'high', reason: dims.isMultiSerie ? 'Multi-serie → barras agrupadas' : 'Comparación → barras', multiDataset: dims.isMultiSerie };
+      if (dims.isMultiSerie)
+        return { chartType: 'scatter', objective, confidence: 'high', reason: 'Comparación multi-serie → scatter precio vs plazo + charts secundarios', multiDataset: true };
+      return { chartType: 'bar', objective, confidence: 'high', reason: 'Comparación → barras', multiDataset: false };
     }
 
     case 'tendencia':
@@ -269,8 +271,8 @@ REGLAS DE SELECCIÓN (en orden de prioridad):
 1. MULTI-SERIE + TIEMPO  → chartType: "line"  (líneas paralelas, una por serie)
    Ejemplo: "compara el histórico de motos y celulares"
 
-2. MULTI-SERIE sin tiempo → chartType: "bar"  (barras agrupadas)
-   Ejemplo: "compara motos y celulares"
+2. MULTI-SERIE sin tiempo → chartType: "scatter" (correlación precio vs plazo) + charts secundarios: area, line, bar multi-dataset
+   Ejemplo: "compara motos y celulares", "ventas de celulares y motos"
 
 3. TIEMPO solo → chartType: "area"
    Ejemplo: "histórico de motos", "evolución mensual de ventas"

@@ -558,26 +558,30 @@ COLORES para charts (usa estos exactos):
 
   const comparisonCtx = multiCategoria
     ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterCategoria as string[]).length} categorías: [${multiCategoriaList}].
-REGLAS OBLIGATORIAS para el dashboard de comparación:
-1. El Chart PRINCIPAL debe ser multi-dataset — un dataset por cada categoría (${multiCategoriaList}).
-   - Si hay dimensión temporal (groupBy=fecha_venta) → usa type "line" con una línea por categoría.
-   - Si no hay tiempo → usa type "bar" con barras agrupadas, eje X = estado/canal_venta/producto.
-   Ejemplo multi-dataset: datasets: [{ label: "Motos", data: [...] }, { label: "Celulares", data: [...] }]
-2. Incluye un segundo Chart de tipo diferente también multi-dataset:
-   - Con tiempo: "area" multi-dataset mostrando la evolución de cada categoría.
-   - Sin tiempo: "radar" comparando las categorías en múltiples métricas (conteo, monto promedio, % al_corriente, % atrasado).
-3. El KPIGrid debe tener una StatCard por categoría con su total individual (usa fieldSummaries.categoria.topValues).
-4. NUNCA uses treemap ni doughnut de una sola serie para comparar — siempre multi-dataset.
-5. Para calcular valores por categoría filtra fieldSummaries.categoria.topValues a las categorías del filtro.`
+REGLAS OBLIGATORIAS para el dashboard de comparación — genera EXACTAMENTE estos 4 charts en este orden:
+1. Chart scatter: correlación precio_contado vs plazo_semanas. Un dataset por categoría (${multiCategoriaList}).
+   labels = valores de precio_contado (como strings numéricos), datasets[i].data = valores de plazo_semanas.
+   Usa los registros de la muestra para poblar los puntos. Cada dataset tiene el label de su categoría.
+2. Chart area: evolución mensual de ventas. Un dataset por categoría (${multiCategoriaList}).
+   Usa fieldSummaries.fecha_venta o agrupa los registros por mes. Eje X = meses, eje Y = conteo.
+3. Chart line: tendencia de monto_total_credito por mes. Un dataset por categoría (${multiCategoriaList}).
+   Eje X = meses, eje Y = suma de monto_total_credito por mes.
+4. Chart bar: comparación directa por estado (top 8 estados). Un dataset por categoría (${multiCategoriaList}).
+   Eje X = estados, cada dataset = conteo de ventas de esa categoría por estado.
+Además incluye:
+- KPIGrid: una StatCard por categoría con su total individual + StatCards de totales generales.
+- TransactionList: últimas 6-8 operaciones.
+NUNCA uses treemap ni doughnut de una sola serie para comparar.`
     : multiEstado
     ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterEstado as string[]).length} estados: [${multiEstadoList}].
-REGLAS OBLIGATORIAS para el dashboard de comparación:
-1. El Chart PRINCIPAL debe ser multi-dataset — un dataset por cada estado (${multiEstadoList}).
-   - Con tiempo → type "line", una línea por estado.
-   - Sin tiempo → type "bar" agrupado, eje X = categoria o canal_venta.
-2. Incluye un Chart "radar" comparando los estados en múltiples métricas.
-3. El KPIGrid debe tener una StatCard por estado con su total individual.
-4. NUNCA uses un chart de un solo dataset cuando hay múltiples estados a comparar.`
+REGLAS OBLIGATORIAS para el dashboard de comparación — genera EXACTAMENTE estos 4 charts en este orden:
+1. Chart scatter: correlación precio_contado vs plazo_semanas. Un dataset por estado (${multiEstadoList}).
+2. Chart area: evolución mensual de ventas. Un dataset por estado (${multiEstadoList}).
+3. Chart line: tendencia de monto_total_credito por mes. Un dataset por estado (${multiEstadoList}).
+4. Chart bar: comparación directa por categoría. Un dataset por estado (${multiEstadoList}).
+- KPIGrid: una StatCard por estado con su total individual.
+- TransactionList: últimas 6-8 operaciones.
+NUNCA uses un chart de un solo dataset cuando hay múltiples estados a comparar.`
     : isMultiDataset
     ? `MODO MULTI-DATASET ACTIVO: el chart principal debe tener datasets separados por cada serie detectada.
    Usa fieldSummaries para calcular los valores por serie.`
@@ -860,27 +864,36 @@ function sanitizeUIConfig(
       }
     }
 
-    // ── Rule 2: treemap/doughnut/pie with singleCategoria and all labels = that category ──
+    // ── Rule 2: treemap/doughnut/pie with singleCategoria — always replace with bar by producto or estado ──
     if (singleCategoria && ['treemap', 'doughnut', 'pie'].includes(type)) {
-      const allSame = (labels as string[]).every(l =>
-        typeof l === 'string' && l.toLowerCase().includes((filterCategoria as string).toLowerCase().split(' ')[0])
-      );
-      if (allSame && (labels as unknown[]).length <= 2) {
-        console.log(`[sanitize] replacing ${type} (all labels = single categoria) → bar by estado`);
-        if (estadoTop.length > 0) {
-          return {
-            ...comp,
-            props: {
-              ...props,
-              type: 'bar',
-              data: {
-                labels: estadoTop.map(e => e.value),
-                datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#059669' }],
-              },
-              title: `Ventas por Estado — ${filterCategoria}`,
+      console.log(`[sanitize] replacing ${type} (singleCategoria) → bar by producto`);
+      if (productoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: productoTop.map(p => p.value),
+              datasets: [{ label: 'Ventas', data: productoTop.map(p => p.count), backgroundColor: '#059669' }],
             },
-          };
-        }
+            title: props.title ?? `Ventas por Producto — ${filterCategoria}`,
+          },
+        };
+      }
+      if (estadoTop.length > 0) {
+        return {
+          ...comp,
+          props: {
+            ...props,
+            type: 'bar',
+            data: {
+              labels: estadoTop.map(e => e.value),
+              datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#059669' }],
+            },
+            title: props.title ?? `Ventas por Estado — ${filterCategoria}`,
+          },
+        };
       }
     }
 

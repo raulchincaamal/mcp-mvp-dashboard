@@ -294,8 +294,15 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
 function scatterOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const allNumeric = data.labels.every(l => !isNaN(parseFloat(l)) && isFinite(Number(l)));
+  const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
+    legend: multi ? {
+      bottom: 4,
+      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      icon: 'circle',
+      itemGap: 16,
+    } : undefined,
     tooltip: {
       trigger: 'item',
       formatter: ((p: unknown) => {
@@ -307,7 +314,7 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
     },
-    grid: { left: 16, right: 16, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'value', axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
       axisLabel: { color: tk.textTertiary, fontSize: 11 },

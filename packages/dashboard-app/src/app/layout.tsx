@@ -23,14 +23,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" data-theme="light" suppressHydrationWarning>
+    <html lang="es" data-theme="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
           (function() {
-            var t = localStorage.getItem('mcp-theme');
-            if (t) document.documentElement.setAttribute('data-theme', t);
+            var t = localStorage.getItem('mcp-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
           })()
         `,
           }}

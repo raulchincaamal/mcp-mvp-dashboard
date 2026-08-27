@@ -314,8 +314,8 @@ function PhaseGenerating({ active }: { active: boolean }) {
 
   const heights = [42, 74, 36, 88, 54, 92, 46, 72];
   const colors  = [
-    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
-    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
+    'var(--primary)', 'var(--primary-dark)', 'var(--primary)', 'var(--primary-dark)',
+    'var(--primary)', 'var(--primary-dark)', 'var(--primary)', 'var(--primary-dark)',
   ];
   const pts     = heights.map((h, i) => [7 + i * 12.5, 94 - h * 0.86]);
   const d       = `M ${pts.map(p => p.join(' ')).join(' L ')}`;
@@ -375,19 +375,19 @@ function PhaseGenerating({ active }: { active: boolean }) {
         <svg style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="gl" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#49a4d8" />
-              <stop offset="50%" stopColor="#2d88bf" />
-              <stop offset="100%" stopColor="#49a4d8" />
+              <stop offset="0%" stopColor="#5bb8f5" />
+              <stop offset="50%" stopColor="#22d3ee" />
+              <stop offset="100%" stopColor="#5bb8f5" />
             </linearGradient>
             <linearGradient id="ga" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#49a4d8" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#49a4d8" stopOpacity="0" />
+              <stop offset="0%" stopColor="#5bb8f5" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#5bb8f5" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path ref={areaRef} d={area} fill="url(#ga)" opacity="0" />
           <path ref={lineRef} d={d} fill="none" stroke="url(#gl)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity="0" />
           {pts.map((p, i) => (
-            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#49a4d8" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #49a4d8)' }} />
+            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#5bb8f5" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #5bb8f5)' }} />
           ))}
         </svg>
       </div>

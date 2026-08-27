@@ -85,15 +85,15 @@ function normalizeFlatData(data: AuroraChartData): LegacyChartData {
 function readTokens() {
   if (typeof window === 'undefined') {
     return {
-      bg: '#282c34', surface: 'rgba(255,255,255,0.06)',
-      text: '#e6ecf4', textTertiary: 'rgba(170,185,210,0.5)',
-      border: 'rgba(200,210,230,0.1)',
+      bg: '#080c14', surface: 'rgba(255,255,255,0.048)',
+      text: '#ddeeff', textTertiary: 'rgba(140,175,230,0.52)',
+      border: 'rgba(91,184,245,0.12)',
     };
   }
   const s = getComputedStyle(document.documentElement);
   const v = (k: string, fb: string) => s.getPropertyValue(k).trim() || fb;
   return {
-    bg:           v('--bg',           '#282c34'),
+    bg:           v('--bg',           '#080c14'),
     surface:      v('--surface',      'rgba(255,255,255,0.06)'),
     text:         v('--text',         '#e6ecf4'),
     textTertiary: v('--text-tertiary','rgba(170,185,210,0.5)'),
@@ -115,23 +115,47 @@ function useThemeTokens() {
 }
 
 // ─── Palettes ──────────────────────────────────────────────
+// Diseñadas para fondos oscuros (Midnight/Slate). Cada par: [color vivo, color degradado].
+// Criterio: contraste ≥3:1 sobre --bg #080c14, separación perceptual entre series.
 
 const PALETTES: Record<string, [string, string][]> = {
+  // Aurora — paleta principal. Azul estelar → cian → violeta → verde → ámbar → rosa
   aurora: [
-    ['#c084fc', '#818cf8'], ['#67e8f9', '#60a5fa'], ['#f9a8d4', '#c084fc'],
-    ['#6ee7b7', '#34d399'], ['#fcd34d', '#fb923c'], ['#fca5a5', '#f472b6'],
+    ['#5bb8f5', '#3a9de0'],   // azul estelar (primary)
+    ['#22d3ee', '#0891b2'],   // cian eléctrico
+    ['#a78bfa', '#7c3aed'],   // violeta nebulosa
+    ['#34d399', '#059669'],   // verde esmeralda
+    ['#fbbf24', '#d97706'],   // ámbar dorado
+    ['#f472b6', '#db2777'],   // rosa cósmico
+    ['#60a5fa', '#2563eb'],   // azul medio
+    ['#4ade80', '#16a34a'],   // verde lima
   ],
+  // Neon — alta saturación para presentaciones de impacto
   neon: [
-    ['#00f5ff', '#0066ff'], ['#ff00ff', '#8800ff'], ['#00ff99', '#00ccff'],
-    ['#ffff00', '#ff8800'], ['#ff0088', '#ff00ff'], ['#88ff00', '#00ffaa'],
+    ['#00e5ff', '#0066cc'],
+    ['#d946ef', '#7c3aed'],
+    ['#00ff94', '#00b36b'],
+    ['#ffea00', '#ff8800'],
+    ['#ff3d71', '#cc0044'],
+    ['#69ffb4', '#00cc77'],
   ],
+  // Fire — paleta cálida para métricas de riesgo/alerta
   fire: [
-    ['#fde68a', '#f97316'], ['#fbbf24', '#ef4444'], ['#fef08a', '#fbbf24'],
-    ['#fca5a5', '#dc2626'], ['#fed7aa', '#f97316'], ['#fef9c3', '#fbbf24'],
+    ['#fde68a', '#f97316'],
+    ['#fbbf24', '#ef4444'],
+    ['#fef08a', '#fbbf24'],
+    ['#fca5a5', '#dc2626'],
+    ['#fed7aa', '#f97316'],
+    ['#fef9c3', '#fbbf24'],
   ],
+  // Ocean — paleta fría para métricas de volumen/liquidez
   ocean: [
-    ['#a5f3fc', '#38bdf8'], ['#7dd3fc', '#0ea5e9'], ['#bae6fd', '#06b6d4'],
-    ['#e0f2fe', '#38bdf8'], ['#67e8f9', '#0284c7'], ['#cffafe', '#0e7490'],
+    ['#7dd3fc', '#0284c7'],
+    ['#a5f3fc', '#0891b2'],
+    ['#bae6fd', '#0369a1'],
+    ['#67e8f9', '#0e7490'],
+    ['#e0f2fe', '#0284c7'],
+    ['#cffafe', '#155e75'],
   ],
 };
 

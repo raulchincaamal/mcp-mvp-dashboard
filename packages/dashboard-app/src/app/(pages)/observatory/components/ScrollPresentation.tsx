@@ -273,7 +273,9 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 // GRID MODE
 // ═══════════════════════════════════════════════════════════════════════════
 
-const ACCENT_COLORS = ['#7c6fff','#06b6d4','#34d399','#f472b6','#fb923c','#a78bfa','#38bdf8','#4ade80'];
+// Paleta de acentos para cards del grid — coherente con aurora palette
+// Orden: azul estelar, cian, violeta, verde, ámbar, azul medio, rosa, lima
+const ACCENT_COLORS = ['#5bb8f5','#22d3ee','#a78bfa','#34d399','#fbbf24','#60a5fa','#f472b6','#4ade80'];
 const GAP = 14;
 
 function renderChart(insight: InsightData, height: number, bare = false, preview = false) {
@@ -290,7 +292,7 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
   }
 
   if (chartType === 'progress' && auroraData) {
-    const PROGRESS_COLORS = ['#0CF49B','#60a5fa','#fb923c','#f472b6','#c084fc','#67e8f9','#fcd34d','#818cf8'];
+    const PROGRESS_COLORS = ['#10d97e','#5bb8f5','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fde68a','#818cf8'];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
         {auroraData.labels.map((label, i) => {

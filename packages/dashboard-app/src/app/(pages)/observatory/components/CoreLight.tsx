@@ -87,13 +87,13 @@ const CoreLight = memo(function CoreLight({ state, triggered, onTriggerComplete 
   const handleMouseEnter = () => {
     gsap.to(containerRef.current, { scale: baseScale.current * 1.2, duration: 0.7, ease: 'power2.inOut', overwrite: true });
     gsap.to(hoverGlowRef.current, { opacity: 1, scale: 1.4, duration: 0.7, ease: 'power2.inOut' });
-    gsap.to(innerRef.current,     { boxShadow: '0 0 50px rgba(120,160,255,1), 0 0 100px rgba(80,120,255,0.65)', duration: 0.6, ease: 'power2.inOut' });
+    gsap.to(innerRef.current,     { boxShadow: '0 0 50px rgba(91,184,245,1), 0 0 100px rgba(58,157,224,0.65)', duration: 0.6, ease: 'power2.inOut' });
   };
 
   const handleMouseLeave = () => {
     gsap.to(containerRef.current, { scale: baseScale.current, duration: 0.8, ease: 'power2.inOut', overwrite: true });
     gsap.to(hoverGlowRef.current, { opacity: 0, scale: 1, duration: 0.8, ease: 'power2.inOut' });
-    gsap.to(innerRef.current,     { boxShadow: '0 0 20px rgba(100,140,255,0.9), 0 0 40px rgba(80,120,255,0.5)', duration: 0.7, ease: 'power2.inOut' });
+    gsap.to(innerRef.current,     { boxShadow: '0 0 20px rgba(91,184,245,0.9), 0 0 40px rgba(58,157,224,0.5)', duration: 0.7, ease: 'power2.inOut' });
   };
 
   return (
@@ -109,7 +109,7 @@ const CoreLight = memo(function CoreLight({ state, triggered, onTriggerComplete 
           position: 'absolute',
           width: 160, height: 160,
           borderRadius: '50%',
-          border: `1.5px solid rgba(${i === 0 ? '180,200,255' : i === 1 ? '120,160,255' : '80,120,255'},0.7)`,
+          border: `1.5px solid rgba(${i === 0 ? '91,184,245' : i === 1 ? '58,157,224' : '34,211,238'},0.75)`,
           opacity: 0,
           pointerEvents: 'none',
         }} />
@@ -120,35 +120,35 @@ const CoreLight = memo(function CoreLight({ state, triggered, onTriggerComplete 
           position: 'absolute',
           width: 100 + i * 50, height: 100 + i * 50,
           borderRadius: '50%',
-          border: '1px solid rgba(100,140,255,0.6)',
-          opacity: 0.18 - i * 0.04,
+          border: '1px solid rgba(91,184,245,0.5)',
+          opacity: 0.16 - i * 0.04,
           animation: `coreSpin ${15 + i * 8}s linear infinite ${i % 2 ? 'reverse' : ''}`,
         }} />
       ))}
 
       <div style={{
         position: 'absolute', width: 220, height: 220, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(80,120,255,0.18) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(91,184,245,0.16) 0%, transparent 70%)',
         filter: 'blur(25px)', opacity: cfg.glow * 0.7,
       }} />
 
       <div ref={hoverGlowRef} style={{
         position: 'absolute', width: 260, height: 260, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(120,160,255,0.28) 0%, rgba(80,100,255,0.12) 40%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(91,184,245,0.26) 0%, rgba(34,211,238,0.10) 40%, transparent 70%)',
         filter: 'blur(30px)', opacity: 0, pointerEvents: 'none',
       }} />
 
       <div style={{
         position: 'absolute', width: 110, height: 110, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(100,140,255,0.5) 0%, transparent 60%)',
+        background: 'radial-gradient(circle, rgba(91,184,245,0.45) 0%, transparent 60%)',
         filter: 'blur(12px)', opacity: cfg.glow * 0.35,
       }} />
 
       <div ref={innerRef} style={{
         width: 36, height: 36, borderRadius: '50%',
-        background: 'radial-gradient(circle, #fff 0%, rgba(120,160,255,1) 40%, transparent 100%)',
-        boxShadow: '0 0 20px rgba(100,140,255,0.9), 0 0 40px rgba(80,120,255,0.5)',
-        opacity: 0.9,
+        background: 'radial-gradient(circle, #fff 0%, rgba(91,184,245,1) 40%, transparent 100%)',
+        boxShadow: '0 0 20px rgba(91,184,245,0.9), 0 0 40px rgba(58,157,224,0.5)',
+        opacity: 0.92,
       }} />
 
       <style>{`

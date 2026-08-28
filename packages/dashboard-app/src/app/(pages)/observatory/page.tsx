@@ -137,7 +137,7 @@ export default function ObservatoryPage() {
     const tl = gsap.timeline();
     tl.to(el, { left: 0, top: 0, width: '100vw', height: '100vh', borderRadius: 0, duration: 0.55, ease: 'power3.inOut' });
     tl.fromTo(buildingRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power2.out' }, '-=0.1');
-    tl.call(() => runMockFlow(zoomQuery, activeUserIdRef.current), [], 0.2);
+    tl.call(() => runMockFlow(zoomQuery, activeUserIdRef.current, pendingFiltersRef.current ?? undefined), [], 0.2);
   }, [zoomQuery]);
 
   // State transitions
@@ -184,8 +184,11 @@ export default function ObservatoryPage() {
     gsap.to(buildingRef.current, { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' });
   }, [ctx.error]);
 
-  const triggerZoom = useCallback((query: string, rect: DOMRect, userId?: string) => {
+  const pendingFiltersRef = useRef<Record<string, unknown> | null>(null);
+
+  const triggerZoom = useCallback((query: string, rect: DOMRect, userId?: string, filters?: Record<string, unknown>) => {
     if (userId) activeUserIdRef.current = userId;
+    pendingFiltersRef.current = filters ?? null;
     setShowPresentation(false);
     setZoomQuery(null);
     pendingRect.current = rect;
@@ -216,8 +219,28 @@ export default function ObservatoryPage() {
     return () => connections.forEach(es => es.close());
   }, [triggerZoom]);
 
+  // Mapa de categorías a intents enriquecidos con contexto específico
+  const CATEGORY_INTENTS: Record<string, string> = {
+    'Motos': 'Dashboard completo de ventas de Motos: productos más vendidos, distribución por estado, evolución mensual, estatus de créditos y análisis de cartera',
+    'Celulares': 'Dashboard completo de ventas de Celulares: modelos más vendidos, distribución por estado, tendencia mensual, estatus de créditos y canales de venta',
+    'Bicicletas Eléctricas': 'Dashboard completo de ventas de Bicicletas Eléctricas: productos top, distribución geográfica, evolución mensual y salud crediticia',
+    'Pantallas/TV': 'Dashboard completo de ventas de Pantallas y TV: modelos más vendidos, distribución por estado, tendencia mensual y estatus de créditos',
+    'Audio': 'Dashboard completo de ventas de Audio: productos más vendidos, distribución por estado, evolución mensual y análisis de créditos',
+    'Tablets': 'Dashboard completo de ventas de Tablets: modelos top, distribución geográfica, tendencia mensual y estatus de cartera',
+    'Consolas': 'Dashboard completo de ventas de Consolas: productos más vendidos, distribución por estado, evolución mensual y análisis crediticio',
+    'Climatización': 'Dashboard completo de ventas de Climatización: productos top, distribución por estado, tendencia mensual y salud de créditos',
+  };
+
   const handleCategoryClick = useCallback((label: string, rect: DOMRect) => {
-    triggerZoom(`Resumen de ${label}`, rect);
+    const intent = CATEGORY_INTENTS[label] ?? `Dashboard completo de ventas de ${label}: productos más vendidos, distribución por estado, evolución mensual y estatus de créditos`;
+    // Pasar filtro de categoría pre-construido para garantizar que llegue aunque Bedrock falle
+    const categoryMap: Record<string, string> = {
+      'Bicicletas Eléctricas': 'Bicicletas Eléctricas',
+      'Pantallas/TV': 'Pantallas/TV',
+      'Climatización': 'Climatización',
+    };
+    const categoriaValue = categoryMap[label] ?? label;
+    triggerZoom(intent, rect, undefined, { categoria: categoriaValue });
   }, [triggerZoom]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {

@@ -530,7 +530,7 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 export const ALEXA_USER_ID = 'alexa-display';
 export const ENV_USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? null;
 
-export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID) {
+export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extraFilters?: Record<string, unknown>) {
   const keywords = rawQuery
     .toLowerCase()
     .replace(/[^a-záéíóúüñ\s]/gi, '')
@@ -546,10 +546,12 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID) {
 
   let uiConfig: unknown;
   try {
+    const body: Record<string, unknown> = { dataset: 'ventas-credito', intent: rawQuery, userId, limit: 500 };
+    if (extraFilters) body.filters = extraFilters;
     const res = await fetch(`${API_URL}/api/generate-ui`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery, userId }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const body = await res.text();

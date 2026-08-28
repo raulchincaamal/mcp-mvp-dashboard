@@ -224,8 +224,10 @@ export async function orchestrate(
     }
 
     // Default: if no fecha_venta filter, apply last 3 months relative to dataset max date
+    // Exception: category dashboard intents should use full dataset for richer analysis
+    const isCategoryDashboard = /dashboard completo de/i.test(params.intent) && parsedIntent.filters.categoria;
     const isLastDayIntent = /ultimo\s*d[ií]a|ayer|hoy|last\s*day/i.test(params.intent);
-    if (!filters.fecha_venta && !isLastDayIntent && parsedIntent.groupBy !== 'fecha_venta') {
+    if (!filters.fecha_venta && !isLastDayIntent && parsedIntent.groupBy !== 'fecha_venta' && !isCategoryDashboard) {
       // Probe dataset max date so window is always relative to actual data, not system clock
       const probeResult = (await gcpClient.callTool('query_data', { dataset, limit: 50 })) as { records?: Record<string, unknown>[] };
       const probeDates = (probeResult.records ?? [])
@@ -238,7 +240,7 @@ export async function orchestrate(
       console.log(`[orchestrator] no date filter → last 3 months from dataset max ${fmt(maxDate)}: ${JSON.stringify(filters.fecha_venta)}`);
     }
 
-    const limit = params.limit ?? parsedIntent.limit ?? 200;
+    const limit = params.limit ?? parsedIntent.limit ?? (isCategoryDashboard ? 500 : 200);
 
     console.log(
       `[orchestrator] querying data — filters: ${JSON.stringify(filters)}, limit: ${limit}`,

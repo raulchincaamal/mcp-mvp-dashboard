@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
@@ -349,7 +349,7 @@ function PhaseGenerating({ active }: { active: boolean }) {
       tl.fromTo(el, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(3)' }, 1.7 + i * 0.07);
     });
 
-    return () => tl.kill();
+    return () => { tl.kill(); };
   }, [active]);
 
   return (
@@ -415,7 +415,7 @@ function PhaseReady({ active }: { active: boolean }) {
     tl.to(circleRef.current, { strokeDashoffset: 0, duration: 0.6, ease: 'power2.out' });
     tl.to(checkRef.current,  { strokeDashoffset: 0, duration: 0.4, ease: 'power2.out' }, '-=0.1');
 
-    return () => tl.kill();
+    return () => { tl.kill(); };
   }, [active]);
 
   return (

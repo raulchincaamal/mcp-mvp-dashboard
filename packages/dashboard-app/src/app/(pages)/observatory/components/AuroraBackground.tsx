@@ -2,17 +2,25 @@
 
 import React from 'react';
 
-const NEBULAS = [
-  // Azul estelar principal — arriba centro
-  { w: '70%', h: '70%', top: '-15%', left: '10%',   color: 'rgba(91,184,245,0.09)',  anim: 'aurora-drift-1 22s ease-in-out infinite',          blur: 52 },
-  // Cian eléctrico — derecha media
-  { w: '55%', h: '55%', top: '18%',  right: '-8%',  color: 'rgba(34,211,238,0.07)',  anim: 'aurora-drift-2 26s ease-in-out infinite',          blur: 56 },
-  // Violeta nebulosa — abajo izquierda
-  { w: '52%', h: '52%', bottom: '-8%', left: '-6%', color: 'rgba(167,139,250,0.08)', anim: 'aurora-drift-3 30s ease-in-out infinite',          blur: 48 },
-  // Rosa cósmico — abajo derecha, muy sutil
-  { w: '38%', h: '38%', bottom: '8%', right: '8%',  color: 'rgba(244,114,182,0.05)', anim: 'aurora-drift-1 36s ease-in-out infinite reverse',  blur: 60 },
-  // Azul profundo — centro, capa base
-  { w: '45%', h: '45%', top: '30%',  left: '28%',   color: 'rgba(59,130,246,0.05)',  anim: 'aurora-drift-2 40s ease-in-out infinite reverse',  blur: 64 },
+interface Nebula {
+  w: string; h: string;
+  top?: string; bottom?: string; left?: string; right?: string;
+  color: string; anim: string; blur: number;
+}
+
+const NEBULAS: Nebula[] = [
+  // Azul estelar principal — arriba centro, movimiento amplio
+  { w: '75%', h: '75%', top: '-18%', left: '8%',    color: 'rgba(91,184,245,0.11)',  anim: 'aurora-drift-1 18s ease-in-out infinite',         blur: 50 },
+  // Cian eléctrico — derecha, movimiento rápido
+  { w: '58%', h: '58%', top: '15%',  right: '-10%', color: 'rgba(0,212,168,0.08)',   anim: 'aurora-drift-2 14s ease-in-out infinite',         blur: 54 },
+  // Violeta nebulosa — abajo izquierda, lento y amplio
+  { w: '56%', h: '56%', bottom: '-10%', left: '-8%',color: 'rgba(167,139,250,0.10)', anim: 'aurora-drift-3 22s ease-in-out infinite',         blur: 46 },
+  // Rosa cósmico — abajo derecha, movimiento medio
+  { w: '42%', h: '42%', bottom: '5%', right: '5%',  color: 'rgba(244,114,182,0.07)', anim: 'aurora-drift-4 16s ease-in-out infinite',         blur: 58 },
+  // Azul profundo — centro, muy lento, capa base
+  { w: '50%', h: '50%', top: '28%',  left: '25%',   color: 'rgba(59,130,246,0.07)',  anim: 'aurora-drift-1 32s ease-in-out infinite reverse', blur: 62 },
+  // Cian secundario — arriba derecha, rápido
+  { w: '35%', h: '35%', top: '-5%',  right: '15%',  color: 'rgba(34,211,238,0.06)',  anim: 'aurora-drift-2 12s ease-in-out infinite reverse', blur: 48 },
 ];
 
 const PARTICLES = [
@@ -36,7 +44,7 @@ const AuroraBackground = React.memo(function AuroraBackground({ position = 'abso
         <div key={i} style={{
           position: 'absolute',
           width: n.w, height: n.h,
-          top: n.top, left: (n as Record<string,string>).left, right: (n as Record<string,string>).right, bottom: (n as Record<string,string>).bottom,
+          top: n.top, left: n.left, right: n.right, bottom: n.bottom,
           borderRadius: '50%',
           background: `radial-gradient(ellipse, ${n.color} 0%, transparent 70%)`,
           animation: n.anim,

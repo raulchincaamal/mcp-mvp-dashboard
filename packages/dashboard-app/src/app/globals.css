@@ -289,21 +289,31 @@ input[type="number"] {
 /* ── Aurora background animations ───────────────────────────────────────── */
 
 @keyframes aurora-drift-1 {
-  0%   { transform: translate(0%, 0%)   scale(1); }
-  33%  { transform: translate(4%, -6%)  scale(1.08); }
-  66%  { transform: translate(-5%, 4%)  scale(0.95); }
-  100% { transform: translate(0%, 0%)   scale(1); }
+  0%   { transform: translate(0%, 0%)    scale(1); }
+  25%  { transform: translate(6%, -9%)   scale(1.10); }
+  50%  { transform: translate(-4%, 5%)   scale(0.93); }
+  75%  { transform: translate(3%, -3%)   scale(1.05); }
+  100% { transform: translate(0%, 0%)    scale(1); }
 }
 @keyframes aurora-drift-2 {
-  0%   { transform: translate(0%, 0%)   scale(1); }
-  40%  { transform: translate(-6%, 5%)  scale(1.1); }
-  70%  { transform: translate(5%, -3%)  scale(0.92); }
-  100% { transform: translate(0%, 0%)   scale(1); }
+  0%   { transform: translate(0%, 0%)    scale(1); }
+  30%  { transform: translate(-8%, 7%)   scale(1.12); }
+  60%  { transform: translate(7%, -5%)   scale(0.90); }
+  80%  { transform: translate(-3%, 2%)   scale(1.04); }
+  100% { transform: translate(0%, 0%)    scale(1); }
 }
 @keyframes aurora-drift-3 {
-  0%   { transform: translate(0%, 0%)   scale(1); }
-  50%  { transform: translate(3%, 7%)   scale(1.06); }
-  100% { transform: translate(0%, 0%)   scale(1); }
+  0%   { transform: translate(0%, 0%)    scale(1); }
+  35%  { transform: translate(5%, 10%)   scale(1.08); }
+  70%  { transform: translate(-6%, -4%)  scale(0.94); }
+  100% { transform: translate(0%, 0%)    scale(1); }
+}
+@keyframes aurora-drift-4 {
+  0%   { transform: translate(0%, 0%)    scale(1); }
+  20%  { transform: translate(-7%, -8%)  scale(1.09); }
+  55%  { transform: translate(8%, 6%)    scale(0.92); }
+  80%  { transform: translate(-2%, -3%)  scale(1.06); }
+  100% { transform: translate(0%, 0%)    scale(1); }
 }
 @keyframes pp-float {
   0%   { transform: translateY(0px) translateX(0px); opacity: 0; }

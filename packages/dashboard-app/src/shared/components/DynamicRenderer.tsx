@@ -1190,7 +1190,7 @@ function renderChart(props: Record<string, unknown>, index: number = 0) {
   if (type === 'map') {
     const mapData = (data?.labels ?? []).map((name: string, i: number) => ({
       name,
-      value: (data.datasets?.[0]?.data?.[i] as number) ?? 0,
+      value: ((data.datasets?.[0]?.data as unknown as number[])?.[i] as number) ?? 0,
     }));
     return (
       <MexicoMapChart

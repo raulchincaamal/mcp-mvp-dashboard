@@ -119,18 +119,20 @@ function useThemeTokens() {
 // Criterio: contraste ≥3:1 sobre --bg #080c14, separación perceptual entre series.
 
 const PALETTES: Record<string, [string, string][]> = {
-  // Aurora — paleta principal. Azul estelar → cian → violeta → verde → ámbar → rosa
+  // Stellar Financial — optimizada para dashboards ejecutivos sobre fondo midnight.
+  // Orden por separacion perceptual maxima: cada serie es distinguible a distancia.
+  // Par: [color vivo para lineas/puntos/bordes, tono oscuro para gradientes/rellenos]
   aurora: [
-    ['#5bb8f5', '#3a9de0'],   // azul estelar (primary)
-    ['#22d3ee', '#0891b2'],   // cian eléctrico
-    ['#a78bfa', '#7c3aed'],   // violeta nebulosa
-    ['#34d399', '#059669'],   // verde esmeralda
-    ['#fbbf24', '#d97706'],   // ámbar dorado
-    ['#f472b6', '#db2777'],   // rosa cósmico
-    ['#60a5fa', '#2563eb'],   // azul medio
-    ['#4ade80', '#16a34a'],   // verde lima
+    ['#5bb8f5', '#2d7fc4'],   // 1. azul estelar    — serie principal, confianza
+    ['#00d4a8', '#00957a'],   // 2. teal            — complementario 180deg, max contraste vs azul
+    ['#a78bfa', '#6d3fd4'],   // 3. violeta         — analogo frio, profundidad
+    ['#f5c842', '#c49a0a'],   // 4. ambar dorado    — primer calido, alertas y KPIs
+    ['#f472b6', '#c0186e'],   // 5. rosa cosmico    — quinto elemento
+    ['#4ade80', '#16a34a'],   // 6. verde lima      — positivo secundario
+    ['#fb923c', '#c45a0a'],   // 7. naranja         — calido secundario
+    ['#38bdf8', '#0369a1'],   // 8. celeste         — analogo del primario
   ],
-  // Neon — alta saturación para presentaciones de impacto
+  // Neon — alta saturacion para presentaciones de impacto
   neon: [
     ['#00e5ff', '#0066cc'],
     ['#d946ef', '#7c3aed'],
@@ -139,7 +141,7 @@ const PALETTES: Record<string, [string, string][]> = {
     ['#ff3d71', '#cc0044'],
     ['#69ffb4', '#00cc77'],
   ],
-  // Fire — paleta cálida para métricas de riesgo/alerta
+  // Fire — paleta calida para metricas de riesgo/alerta
   fire: [
     ['#fde68a', '#f97316'],
     ['#fbbf24', '#ef4444'],
@@ -148,7 +150,7 @@ const PALETTES: Record<string, [string, string][]> = {
     ['#fed7aa', '#f97316'],
     ['#fef9c3', '#fbbf24'],
   ],
-  // Ocean — paleta fría para métricas de volumen/liquidez
+  // Ocean — paleta fria para metricas de volumen/liquidez
   ocean: [
     ['#7dd3fc', '#0284c7'],
     ['#a5f3fc', '#0891b2'],

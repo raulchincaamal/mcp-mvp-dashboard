@@ -238,7 +238,7 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               })}
             </div>
           )}
-          {auroraData && chartType === 'map' && (
+          {auroraData && (chartType as string) === 'map' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <MexicoMapChart
                 data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
@@ -248,17 +248,17 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               />
             </div>
           )}
-          {auroraData && chartType === 'progress' && (
+          {auroraData && (chartType as string) === 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8, overflowY: 'auto' }}>
               {renderChart(insight, 340, true)}
             </div>
           )}
-          {auroraData && chartType !== 'map' && chartType !== 'progress' && (
+          {auroraData && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
             </div>
           )}
-          {!auroraData && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (
+          {!auroraData && insight.chartOptions && !!(insight.chartOptions as Record<string,unknown>).series && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
             </div>
@@ -278,12 +278,12 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 const ACCENT_COLORS = ['#5bb8f5','#22d3ee','#a78bfa','#34d399','#fbbf24','#60a5fa','#f472b6','#4ade80'];
 const GAP = 14;
 
-function renderChart(insight: InsightData, height: number, bare = false, preview = false) {
+function renderChart(insight: InsightData, height: number, bare = false, preview = false): React.ReactNode {
   const opts = insight.chartOptions as Record<string, unknown>;
   const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
   const chartType = (opts._auroraType as string) ?? 'bar';
 
-  if (chartType === 'map' && auroraData) {
+  if ((chartType as string) === 'map' && auroraData) {
     const mapData = auroraData.labels.map((name, i) => ({
       name,
       value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0,
@@ -291,7 +291,7 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
     return <MexicoMapChart data={mapData} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
   }
 
-  if (chartType === 'progress' && auroraData) {
+  if ((chartType as string) === 'progress' && auroraData) {
     const PROGRESS_COLORS = ['#10d97e','#5bb8f5','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fde68a','#818cf8'];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
@@ -386,18 +386,18 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
 
   const CARD = (extra?: React.CSSProperties): React.CSSProperties => ({
     borderRadius: 20,
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+    background: 'rgba(255,255,255,0.065)',
+    border: '1px solid rgba(255,255,255,0.13)',
+    boxShadow: '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)',
     overflow: 'hidden',
-    transition: 'border-color 0.2s ease',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
     ...extra,
   });
 
   const accentLine = (color: string) => ({
     position: 'absolute' as const,
-    top: 0, left: '15%', right: '15%', height: 1,
-    background: `linear-gradient(90deg, transparent, ${color}66, transparent)`,
+    top: 0, left: '10%', right: '10%', height: 1,
+    background: `linear-gradient(90deg, transparent, ${color}99, transparent)`,
   });
 
   const kpisLeft = kpis.slice(0, 4); // max 4 KPIs en izquierda (2 filas)
@@ -416,7 +416,7 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
 
         {/* Header */}
         <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
-          <div style={{ position: 'absolute', top: 0, left: '15%', right: '15%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)66, transparent)' }} />
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)88, transparent)' }} />
           <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg><span>New</span></button>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 5px', opacity: 0.8 }}>Executive Intelligence</p>
@@ -429,13 +429,13 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           const accent = ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.03, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.03, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${accent}22`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
               style={{ ...CARD({ padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 6px', opacity: 0.9 }}>{ins.title}</p>
-              <p style={{ fontSize: 28, fontWeight: 800, color: 'rgba(255,255,255,0.92)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
-              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', margin: '4px 0 0' }}>{ins.metricLabel}</p>}
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 6px', opacity: 1 }}>{ins.title}</p>
+              <p style={{ fontSize: 28, fontWeight: 800, color: 'rgba(255,255,255,0.96)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
+              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.38)', margin: '4px 0 0' }}>{ins.metricLabel}</p>}
             </div>
           );
         })}
@@ -445,11 +445,11 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           const accent = ACCENT_COLORS[(i + 4) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.01, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}33`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.01, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${accent}18`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
               style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0, opacity: 0.9 }}>{ins.title}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0, opacity: 1 }}>{ins.title}</p>
               <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview /></div>
             </div>
           );
@@ -462,12 +462,12 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         {/* Primary chart */}
         {primary && (
           <div data-animate ref={el => { cardRefs.current[insights.indexOf(primary)] = el; }} onClick={() => onExpand(primary)}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.005, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}33`; }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.005, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${ACCENT_COLORS[0]}18`; }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
             style={{ ...CARD({ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
             <div style={accentLine(ACCENT_COLORS[0])} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0, opacity: 0.9 }}>{primary.title}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0, opacity: 1 }}>{primary.title}</p>
               <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>click to expand</span>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={primary} /></div>
@@ -536,7 +536,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         </div>
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
-          {auroraData && !isList && chartType === 'map' && (
+          {auroraData && !isList && (chartType as string) === 'map' && (
             <MexicoMapChart
               data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
               height={340}
@@ -544,10 +544,10 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
               bare
             />
           )}
-          {auroraData && !isList && chartType !== 'map' && (
+          {auroraData && !isList && (chartType as string) !== 'map' && (
             <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={chartType === 'heatmap' ? Math.max(400, (auroraData.datasets?.length ?? 4) * 40 + 80) : 340} />
           )}
-          {!auroraData && !isList && insight.chartOptions && (insight.chartOptions as Record<string,unknown>).series && (
+          {!auroraData && !isList && insight.chartOptions && !!(insight.chartOptions as Record<string,unknown>).series && (
             <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
           )}
           {isList && insight.listItems && (

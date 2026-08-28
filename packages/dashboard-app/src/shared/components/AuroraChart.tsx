@@ -85,19 +85,28 @@ function normalizeFlatData(data: AuroraChartData): LegacyChartData {
 function readTokens() {
   if (typeof window === 'undefined') {
     return {
-      bg: '#080c14', surface: 'rgba(255,255,255,0.048)',
-      text: '#ddeeff', textTertiary: 'rgba(140,175,230,0.52)',
-      border: 'rgba(91,184,245,0.12)',
+      bg: '#060a10', surface: 'rgba(10,20,40,0.92)',
+      text: '#e4f0ff', textTertiary: 'rgba(120,165,220,0.50)',
+      border: 'rgba(0,200,240,0.10)',
+      axisLine:  'rgba(255,255,255,0.18)',
+      splitLine: 'rgba(255,255,255,0.07)',
+      axisLabel: 'rgba(200,220,255,0.65)',
+      tooltipBg: 'rgba(8,16,32,0.95)',
+      tooltipBorder: 'rgba(0,200,240,0.30)',
     };
   }
-  const s = getComputedStyle(document.documentElement);
-  const v = (k: string, fb: string) => s.getPropertyValue(k).trim() || fb;
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   return {
-    bg:           v('--bg',           '#080c14'),
-    surface:      v('--surface',      'rgba(255,255,255,0.06)'),
-    text:         v('--text',         '#e6ecf4'),
-    textTertiary: v('--text-tertiary','rgba(170,185,210,0.5)'),
-    border:       v('--border-color', 'rgba(200,210,230,0.1)'),
+    bg:           isDark ? '#060a10' : '#edf1f7',
+    surface:      isDark ? 'rgba(255,255,255,0.042)' : 'rgba(255,255,255,0.68)',
+    text:         isDark ? '#e4f0ff' : '#08142a',
+    textTertiary: isDark ? 'rgba(120,165,220,0.50)' : 'rgba(68,88,120,0.80)',
+    border:       isDark ? 'rgba(0,200,240,0.10)' : 'rgba(60,90,150,0.16)',
+    axisLine:     isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,20,60,0.28)',
+    splitLine:    isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,20,60,0.10)',
+    axisLabel:    isDark ? 'rgba(200,220,255,0.70)' : 'rgba(10,30,80,0.65)',
+    tooltipBg:    isDark ? 'rgba(6,12,24,0.97)'    : 'rgba(255,255,255,0.97)',
+    tooltipBorder:isDark ? 'rgba(0,200,240,0.40)'  : 'rgba(0,100,160,0.35)',
   };
 }
 
@@ -119,18 +128,18 @@ function useThemeTokens() {
 // Criterio: contraste ≥3:1 sobre --bg #080c14, separación perceptual entre series.
 
 const PALETTES: Record<string, [string, string][]> = {
-  // Stellar Financial — optimizada para dashboards ejecutivos sobre fondo midnight.
-  // Orden por separacion perceptual maxima: cada serie es distinguible a distancia.
-  // Par: [color vivo para lineas/puntos/bordes, tono oscuro para gradientes/rellenos]
+  // Terminal Financiero — Bloomberg/Palantir style para dashboards ejecutivos.
+  // 3 colores base (cian, verde, ámbar) + variaciones frías.
+  // Contraste ≥3:1 sobre #060a10. Separación perceptual máxima entre series.
   aurora: [
-    ['#5bb8f5', '#2d7fc4'],   // 1. azul estelar    — serie principal, confianza
-    ['#00d4a8', '#00957a'],   // 2. teal            — complementario 180deg, max contraste vs azul
-    ['#a78bfa', '#6d3fd4'],   // 3. violeta         — analogo frio, profundidad
-    ['#f5c842', '#c49a0a'],   // 4. ambar dorado    — primer calido, alertas y KPIs
-    ['#f472b6', '#c0186e'],   // 5. rosa cosmico    — quinto elemento
-    ['#4ade80', '#16a34a'],   // 6. verde lima      — positivo secundario
-    ['#fb923c', '#c45a0a'],   // 7. naranja         — calido secundario
-    ['#38bdf8', '#0369a1'],   // 8. celeste         — analogo del primario
+    ['#00c8f0', '#0077a8'],   // 1. cian corporativo   — serie principal
+    ['#00d97e', '#00915a'],   // 2. verde crecimiento  — positivo
+    ['#f5a623', '#b87200'],   // 3. ámbar alerta       — KPI crítico
+    ['#818cf8', '#4338ca'],   // 4. índigo             — secundario
+    ['#38bdf8', '#0369a1'],   // 5. celeste            — variación cian
+    ['#34d399', '#059669'],   // 6. esmeralda          — variación verde
+    ['#fb923c', '#c2410c'],   // 7. naranja            — acento cálido
+    ['#a78bfa', '#6d28d9'],   // 8. violeta            — octavo elemento
   ],
   // Neon — alta saturacion para presentaciones de impacto
   neon: [
@@ -188,27 +197,27 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis' as const,
-      axisPointer: { type: 'shadow' as const, shadowStyle: { color: tk.border } },
-      backgroundColor: tk.surface,
-      borderColor: tk.border,
+      axisPointer: { type: 'shadow' as const, shadowStyle: { color: tk.splitLine } },
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
       borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
-    legend: multi ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 }, icon: 'roundRect' } : undefined,
+    legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels,
-      axisLine: { lineStyle: { color: tk.border } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0,
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0,
         formatter: (v: string) => v.length > 14 ? v.slice(0, 13) + '…' : v,
       },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit' },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => ({
       name: ds.label ?? '',
@@ -233,21 +242,21 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
-    legend: multi ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 } } : undefined,
+    legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
-      axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
+      axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit' },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => {
       const [top, bot] = palette[di % palette.length];
@@ -280,13 +289,13 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item', formatter: '{b}: {c} ({d}%)',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     legend: {
       orient: 'horizontal', bottom: 4,
-      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
       icon: 'circle',
     },
     series: [{
@@ -325,7 +334,7 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
     backgroundColor: 'transparent',
     legend: multi ? {
       bottom: 4,
-      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
       icon: 'circle',
       itemGap: 16,
     } : undefined,
@@ -342,15 +351,15 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
     },
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
-      type: 'value', axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      type: 'value', axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
       name: allNumeric ? '' : 'X',
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => {
       const [top] = palette[di % palette.length];
@@ -382,9 +391,9 @@ function radarOption(rawData: AuroraChartData, title: string | undefined, palett
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     legend: multi ? {
       orient: 'vertical',
@@ -398,10 +407,10 @@ function radarOption(rawData: AuroraChartData, title: string | undefined, palett
       center: multi ? ['36%', '50%'] : ['50%', '50%'],
       radius: '60%',
       indicator: data.labels.map(l => ({ name: l.length > 12 ? l.slice(0, 11) + '…' : l, max: maxVal })),
-      axisName: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border } },
+      axisName: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine } },
       splitArea: { show: false },
-      axisLine: { lineStyle: { color: tk.border } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       shape: 'polygon',
     },
     series: [{
@@ -434,9 +443,9 @@ function funnelOption(rawData: AuroraChartData, title: string | undefined, palet
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item', formatter: '{b}: {c}',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     series: [{
       type: 'funnel' as const,
@@ -485,7 +494,7 @@ function gaugeOption(rawData: AuroraChartData, title: string | undefined, palett
       pointer: { itemStyle: { color: top }, length: '65%', width: 5 },
       axisTick: { show: false },
       splitLine: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, distance: 20 },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, distance: 20 },
       detail: {
         valueAnimation: true,
         formatter: '{value}%',
@@ -525,21 +534,21 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
         const yLabel = yLabels[v[1]] ?? v[1];
         return `<b>${xLabel} / ${yLabel}</b><br/>Valor: <b>${v[2]}</b>`;
       }) as never,
-      backgroundColor: 'rgba(15,23,42,0.92)',
-      borderColor: 'rgba(59,130,246,0.4)',
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
       borderWidth: 1,
-      textStyle: { color: '#e2e8f0', fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;padding:10px 14px;',
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;padding:10px 14px;',
     },
     grid: { left: 80, right: 20, top: 12, bottom: 56, containLabel: false },
     xAxis: {
       type: 'category',
       data: data.labels,
-      splitArea: { show: true, areaStyle: { color: ['rgba(30,64,175,0.04)', 'rgba(30,64,175,0.09)'] } },
-      axisLine: { lineStyle: { color: 'rgba(59,130,246,0.2)' } },
+      splitArea: { show: true, areaStyle: { color: ['rgba(0,200,240,0.03)', 'rgba(0,200,240,0.06)'] } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       axisTick: { show: false },
       axisLabel: {
-        color: tk.textTertiary, fontSize: 10,
+        color: tk.axisLabel, fontSize: 10,
         rotate: data.labels.length > 12 ? 40 : 0,
         interval: data.labels.length > 20 ? 1 : 0,
       },
@@ -547,10 +556,10 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
     yAxis: {
       type: 'category',
       data: yLabels,
-      splitArea: { show: true, areaStyle: { color: ['rgba(30,64,175,0.04)', 'rgba(30,64,175,0.09)'] } },
-      axisLine: { lineStyle: { color: 'rgba(59,130,246,0.2)' } },
+      splitArea: { show: true, areaStyle: { color: ['rgba(0,200,240,0.03)', 'rgba(0,200,240,0.06)'] } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10 },
+      axisLabel: { color: tk.axisLabel, fontSize: 10 },
     },
     visualMap: {
       min: 0,
@@ -561,10 +570,9 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
       bottom: 2,
       itemHeight: 100,
       itemWidth: 14,
-      // dark navy → mid blue → bright blue → light blue (no whites — keeps text always readable)
-      inRange: { color: ['#0f172a', '#1e3a8a', '#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd'] },
-      textStyle: { color: tk.textTertiary, fontSize: 10 },
-      borderColor: 'rgba(59,130,246,0.2)',
+      inRange: { color: ['#060a10', '#003a5c', '#0077a8', '#00c8f0', '#7ee8fa'] },
+      textStyle: { color: tk.axisLabel, fontSize: 10 },
+      borderColor: tk.axisLine,
       borderWidth: 1,
     },
     series: [{
@@ -631,26 +639,26 @@ function candlestickMAOption(rawData: CandlestickMAData, title: string | undefin
         type: 'cross',
         lineStyle: { color: p0[0], width: 1.5, opacity: 0.8 },
       },
-      backgroundColor: tk.surface,
-      borderColor: tk.border,
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
       borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     grid: { left: 16, right: 16, bottom: 80, top: title ? 56 : 40, containLabel: true },
     xAxis: {
       type: 'category',
       data: dates,
-      axisLine: { lineStyle: { color: tk.border } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, fontFamily: 'inherit' },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, fontFamily: 'inherit' },
     },
     yAxis: {
       scale: true,
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, fontFamily: 'inherit' },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, fontFamily: 'inherit' },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     dataZoom: [
       {
@@ -739,9 +747,9 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
     backgroundColor: 'transparent',
     tooltip: {
       formatter: '{b}: {c}',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     series: [{
       type: 'treemap' as const,

@@ -3,32 +3,33 @@
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Brand — Midnight-first ──────────────────────────────────────────── */
-  /* Primary: azul estelar frío — legible sobre fondos oscuros y claros    */
-  --primary: #5bb8f5;
-  --primary-dark: #3a9de0;
-  --primary-light: rgba(91, 184, 245, 0.13);
+  /* ── Brand — Terminal Financiero ────────────────────────────────────── */
+  /* Primary: cian frío corporativo — Bloomberg/Palantir style             */
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.12);
 
-  /* Accent secundario: cian eléctrico — para highlights y KPIs positivos  */
-  --accent-cyan: #22d3ee;
-  /* Accent terciario: violeta nebulosa — para gráficas y badges           */
-  --accent-violet: #a78bfa;
+  /* Semánticos financieros */
+  --accent-green:  #00d97e;   /* positivo / crecimiento */
+  --accent-amber:  #f5a623;   /* alerta / KPI crítico   */
+  --accent-red:    #f5455a;   /* negativo / riesgo      */
+  --accent-violet: #818cf8;   /* categoría especial     */
 
-  /* Surfaces — Light (tema claro, no es el principal) */
-  --bg: #e8ecf4;
-  --surface: rgba(255, 255, 255, 0.60);
-  --surface-2: #f2f5fb;
-  --surface-3: rgba(200, 212, 232, 0.50);
+  /* Surfaces — Light */
+  --bg: #edf1f7;
+  --surface: rgba(255, 255, 255, 0.68);
+  --surface-2: #f4f7fc;
+  --surface-3: rgba(210, 220, 238, 0.55);
   --surface-blur: blur(28px);
 
   /* Borders */
-  --border-color: rgba(70, 100, 155, 0.18);
-  --border-strong: rgba(50, 80, 140, 0.30);
+  --border-color: rgba(60, 90, 150, 0.16);
+  --border-strong: rgba(40, 70, 130, 0.28);
 
-  /* Text — contraste mínimo AA sobre --bg claro */
-  --text: #0a1628;
-  --text-secondary: #1c2e52;
-  --text-tertiary: #4a5e80;
+  /* Text */
+  --text: #08142a;
+  --text-secondary: #1a2c4e;
+  --text-tertiary: #445878;
 
   /* Sidebar / Navbar */
   --navbar-bg: rgba(255, 255, 255, 0.85);
@@ -93,49 +94,52 @@
    Contraste: texto primario ≥ 7:1, secundario ≥ 4.5:1, terciario ≥ 3:1
    ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="dark"] {
-  /* Brand — azul estelar más brillante para destacar sobre el fondo oscuro */
-  --primary: #5bb8f5;
-  --primary-dark: #3a9de0;
-  --primary-light: rgba(91, 184, 245, 0.13);
+  /* ── Terminal Financiero — Midnight ─────────────────────────────────── */
+  /* Cian frío corporativo — más Bloomberg, menos Twitter                  */
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.10);
 
-  /* Accent secundario y terciario */
-  --accent-cyan: #22d3ee;
-  --accent-violet: #a78bfa;
+  /* Semánticos financieros */
+  --accent-green:  #00d97e;
+  --accent-amber:  #f5a623;
+  --accent-red:    #f5455a;
+  --accent-violet: #818cf8;
 
-  /* Fondo — negro espacial con tinte azul muy sutil */
-  --bg: #080c14;
-  /* Superficie — vidrio oscuro con tinte azul-índigo */
-  --surface: rgba(255, 255, 255, 0.048);
-  --surface-2: #0e1220;
-  --surface-3: #090d18;
+  /* Fondo — negro con tinte azul marino muy profundo */
+  --bg: #060a10;
+  /* Superficie — vidrio oscuro, casi negro, con tinte frío */
+  --surface: rgba(255, 255, 255, 0.042);
+  --surface-2: #0b1018;
+  --surface-3: #080d14;
   --surface-blur: blur(24px);
 
-  /* Bordes — azul estelar muy tenue, visible sin distraer */
-  --border-color: rgba(91, 184, 245, 0.12);
-  --border-strong: rgba(91, 184, 245, 0.26);
+  /* Bordes — cian muy tenue, apenas visible */
+  --border-color: rgba(0, 200, 240, 0.10);
+  --border-strong: rgba(0, 200, 240, 0.22);
 
-  /* Texto — blanco azulado frío, contraste alto sobre fondo oscuro
-     --text:           #ddeeff  → contraste ~12:1 sobre --bg  ✓ AAA
-     --text-secondary: rgba(190,215,255,0.80) → ~7:1  ✓ AA
-     --text-tertiary:  rgba(140,175,230,0.52) → ~3.5:1 ✓ AA Large */
-  --text: #ddeeff;
-  --text-secondary: rgba(190, 215, 255, 0.80);
-  --text-tertiary: rgba(140, 175, 230, 0.52);
+  /* Texto — blanco frío con tinte azul
+     --text:           #e4f0ff  → contraste ~13:1 ✓ AAA
+     --text-secondary: rgba(180,210,255,0.78) → ~7:1 ✓ AA
+     --text-tertiary:  rgba(120,165,220,0.50) → ~3.5:1 ✓ AA Large */
+  --text: #e4f0ff;
+  --text-secondary: rgba(180, 210, 255, 0.78);
+  --text-tertiary: rgba(120, 165, 220, 0.50);
 
   /* Sidebar / Navbar */
-  --sidebar-bg: #050810;
-  --navbar-bg: rgba(8, 12, 20, 0.90);
-  --sidebar-surface: rgba(255, 255, 255, 0.045);
-  --sidebar-text: #3d5c88;
-  --sidebar-active-text: #ddeeff;
-  --sidebar-active-bg: rgba(91, 184, 245, 0.16);
-  --sidebar-active-border: #5bb8f5;
+  --sidebar-bg: #040810;
+  --navbar-bg: rgba(6, 10, 16, 0.92);
+  --sidebar-surface: rgba(255, 255, 255, 0.04);
+  --sidebar-text: #2a4a70;
+  --sidebar-active-text: #e4f0ff;
+  --sidebar-active-bg: rgba(0, 200, 240, 0.14);
+  --sidebar-active-border: #00c8f0;
 
   /* Semantic */
-  --accent-color: #10d97e;
+  --accent-color: #00d97e;
   --danger: #f5455a;
   --warning: #f5a623;
-  --select-bg: #0c1022;
+  --select-bg: #0a1020;
 
   /* Shadows — más profundas en dark para dar elevación real */
   --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.40);
@@ -164,12 +168,14 @@
    SLATE — Tema intermedio. Gris azulado profundo, más suave que Midnight.
    ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="slate"] {
-  --primary: #5bb8f5;
-  --primary-dark: #3a9de0;
-  --primary-light: rgba(91, 184, 245, 0.13);
-  --accent-cyan: #22d3ee;
-  --accent-violet: #a78bfa;
-  --bg: #1e2230;
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.11);
+  --accent-green:  #00d97e;
+  --accent-amber:  #f5a623;
+  --accent-red:    #f5455a;
+  --accent-violet: #818cf8;
+  --bg: #111824;
   --surface: rgba(255, 255, 255, 0.058);
   --surface-2: #181e2c;
   --surface-3: #141824;

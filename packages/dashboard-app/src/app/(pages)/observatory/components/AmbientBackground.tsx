@@ -5,7 +5,7 @@ import React from 'react';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import { cursorRef } from '../hooks/useCursor';
-import AuroraBackground from './AuroraBackground';
+// AuroraBackground removed — nebulas now live in Three.js scene
 
 interface Props {
   onCategoryClick?: (label: string, rect: DOMRect) => void;
@@ -195,22 +195,82 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
 
-    // ── Particles ──────────────────────────────────────────────────────────
-    const PC = 300;
-    const pPos = new Float32Array(PC * 3);
-    const pVel = new Float32Array(PC * 2);
-    for (let i = 0; i < PC; i++) {
-      pPos[i * 3]     = (Math.random() - 0.5) * 1400;
-      pPos[i * 3 + 1] = (Math.random() - 0.5) * 900;
-      pPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
-      pVel[i * 2]     = (Math.random() - 0.5) * 0.12;
-      pVel[i * 2 + 1] = (Math.random() - 0.5) * 0.12;
+    // ── Nebulas (3D sprites, parallax with camera) ─────────────────────────
+    function makeNebulaTex(color: string, opacity: number): THREE.Texture {
+      const size = 512;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d')!;
+      const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      g.addColorStop(0,    color.replace(')', `, ${opacity})`).replace('rgb', 'rgba'));
+      g.addColorStop(0.4,  color.replace(')', `, ${opacity * 0.5})`).replace('rgb', 'rgba'));
+      g.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(cv);
     }
-    const pGeo = new THREE.BufferGeometry();
-    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    scene.add(new THREE.Points(pGeo,
-      new THREE.PointsMaterial({ color: 0x8899ff, size: 1.6, transparent: true, opacity: 0.4 })
+
+    const NEBULA_DEFS = [
+      { x: -600, y:  280, z: -400, sx: 1100, sy: 750,  color: 'rgb(30,100,255)',  op: 0.55 },
+      { x:  550, y:  100, z: -300, sx:  900, sy: 700,  color: 'rgb(0,180,255)',   op: 0.45 },
+      { x: -200, y: -320, z: -500, sx: 1000, sy: 800,  color: 'rgb(10,60,200)',   op: 0.40 },
+      { x:  400, y: -250, z: -600, sx:  800, sy: 650,  color: 'rgb(0,120,220)',   op: 0.38 },
+      { x:   50, y:   80, z: -350, sx:  700, sy: 550,  color: 'rgb(0,160,240)',   op: 0.30 },
+    ];
+
+    const nebulaMats: THREE.SpriteMaterial[] = [];
+    NEBULA_DEFS.forEach(def => {
+      const tex = makeNebulaTex(def.color, def.op);
+      const mat = new THREE.SpriteMaterial({
+        map: tex, transparent: true, opacity: 1,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      nebulaMats.push(mat);
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(def.x, def.y, def.z);
+      sprite.scale.set(def.sx, def.sy, 1);
+      scene.add(sprite);
+    });
+
+    // ── Particles ──────────────────────────────────────────────────────────
+    // Layer 1: dense small stars
+    const PC1 = 600;
+    const pPos1 = new Float32Array(PC1 * 3);
+    const pVel1 = new Float32Array(PC1 * 2);
+    for (let i = 0; i < PC1; i++) {
+      pPos1[i * 3]     = (Math.random() - 0.5) * 1600;
+      pPos1[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+      pPos1[i * 3 + 2] = (Math.random() - 0.5) * 400;
+      pVel1[i * 2]     = (Math.random() - 0.5) * 0.08;
+      pVel1[i * 2 + 1] = (Math.random() - 0.5) * 0.08;
+    }
+    const pGeo1 = new THREE.BufferGeometry();
+    pGeo1.setAttribute('position', new THREE.BufferAttribute(pPos1, 3));
+    scene.add(new THREE.Points(pGeo1,
+      new THREE.PointsMaterial({ color: 0xaabbff, size: 1.8, transparent: true, opacity: 0.65, sizeAttenuation: true })
     ));
+
+    // Layer 2: bright accent stars (fewer, bigger)
+    const PC2 = 120;
+    const pPos2 = new Float32Array(PC2 * 3);
+    const pVel2 = new Float32Array(PC2 * 2);
+    for (let i = 0; i < PC2; i++) {
+      pPos2[i * 3]     = (Math.random() - 0.5) * 1600;
+      pPos2[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+      pPos2[i * 3 + 2] = (Math.random() - 0.5) * 400;
+      pVel2[i * 2]     = (Math.random() - 0.5) * 0.05;
+      pVel2[i * 2 + 1] = (Math.random() - 0.5) * 0.05;
+    }
+    const pGeo2 = new THREE.BufferGeometry();
+    pGeo2.setAttribute('position', new THREE.BufferAttribute(pPos2, 3));
+    scene.add(new THREE.Points(pGeo2,
+      new THREE.PointsMaterial({ color: 0x66ccff, size: 3.5, transparent: true, opacity: 0.85, sizeAttenuation: true })
+    ));
+
+    // Alias pGeo to pGeo1 for the animation loop
+    const pGeo = pGeo1;
+    const PC   = PC1;
+    const pVel = pVel1;
 
     // ── Particle connections — DISABLED for performance ───────────────────
 
@@ -313,12 +373,25 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       for (let i = 0; i < PC; i++) {
         let x = arr[i * 3]     + pVel[i * 2];
         let y = arr[i * 3 + 1] + pVel[i * 2 + 1];
-        if (x >  700) x = -700; if (x < -700) x =  700;
-        if (y >  450) y = -450; if (y < -450) y =  450;
+        if (x >  800) x = -800; if (x < -800) x =  800;
+        if (y >  500) y = -500; if (y < -500) y =  500;
         arr[i * 3]     = x;
         arr[i * 3 + 1] = y;
       }
       pp.needsUpdate = true;
+
+      // Layer 2 particles
+      const pp2 = pGeo2.attributes.position as THREE.BufferAttribute;
+      const arr2 = pp2.array as Float32Array;
+      for (let i = 0; i < PC2; i++) {
+        let x = arr2[i * 3]     + pVel2[i * 2];
+        let y = arr2[i * 3 + 1] + pVel2[i * 2 + 1];
+        if (x >  800) x = -800; if (x < -800) x =  800;
+        if (y >  500) y = -500; if (y < -500) y =  500;
+        arr2[i * 3]     = x;
+        arr2[i * 3 + 1] = y;
+      }
+      pp2.needsUpdate = true;
 
       // Spawn pulses on timer
       const now = performance.now();
@@ -430,6 +503,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         scene.remove(p.group);
         p.group._coreMat?.dispose();
       });
+      nebulaMats.forEach(m => { m.map?.dispose(); m.dispose(); });
       sharedGlowTex.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
@@ -438,7 +512,6 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
-      <AuroraBackground position="fixed" />
       {/* Three.js canvas */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
 

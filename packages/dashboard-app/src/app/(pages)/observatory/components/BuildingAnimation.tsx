@@ -375,19 +375,19 @@ function PhaseGenerating({ active }: { active: boolean }) {
         <svg style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="gl" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#5bb8f5" />
-              <stop offset="50%" stopColor="#22d3ee" />
-              <stop offset="100%" stopColor="#5bb8f5" />
+              <stop offset="0%" stopColor="#00c8f0" />
+              <stop offset="50%" stopColor="#00d97e" />
+              <stop offset="100%" stopColor="#00c8f0" />
             </linearGradient>
             <linearGradient id="ga" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#5bb8f5" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#5bb8f5" stopOpacity="0" />
+              <stop offset="0%" stopColor="#00c8f0" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#00c8f0" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path ref={areaRef} d={area} fill="url(#ga)" opacity="0" />
           <path ref={lineRef} d={d} fill="none" stroke="url(#gl)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity="0" />
           {pts.map((p, i) => (
-            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#5bb8f5" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #5bb8f5)' }} />
+            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#00c8f0" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #00c8f0)' }} />
           ))}
         </svg>
       </div>

@@ -273,9 +273,9 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 // GRID MODE
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Paleta de acentos para cards del grid — coherente con aurora palette
-// Orden: azul estelar, cian, violeta, verde, ámbar, azul medio, rosa, lima
-const ACCENT_COLORS = ['#5bb8f5','#22d3ee','#a78bfa','#34d399','#fbbf24','#60a5fa','#f472b6','#4ade80'];
+// Paleta de acentos para cards del grid — Terminal Financiero
+// Cian corporativo como primario, verde/ámbar como semánticos, resto fríos
+const ACCENT_COLORS = ['#00c8f0','#00d97e','#f5a623','#818cf8','#38bdf8','#34d399','#fb923c','#a78bfa'];
 const GAP = 14;
 
 function renderChart(insight: InsightData, height: number, bare = false, preview = false): React.ReactNode {
@@ -385,10 +385,11 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
   };
 
   const CARD = (extra?: React.CSSProperties): React.CSSProperties => ({
-    borderRadius: 20,
-    background: 'rgba(255,255,255,0.065)',
-    border: '1px solid rgba(255,255,255,0.13)',
-    boxShadow: '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)',
+    borderRadius: 16,
+    background: 'rgba(255,255,255,0.038)',
+    border: '1px solid rgba(0,200,240,0.10)',
+    // visionOS inner highlight: borda superior mais clara simula luz de cima
+    boxShadow: '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)',
     overflow: 'hidden',
     transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
     ...extra,
@@ -396,8 +397,8 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
 
   const accentLine = (color: string) => ({
     position: 'absolute' as const,
-    top: 0, left: '10%', right: '10%', height: 1,
-    background: `linear-gradient(90deg, transparent, ${color}99, transparent)`,
+    top: 0, left: 0, right: 0, height: 1,
+    background: `linear-gradient(90deg, transparent, ${color}cc, transparent)`,
   });
 
   const kpisLeft = kpis.slice(0, 4); // max 4 KPIs en izquierda (2 filas)
@@ -415,12 +416,12 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
       <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${kpiRows}, auto) repeat(${secRows}, minmax(180px, 1fr))`, gap: GAP }}>
 
         {/* Header */}
-        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
-          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: 1, background: 'linear-gradient(90deg, transparent, var(--primary)88, transparent)' }} />
-          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg><span>New</span></button>
+        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,200,240,0.5), transparent)' }} />
+          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: 'rgba(0,200,240,0.06)', border: '1px solid rgba(0,200,240,0.15)', color: 'rgba(0,200,240,0.55)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg><span>New</span></button>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 5px', opacity: 0.8 }}>Executive Intelligence</p>
-            <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px', opacity: 0.7 }}>Executive Intelligence</p>
+            <h1 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
           </div>
         </div>
 
@@ -429,13 +430,13 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           const accent = ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.03, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}66`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${accent}22`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.025, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}18`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
               style={{ ...CARD({ padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 6px', opacity: 1 }}>{ins.title}</p>
-              <p style={{ fontSize: 28, fontWeight: 800, color: 'rgba(255,255,255,0.96)', margin: 0, lineHeight: 1, letterSpacing: '-0.03em' }}>{ins.metric}</p>
-              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.38)', margin: '4px 0 0' }}>{ins.metricLabel}</p>}
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px' }}>{ins.title}</p>
+              <p style={{ fontSize: 26, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
+              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(120,165,220,0.45)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
             </div>
           );
         })}
@@ -445,11 +446,11 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
           const accent = ACCENT_COLORS[(i + 4) % ACCENT_COLORS.length];
           return (
             <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.01, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${accent}18`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
-              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
+              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.008, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}38`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}14`; }}
+              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
+              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '12px 14px', cursor: 'pointer', position: 'relative' }) }}>
               <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0, opacity: 1 }}>{ins.title}</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0 }}>{ins.title}</p>
               <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview /></div>
             </div>
           );
@@ -462,13 +463,13 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
         {/* Primary chart */}
         {primary && (
           <div data-animate ref={el => { cardRefs.current[insights.indexOf(primary)] = el; }} onClick={() => onExpand(primary)}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.005, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px ${ACCENT_COLORS[0]}18`; }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.13)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.09)'; }}
-            style={{ ...CARD({ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 18px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
+            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.004, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}38`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${ACCENT_COLORS[0]}14`; }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
+            style={{ ...CARD({ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
             <div style={accentLine(ACCENT_COLORS[0])} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0, opacity: 1 }}>{primary.title}</p>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>click to expand</span>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0 }}>{primary.title}</p>
+              <span style={{ fontSize: 9, color: 'rgba(0,200,240,0.25)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>expand</span>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={primary} /></div>
           </div>

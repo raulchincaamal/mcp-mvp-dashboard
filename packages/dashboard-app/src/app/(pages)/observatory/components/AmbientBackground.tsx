@@ -9,6 +9,7 @@ import { cursorRef } from '../hooks/useCursor';
 
 interface Props {
   onCategoryClick?: (label: string, rect: DOMRect) => void;
+  showCoconauta?: boolean;
 }
 
 const CATEGORY_SVGS: Record<string, string> = {
@@ -171,8 +172,9 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
   );
 }
 
-export default function AmbientBackground({ onCategoryClick }: Props) {
+export default function AmbientBackground({ onCategoryClick, showCoconauta = true }: Props) {
   const mountRef    = useRef<HTMLDivElement>(null);
+  const cocoOverlayRef = useRef<HTMLDivElement>(null);
   const rafRef      = useRef<number>(0);
   const widgetRefs  = useRef<(HTMLDivElement | null)[]>([]);
   const angleRef    = useRef(0);
@@ -344,6 +346,112 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       pulses.push({ lineIdx: idx, t: 0, speed: 0.006 + Math.random() * 0.006, group: makePulseGroup() });
     };
 
+    // ── Coconauta 3D sprite ──────────────────────────────────────────────────
+    let coconautaSprite: THREE.Sprite | null = null;
+    // Posición inicial: abajo a la derecha en coordenadas de mundo
+    // Proyectamos desde screen (85%, 85%) al plano Z=RY*0.6
+    const fovRad0 = (55 * Math.PI) / 180;
+    const dist0 = 650 - RY * 0.6;
+    const halfH0 = dist0 * Math.tan(fovRad0 / 2);
+    const halfW0 = halfH0 * (W / H);
+    const cocoPos = new THREE.Vector3(
+      halfW0 * 0.65,
+      -halfH0 * 0.65,
+      RY * 0.6,
+    );
+    const cocoVel = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.6,
+      (Math.random() - 0.5) * 0.4,
+      0,
+    );
+    let cocoFloat = 0;
+    let cocoFloatDir = 1;
+    let cocoDragging = false;
+    let cocoOpacity = 0;
+
+    if (showCoconauta) {
+      const img = new window.Image();
+      img.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = 256; cv.height = 256;
+        const ctx2 = cv.getContext('2d')!;
+        ctx2.drawImage(img, 0, 0, 256, 256);
+        const tex = new THREE.CanvasTexture(cv);
+        const mat = new THREE.SpriteMaterial({
+          map: tex, transparent: true, opacity: 0,
+          depthWrite: false,
+        });
+        coconautaSprite = new THREE.Sprite(mat);
+        coconautaSprite.scale.set(120, 120, 1);
+        coconautaSprite.position.copy(cocoPos);
+        scene.add(coconautaSprite);
+        // Fade in
+        gsap.to(mat, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.8,
+          onUpdate: () => { cocoOpacity = mat.opacity; },
+        });
+      };
+      img.src = '/coconauta.svg';
+    }
+
+    // Coconauta pointer interaction via overlay div
+    let cocoLastMouse = { x: 0, y: 0 };
+    let cocoMouseVel = { x: 0, y: 0 };
+
+    // Update overlay position every frame (called from animate loop)
+    const updateCocoOverlay = () => {
+      const overlay = cocoOverlayRef.current;
+      if (!overlay || !coconautaSprite) return;
+      const v = coconautaSprite.position.clone().project(camera);
+      const sx = (v.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      const size = 120;
+      overlay.style.left = `${sx - size / 2}px`;
+      overlay.style.top  = `${sy - size / 2}px`;
+      overlay.style.display = showCoconauta && coconautaSprite ? 'block' : 'none';
+    };
+
+    const onCocoPointerDown = (e: PointerEvent) => {
+      cocoDragging = true;
+      cocoLastMouse = { x: e.clientX, y: e.clientY };
+      cocoMouseVel = { x: 0, y: 0 };
+      cocoVel.set(0, 0, 0);
+      const overlay = cocoOverlayRef.current;
+      if (overlay) { overlay.style.cursor = 'grabbing'; overlay.setPointerCapture(e.pointerId); }
+    };
+
+    const onCocoPointerMove = (e: PointerEvent) => {
+      if (!cocoDragging) return;
+      // Compute world-space scale: how many world units per screen pixel at z=cocoPos.z
+      // Using the camera FOV and distance
+      const fovRad = (55 * Math.PI) / 180;
+      const dist = camera.position.z - cocoPos.z;
+      const worldPerPx = (2 * dist * Math.tan(fovRad / 2)) / window.innerHeight;
+      const dx = (e.clientX - cocoLastMouse.x) * worldPerPx;
+      const dy = -(e.clientY - cocoLastMouse.y) * worldPerPx;
+      cocoMouseVel.x = dx * 0.7 + cocoMouseVel.x * 0.3;
+      cocoMouseVel.y = dy * 0.7 + cocoMouseVel.y * 0.3;
+      cocoPos.x += dx;
+      cocoPos.y += dy;
+      cocoLastMouse = { x: e.clientX, y: e.clientY };
+    };
+
+    const onCocoPointerUp = () => {
+      if (!cocoDragging) return;
+      cocoDragging = false;
+      cocoVel.x = cocoMouseVel.x * 1.4;
+      cocoVel.y = cocoMouseVel.y * 1.4;
+      const overlay = cocoOverlayRef.current;
+      if (overlay) overlay.style.cursor = 'grab';
+    };
+
+    const overlay = cocoOverlayRef.current;
+    if (overlay) {
+      overlay.addEventListener('pointerdown', onCocoPointerDown);
+      overlay.addEventListener('pointermove', onCocoPointerMove);
+      overlay.addEventListener('pointerup', onCocoPointerUp);
+      overlay.addEventListener('pointercancel', onCocoPointerUp);
+    }
+
     // ── Resize ─────────────────────────────────────────────────────────────
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -465,6 +573,27 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         }
       }
 
+      // Coconauta 3D physics + overlay sync
+      updateCocoOverlay();
+      if (coconautaSprite && showCoconauta) {
+        if (!cocoDragging) {
+          cocoFloat += 0.018 * cocoFloatDir;
+          if (Math.abs(cocoFloat) > 18) cocoFloatDir *= -1;
+          cocoVel.x *= 0.97;
+          cocoVel.y *= 0.97;
+          cocoPos.x += cocoVel.x;
+          cocoPos.y += cocoVel.y;
+          // Bounce off 3D bounds
+          const BX = RX * 0.85;
+          const BY = RY * 1.8;
+          if (cocoPos.x >  BX) { cocoPos.x =  BX; cocoVel.x = -Math.abs(cocoVel.x) * 0.72; }
+          if (cocoPos.x < -BX) { cocoPos.x = -BX; cocoVel.x =  Math.abs(cocoVel.x) * 0.72; }
+          if (cocoPos.y >  BY) { cocoPos.y =  BY; cocoVel.y = -Math.abs(cocoVel.y) * 0.72; }
+          if (cocoPos.y < -BY) { cocoPos.y = -BY; cocoVel.y =  Math.abs(cocoVel.y) * 0.72; }
+        }
+        coconautaSprite.position.set(cocoPos.x, cocoPos.y + (cocoDragging ? 0 : cocoFloat), cocoPos.z);
+      }
+
       renderer.render(scene, camera);
     };
 
@@ -499,6 +628,13 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', onResize);
+      const ov = cocoOverlayRef.current;
+      if (ov) {
+        ov.removeEventListener('pointerdown', onCocoPointerDown);
+        ov.removeEventListener('pointermove', onCocoPointerMove);
+        ov.removeEventListener('pointerup', onCocoPointerUp);
+        ov.removeEventListener('pointercancel', onCocoPointerUp);
+      }
       pulses.forEach(p => {
         scene.remove(p.group);
         p.group._coreMat?.dispose();
@@ -514,6 +650,12 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
       {/* Three.js canvas */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
+      {/* Coconauta drag overlay — invisible hit area that tracks the sprite */}
+      <div ref={cocoOverlayRef} style={{
+        position: 'absolute', width: 120, height: 120,
+        cursor: 'grab', pointerEvents: 'auto',
+        display: 'none', zIndex: 2,
+      }} />
 
       {CATEGORIES.map((label, i) => {
         const accent = AURORA_COLORS[label];
@@ -539,7 +681,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
-              if (border) border.style.outlineColor = `${accent}cc`;
+              if (border) (border as HTMLElement).style.borderColor = `${accent}cc`;
             }}
             onMouseLeave={e => {
               const el = e.currentTarget;
@@ -548,47 +690,51 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
-              if (border) border.style.outlineColor = `${accent}50`;
+              if (border) (border as HTMLElement).style.borderColor = `${accent}70`;
             }}
           >
             {/* Card */}
             <div style={{
               width: WIDGET_SIZE, height: CARD_H,
               borderRadius: 18,
-              background: `${accent}18`,
-              boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
               overflow: 'hidden', position: 'relative', flexShrink: 0,
+              boxShadow: `0 4px 24px ${accent}22, 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)`,
             }}>
-              {/* Solid bg — reads actual --bg value */}
+              {/* Base: dark translucent */}
               <div style={{
                 position: 'absolute', inset: 0,
-                backgroundColor: 'var(--bg)',
-                opacity: 0.92,
+                background: 'rgba(6,8,20,0.72)',
+                backdropFilter: 'blur(12px)',
               }} />
-              {/* Accent tint */}
+              {/* Diagonal color sweep */}
               <div style={{
                 position: 'absolute', inset: 0,
-                background: `linear-gradient(135deg, ${accent}30 0%, transparent 60%)`,
+                background: `linear-gradient(135deg, ${accent}55 0%, ${accent}18 40%, transparent 70%)`,
+                pointerEvents: 'none',
+              }} />
+              {/* Bottom glow pool */}
+              <div style={{
+                position: 'absolute', bottom: '-20%', left: '10%', right: '10%', height: '60%',
+                background: `radial-gradient(ellipse, ${accent}30 0%, transparent 70%)`,
                 pointerEvents: 'none',
               }} />
               {/* Hover glow */}
               <div className="aurora-glow" style={{
                 position: 'absolute', inset: 0,
-                background: `radial-gradient(ellipse at 30% 50%, ${accent}40 0%, transparent 70%)`,
+                background: `radial-gradient(ellipse at 30% 40%, ${accent}60 0%, transparent 65%)`,
                 opacity: 0, pointerEvents: 'none',
               }} />
-              {/* Border — always visible base + hover highlight */}
+              {/* Border */}
               <div className="aurora-border" style={{
                 position: 'absolute', inset: 0, borderRadius: 18,
-                outline: `1px solid ${accent}50`,
-                outlineOffset: '-1px',
-                opacity: 1, pointerEvents: 'none',
-                transition: 'outline-color 0.4s ease',
+                border: `1px solid ${accent}70`,
+                pointerEvents: 'none',
+                transition: 'border-color 0.4s ease',
               }} />
               {/* Top shine */}
               <div style={{
-                position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+                background: `linear-gradient(90deg, transparent, ${accent}90, transparent)`,
                 pointerEvents: 'none',
               }} />
               <WidgetCard label={label} accent={accent} />

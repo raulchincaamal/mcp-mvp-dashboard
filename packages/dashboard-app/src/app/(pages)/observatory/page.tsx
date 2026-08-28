@@ -274,108 +274,6 @@ export default function ObservatoryPage() {
     );
   }, []);
 
-  const coconautaRef = useRef<HTMLImageElement>(null);
-
-  useEffect(() => {
-    const el = coconautaRef.current;
-    if (!el) return;
-
-    // Posición absoluta (px desde top-left del viewport)
-    const pos = { x: window.innerWidth * 0.88 - 70, y: window.innerHeight * 0.88 - 70 };
-    const vel = { x: 0, y: 0 };
-    const FRICTION = 0.97;
-    const BOUNCE = 0.72;
-    let dragging = false;
-    let floatOffset = 0;
-    let floatDir = 1;
-    let rafId = 0;
-    let lastMouse = { x: 0, y: 0 };
-    let mouseVel = { x: 0, y: 0 };
-
-    el.style.position = 'fixed';
-    el.style.left = '0';
-    el.style.top = '0';
-    el.style.bottom = 'auto';
-    el.style.right = 'auto';
-    el.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-    el.style.pointerEvents = 'auto';
-    el.style.cursor = 'grab';
-    el.style.userSelect = 'none';
-
-    const W = () => window.innerWidth;
-    const H = () => window.innerHeight;
-    const SIZE = 140;
-
-    const tick = () => {
-      rafId = requestAnimationFrame(tick);
-
-      if (!dragging) {
-        // Float idle
-        floatOffset += 0.018 * floatDir;
-        if (Math.abs(floatOffset) > 18) floatDir *= -1;
-
-        // Apply velocity + friction
-        vel.x *= FRICTION;
-        vel.y *= FRICTION;
-        pos.x += vel.x;
-        pos.y += vel.y;
-
-        // Bounce off walls
-        if (pos.x < 0) { pos.x = 0; vel.x = Math.abs(vel.x) * BOUNCE; }
-        if (pos.x > W() - SIZE) { pos.x = W() - SIZE; vel.x = -Math.abs(vel.x) * BOUNCE; }
-        if (pos.y < 0) { pos.y = 0; vel.y = Math.abs(vel.y) * BOUNCE; }
-        if (pos.y > H() - SIZE) { pos.y = H() - SIZE; vel.y = -Math.abs(vel.y) * BOUNCE; }
-      }
-
-      el.style.transform = `translate(${pos.x}px, ${pos.y + (dragging ? 0 : floatOffset)}px)`;
-    };
-
-    const onDown = (e: PointerEvent) => {
-      dragging = true;
-      el.style.cursor = 'grabbing';
-      el.setPointerCapture(e.pointerId);
-      lastMouse = { x: e.clientX, y: e.clientY };
-      mouseVel = { x: 0, y: 0 };
-      vel.x = 0; vel.y = 0;
-      gsap.killTweensOf(el, 'opacity');
-    };
-
-    const onMove = (e: PointerEvent) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastMouse.x;
-      const dy = e.clientY - lastMouse.y;
-      mouseVel.x = dx * 0.7 + mouseVel.x * 0.3;
-      mouseVel.y = dy * 0.7 + mouseVel.y * 0.3;
-      pos.x += dx;
-      pos.y += dy;
-      lastMouse = { x: e.clientX, y: e.clientY };
-    };
-
-    const onUp = () => {
-      if (!dragging) return;
-      dragging = false;
-      el.style.cursor = 'grab';
-      vel.x = mouseVel.x * 1.4;
-      vel.y = mouseVel.y * 1.4;
-    };
-
-    el.addEventListener('pointerdown', onDown);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', onUp);
-
-    gsap.fromTo(el, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 1.2, ease: 'back.out(1.6)', delay: 0.8 });
-    rafId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      el.removeEventListener('pointerdown', onDown);
-      el.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerup', onUp);
-      el.removeEventListener('pointercancel', onUp);
-    };
-  }, []);
-
   const isIdle = ctx.state === 'IDLE';
 
   return (
@@ -402,28 +300,10 @@ export default function ObservatoryPage() {
         }}>Macropay AI Diagrams | Ventas</span>
       </div>
 
-      {/* Layer 0 — Three.js + widgets */}
-      <AmbientBackground onCategoryClick={handleCategoryClick} />
+      {/* Layer 0 — Three.js + widgets + Coconauta 3D */}
+      <AmbientBackground onCategoryClick={handleCategoryClick} showCoconauta={isIdle && !zoomQuery && !showPresentation} />
 
-      {/* Coconauta flotante — siempre montado para que el RAF persista */}
-      <img
-        ref={coconautaRef}
-        src="/coconauta.svg"
-        alt=""
-        draggable={false}
-        style={{
-          position: 'fixed',
-          left: 0, top: 0,
-          width: 140,
-          opacity: 0,
-          zIndex: 5,
-          filter: 'drop-shadow(0 0 24px rgba(255,255,255,0.08))',
-          display: isIdle && !zoomQuery && !showPresentation ? 'block' : 'none',
-          willChange: 'transform',
-        }}
-      />
-
-      {/* Layer 1 — Cursor light */}
+{/* Layer 1 — Cursor light */}
       <CursorLight />
 
       {/* Hot corner — bottom left theme switcher (solo en landing) */}

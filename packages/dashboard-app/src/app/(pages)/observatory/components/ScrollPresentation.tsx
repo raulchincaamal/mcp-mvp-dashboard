@@ -9,19 +9,11 @@ import MexicoMapChart from '@/shared/components/MexicoMapChart';
 import AuroraBackground from './AuroraBackground';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
+import type { LayoutHint, GridSpec } from '../layout-engine';
 
-// Renders raw ECharts options — used for candlestick, ProgressGroup horizontal, etc.
 function EChartsRaw({ opts, height }: { opts: Record<string, unknown>; height: number }) {
-  // Strip internal keys before passing to ECharts
   const { _auroraType: _t, _auroraData: _d, ...echartsOpts } = opts;
-  return (
-    <ReactECharts
-      option={echartsOpts as never}
-      style={{ height, width: '100%' }}
-      opts={{ renderer: 'canvas' }}
-      notMerge
-    />
-  );
+  return <ReactECharts option={echartsOpts as never} style={{ height, width: '100%' }} opts={{ renderer: 'canvas' }} notMerge />;
 }
 
 interface Props {
@@ -29,11 +21,12 @@ interface Props {
   cursor: CursorState;
   query: string | null;
   onReset: () => void;
+  layoutHint?: LayoutHint | null;
 }
 
 type ViewMode = 'presentation' | 'grid';
 
-export default function ScrollPresentation({ insights, cursor, query, onReset }: Props) {
+export default function ScrollPresentation({ insights, cursor, query, onReset, layoutHint }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -74,8 +67,6 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
 
   const totalSlides = insights.length + 2;
 
-
-
   useEffect(() => {
     if (!autoPlay || viewMode !== 'presentation') return;
     const timer = setTimeout(() => { if (currentSlide < totalSlides - 1) setCurrentSlide(s => s + 1); else setAutoPlay(false); }, 4000);
@@ -103,9 +94,8 @@ export default function ScrollPresentation({ insights, cursor, query, onReset }:
         <PresentationMode insights={insights} cursor={cursor} query={query} onReset={onReset} currentSlide={currentSlide} totalSlides={totalSlides} />
       </div>
       <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1, overflow: 'hidden' }}>
-        <GridMode insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} />
+        <LayoutRenderer insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} layoutHint={layoutHint} />
       </div>
-      {/* Controls — position:absolute to avoid being clipped by ancestor transforms */}
       <div style={{ position: 'absolute', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {viewMode === 'presentation' && (
           <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -176,12 +166,9 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
   const isList = !!insight.listItems;
   const isStatCard = !insight.chartOptions && !isList;
 
-  // Convert chartOptions back to AuroraChart-compatible data
   const auroraData = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
-    // Tipos nativos: datos ya en formato AuroraChart
     if (opts._auroraData) return opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] };
-    // bar/line/area: xAxis.data + series[0].data
     const xAxis = opts.xAxis as { data?: string[] } | undefined;
     const series = opts.series as { type?: string; data?: unknown[] }[] | undefined;
     if (xAxis?.data && series?.[0]?.data) {
@@ -192,7 +179,6 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
       }));
       return { labels, datasets };
     }
-    // pie: series[0].data = [{name, value}]
     const pieSeries = series?.[0] as { type?: string; data?: { name: string; value: number }[] } | undefined;
     if (pieSeries?.data && Array.isArray(pieSeries.data) && pieSeries.data[0]?.name !== undefined) {
       return {
@@ -240,18 +226,11 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
           )}
           {auroraData && (chartType as string) === 'map' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
-              <MexicoMapChart
-                data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
-                height={340}
-                gradient="aurora"
-                bare
-              />
+              <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={340} gradient="aurora" bare />
             </div>
           )}
           {auroraData && (chartType as string) === 'progress' && (
-            <div style={{ flex: 1, minHeight: 0, marginTop: 8, overflowY: 'auto' }}>
-              {renderChart(insight, 340, true)}
-            </div>
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8, overflowY: 'auto' }}>{renderChart(insight, 340, true)}</div>
           )}
           {auroraData && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
@@ -270,34 +249,66 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GRID MODE
+// LAYOUT SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Paleta de acentos para cards del grid — Terminal Financiero
-// Cian corporativo como primario, verde/ámbar como semánticos, resto fríos
+type GridProps = Props & {
+  visible: boolean;
+  cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
+  onExpand: (insight: InsightData) => void;
+  layoutHint?: LayoutHint | null;
+};
+
+type LayoutProps = Omit<GridProps, 'cursor' | 'layoutHint'>;
+
 const ACCENT_COLORS = ['#00c8f0','#00d97e','#f5a623','#818cf8','#38bdf8','#34d399','#fb923c','#a78bfa'];
 const GAP = 14;
 
+function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
+  return {
+    borderRadius: 16,
+    background: 'rgba(255,255,255,0.038)',
+    border: '1px solid rgba(0,200,240,0.10)',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)',
+    overflow: 'hidden',
+    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+    ...extra,
+  };
+}
+
+function accentLine(color: string): React.CSSProperties {
+  return { position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${color}cc, transparent)` };
+}
+
+function hoverIn(el: HTMLElement, accent: string) {
+  gsap.to(el, { scale: 1.012, duration: 0.2, ease: 'power2.out', overwrite: 'auto' });
+  el.style.borderColor = `${accent}44`;
+  el.style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}18`;
+}
+
+function hoverOut(el: HTMLElement) {
+  gsap.to(el, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' });
+  el.style.borderColor = 'rgba(0,200,240,0.10)';
+  el.style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)';
+}
+
 function renderChart(insight: InsightData, height: number, bare = false, preview = false): React.ReactNode {
+  if (!insight.chartOptions) return null;
   const opts = insight.chartOptions as Record<string, unknown>;
   const auroraData = opts._auroraData as { labels: string[]; datasets: { label?: string; data: number[] }[] } | undefined;
   const chartType = (opts._auroraType as string) ?? 'bar';
 
-  if ((chartType as string) === 'map' && auroraData) {
-    const mapData = auroraData.labels.map((name, i) => ({
-      name,
-      value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0,
-    }));
-    return <MexicoMapChart data={mapData} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
+  if (chartType === 'map' && auroraData) {
+    return <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
   }
 
-  if ((chartType as string) === 'progress' && auroraData) {
-    const PROGRESS_COLORS = ['#10d97e','#5bb8f5','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fde68a','#818cf8'];
+  if (chartType === 'progress' && auroraData) {
+    const PC = ['#10d97e','#5bb8f5','#fbbf24','#f472b6','#a78bfa','#22d3ee','#fde68a','#818cf8'];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
         {auroraData.labels.map((label, i) => {
           const value = Math.min(100, Math.max(0, auroraData.datasets?.[0]?.data?.[i] ?? 0));
-          const color = PROGRESS_COLORS[i % PROGRESS_COLORS.length];
+          const color = PC[i % PC.length];
           return (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -314,8 +325,6 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
     );
   }
 
-  // Heatmap preview: slice to max 4 rows × 6 cols so it fits the card
-  // Radar preview: slice to max 4 indicators
   const displayData = preview && auroraData
     ? chartType === 'heatmap'
       ? { labels: auroraData.labels.slice(0, 6), datasets: auroraData.datasets.slice(0, 4).map(ds => ({ ...ds, data: ds.data.slice(0, 6) })) }
@@ -329,47 +338,119 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
   return null;
 }
 
+// Minimum heights per chart type — prevents squashing
+const CHART_MIN_H: Record<string, number> = {
+  heatmap: 280, map: 300, radar: 240, scatter: 220, candlestick: 260,
+  'stacked-area': 220, 'diverging-bar': 240, 'bar-race': 260,
+  'hierarchical-bar': 260, 'radial-stacked-bar': 240, bollinger: 220,
+  treemap: 200, bar: 200, area: 200, line: 200, doughnut: 200, pie: 200,
+};
+
+function getChartMinH(insight: InsightData): number {
+  const type = (insight.chartOptions as Record<string, unknown>)?._auroraType as string ?? 'bar';
+  return CHART_MIN_H[type] ?? 200;
+}
+
+// KPI card height + list item height constants
+const KPI_H   = 72;   // approximate rendered height of a KpiCard
+const LIST_H  = 180;  // approximate rendered height of a list/transaction card
+const HEADER_H = 52;  // HeaderBar height
+const MIN_ZOOM = 0.55;
+const MAX_ZOOM = 1.4;
+
+/**
+ * Computes the zoom factor needed so the tallest column fits within the
+ * available viewport height without scrolling.
+ * Falls back to scroll (zoom=1) if content is only slightly taller.
+ */
+function useAdaptiveZoom(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  requiredH: number,
+  baseZoom: number,
+): number {
+  const [zoom, setZoom] = useState(baseZoom);
+  useEffect(() => {
+    const measure = () => {
+      const availH = containerRef.current?.clientHeight ?? window.innerHeight;
+      if (requiredH <= availH) {
+        setZoom(Math.min(baseZoom, MAX_ZOOM));
+      } else {
+        const computed = Math.max(MIN_ZOOM, availH / requiredH);
+        setZoom(computed);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [requiredH, baseZoom]);
+  return zoom;
+}
+
 function AutoHeightChart({ insight, preview = false }: { insight: InsightData; preview?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(200);
   useEffect(() => {
     if (!ref.current) return;
-    const ro = new ResizeObserver(entries => {
-      const height = entries[0]?.contentRect.height;
-      if (height > 10) setH(height);
-    });
+    const ro = new ResizeObserver(entries => { const height = entries[0]?.contentRect.height; if (height > 10) setH(height); });
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
+  return <div ref={ref} style={{ width: '100%', height: '100%' }}>{renderChart(insight, h, true, preview)}</div>;
+}
 
+function KpiCard({ ins, accent, cardRef, onClick }: { ins: InsightData; accent: string; cardRef?: (el: HTMLDivElement | null) => void; onClick: () => void }) {
   return (
-    <div ref={ref} style={{ width: '100%', height: '100%' }}>
-      {renderChart(insight, h, true, preview)}
+    <div data-animate ref={cardRef} onClick={onClick}
+      onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, accent)}
+      onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
+      style={cardStyle({ padding: '14px 16px', cursor: 'pointer', position: 'relative' })}>
+      <div style={accentLine(accent)} />
+      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px' }}>{ins.title}</p>
+      <p style={{ fontSize: 26, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
+      {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(120,165,220,0.45)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
     </div>
   );
 }
 
-function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpand }: Props & { visible: boolean; cardRefs: React.MutableRefObject<(HTMLDivElement | null)[]>; onExpand: (insight: InsightData) => void; onReset: () => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+function ChartCard({ ins, accent, cardRef, onClick, style, preview = false }: { ins: InsightData; accent: string; cardRef?: (el: HTMLDivElement | null) => void; onClick: () => void; style?: React.CSSProperties; preview?: boolean }) {
+  return (
+    <div data-animate ref={cardRef} onClick={onClick}
+      onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, accent)}
+      onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
+      style={cardStyle({ display: 'flex', flexDirection: 'column', padding: '12px 14px', cursor: 'pointer', position: 'relative', ...style })}>
+      <div style={accentLine(accent)} />
+      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0 }}>{ins.title}</p>
+      <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview={preview} /></div>
+    </div>
+  );
+}
+
+function HeaderBar({ query, onNewQuery }: { query: string | null; onNewQuery: () => void }) {
+  return (
+    <div data-animate style={cardStyle({ gridColumn: 'span 2', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' })}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,200,240,0.5), transparent)' }} />
+      <button onClick={onNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: 'rgba(0,200,240,0.06)', border: '1px solid rgba(0,200,240,0.15)', color: 'rgba(0,200,240,0.55)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        <span>New</span>
+      </button>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px', opacity: 0.7 }}>Executive Intelligence</p>
+        <h1 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
+      </div>
+    </div>
+  );
+}
+
+function useGridAnimation(visible: boolean, containerRef: React.RefObject<HTMLDivElement | null>, onReset: () => void) {
   const hasAnimated = useRef(false);
-
-  // Split: KPIs, primary chart (first), all secondary charts (rest), lists
-  const kpis      = insights.filter(ins => !ins.chartOptions && !ins.listItems);
-  const charts    = insights.filter(ins => !!ins.chartOptions);
-  const lists     = insights.filter(ins => !!ins.listItems);
-  const primary   = charts[0] ?? null;
-  const secondary = charts.slice(1); // ALL secondary charts go LEFT
-  const txList    = lists[0] ?? null;
-
-  useEffect(() => { if (!visible) { hasAnimated.current = false; } }, [visible]);
+  useEffect(() => { if (!visible) hasAnimated.current = false; }, [visible]);
   useEffect(() => {
     if (!visible || hasAnimated.current || !containerRef.current) return;
     const allEls = containerRef.current.querySelectorAll<HTMLElement>('[data-animate]');
     allEls.forEach(el => gsap.set(el, { opacity: 0, y: 20, scale: 0.97 }));
     let rafId: number;
     const tryAnimate = () => {
-      const allReady = Array.from(allEls).every(el => el.offsetWidth > 0);
-      if (!allReady) { rafId = requestAnimationFrame(tryAnimate); return; }
+      if (!Array.from(allEls).every(el => el.offsetWidth > 0)) { rafId = requestAnimationFrame(tryAnimate); return; }
       allEls.forEach((el, i) => gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.55, delay: i * 0.07, ease: 'power3.out' }));
       hasAnimated.current = true;
     };
@@ -383,101 +464,367 @@ function GridMode({ insights, cursor, query, onReset, visible, cardRefs, onExpan
     allEls.forEach((el, i) => gsap.to(el, { opacity: 0, scale: 0.88, y: 12, duration: 0.3, delay: i * 0.02, ease: 'power2.in', overwrite: true }));
     gsap.delayedCall(0.3 + allEls.length * 0.02, onReset);
   };
+  return { handleNewQuery };
+}
 
-  const CARD = (extra?: React.CSSProperties): React.CSSProperties => ({
-    borderRadius: 16,
-    background: 'rgba(255,255,255,0.038)',
-    border: '1px solid rgba(0,200,240,0.10)',
-    // visionOS inner highlight: borda superior mais clara simula luz de cima
-    boxShadow: '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)',
-    overflow: 'hidden',
-    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-    ...extra,
-  });
+function LayoutRenderer({ insights, cursor, query, onReset, visible, cardRefs, onExpand, layoutHint }: GridProps) {
+  const variant = layoutHint?.variant ?? 'procedural';
+  switch (variant) {
+    case 'procedural': return <ProceduralLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} gridSpec={layoutHint?.gridSpec} />;
+    case 'hero':       return <HeroLayout       insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'bento-asym': return <BentoAsymLayout  insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'comparison': return <ComparisonLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'focus':      return <FocusLayout      insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'minimal':    return <MinimalLayout    insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    default:           return <BentoSymLayout   insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+  }
+}
 
-  const accentLine = (color: string) => ({
-    position: 'absolute' as const,
-    top: 0, left: 0, right: 0, height: 1,
-    background: `linear-gradient(90deg, transparent, ${color}cc, transparent)`,
-  });
+// ───────────────────────────────────────────────────────────────────────────
+// PROCEDURAL LAYOUT
+// ───────────────────────────────────────────────────────────────────────────
 
-  const kpisLeft = kpis.slice(0, 4); // max 4 KPIs en izquierda (2 filas)
-  const kpiRows = Math.ceil(kpisLeft.length / 2);
-  const secRows = secondary.length;
+type ProceduralProps = LayoutProps & { gridSpec?: GridSpec };
 
-  // Auto-zoom: scale up by default, reduce when many components
-  const totalComponents = kpisLeft.length + secondary.length + (primary ? 1 : 0) + (txList ? 1 : 0);
-  const zoom = totalComponents <= 4 ? 1.4 : totalComponents <= 6 ? 1.2 : totalComponents <= 8 ? 1.0 : totalComponents <= 10 ? 0.85 : 0.75;
+function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpand, gridSpec }: ProceduralProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+
+  // Build a lookup: insightId → insight
+  const byId = React.useMemo(() => {
+    const m: Record<string, InsightData> = {};
+    insights.forEach(i => { m[i.id] = i; });
+    return m;
+  }, [insights]);
+
+  // Compute total required height for adaptive zoom
+  // We estimate by summing the tallest "column" of cells
+  const requiredH = React.useMemo(() => {
+    if (!gridSpec) return 600;
+    const COLS = gridSpec.cols;
+    // Simulate row placement: track column cursor
+    const colCursor = new Array(COLS).fill(0); // height used per column
+    let maxH = 0;
+    gridSpec.cells.forEach(cell => {
+      // Find the earliest row where this cell fits
+      const startCol = colCursor.indexOf(Math.min(...colCursor.slice(0, COLS - cell.colSpan + 1)));
+      const rowStart = Math.max(...colCursor.slice(startCol, startCol + cell.colSpan));
+      const rowEnd = rowStart + cell.minH + GAP;
+      for (let c = startCol; c < startCol + cell.colSpan; c++) colCursor[c] = rowEnd;
+      maxH = Math.max(maxH, rowEnd);
+    });
+    return maxH + 32;
+  }, [gridSpec]);
+
+  const baseZoom = insights.length <= 4 ? 1.3 : insights.length <= 7 ? 1.1 : 0.95;
+  const zoom = useAdaptiveZoom(containerRef, requiredH, baseZoom);
+
+  if (!gridSpec) {
+    // Fallback to BentoSymLayout if no spec
+    return <BentoSymLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+  }
+
+  const COLS = gridSpec.cols;
 
   return (
-    <div ref={containerRef} key={totalComponents} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom }}>
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1, minHeight: 0, padding: '16px 20px', overflow: 'hidden', zoom,
+        display: 'grid',
+        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+        gridAutoRows: 'min-content',
+        gap: GAP,
+        alignContent: 'start',
+      }}
+    >
+      {gridSpec.cells.map((cell, idx) => {
+        const accent = ACCENT_COLORS[idx % ACCENT_COLORS.length];
 
-      {/* LEFT: header + KPIs (max 4) + ALL secondary charts */}
-      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: `auto repeat(${kpiRows}, auto) repeat(${secRows}, minmax(180px, 1fr))`, gap: GAP }}>
-
-        {/* Header */}
-        <div data-animate style={{ ...CARD({ gridColumn: 'span 2', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 12, position: 'relative' }) }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,200,240,0.5), transparent)' }} />
-          <button onClick={handleNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: 'rgba(0,200,240,0.06)', border: '1px solid rgba(0,200,240,0.15)', color: 'rgba(0,200,240,0.55)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg><span>New</span></button>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px', opacity: 0.7 }}>Executive Intelligence</p>
-            <h1 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
-          </div>
-        </div>
-
-        {/* KPIs — max 4, 2 per row, auto height */}
-        {kpisLeft.map((ins, i) => {
-          const accent = ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length];
+        // Special: header cell
+        if (cell.insightId === '__header__') {
           return (
-            <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.025, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}44`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}18`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
-              style={{ ...CARD({ padding: '14px 16px', cursor: 'pointer', position: 'relative' }) }}>
-              <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px' }}>{ins.title}</p>
-              <p style={{ fontSize: 26, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
-              {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(120,165,220,0.45)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
+            <div key="__header__" style={{ gridColumn: `span ${cell.colSpan}` }}>
+              <HeaderBar query={query} onNewQuery={handleNewQuery} />
             </div>
           );
-        })}
+        }
 
-        {/* ALL secondary charts — each spans 2 cols, equal height via 1fr rows */}
-        {secondary.map((ins, i) => {
-          const accent = ACCENT_COLORS[(i + 4) % ACCENT_COLORS.length];
+        const ins = byId[cell.insightId];
+        if (!ins) return null;
+
+        const isKpi = !ins.chartOptions && !ins.listItems;
+        const style: React.CSSProperties = {
+          gridColumn: `span ${cell.colSpan}`,
+          gridRow: `span ${cell.rowSpan}`,
+          minHeight: cell.minH,
+        };
+
+        if (isKpi) {
           return (
-            <div key={ins.id} data-animate ref={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)}
-              onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.008, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${accent}38`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}14`; }}
-              onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
-              style={{ ...CARD({ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '12px 14px', cursor: 'pointer', position: 'relative' }) }}>
-              <div style={accentLine(accent)} />
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0 }}>{ins.title}</p>
-              <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview /></div>
+            <div key={ins.id} style={{ gridColumn: `span ${cell.colSpan}`, gridRow: `span ${cell.rowSpan}`, minHeight: cell.minH }}>
+              <KpiCard
+                ins={ins}
+                accent={accent}
+                cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+                onClick={() => onExpand(ins)}
+              />
             </div>
           );
-        })}
-      </div>
+        }
 
-      {/* RIGHT: primary chart */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
+        return (
+          <ChartCard
+            key={ins.id}
+            ins={ins}
+            accent={accent}
+            cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+            onClick={() => onExpand(ins)}
+            style={style}
+            preview={cell.rowSpan === 1}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
-        {/* Primary chart */}
-        {primary && (
-          <div data-animate ref={el => { cardRefs.current[insights.indexOf(primary)] = el; }} onClick={() => onExpand(primary)}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { scale: 1.004, duration: 0.2, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = `${ACCENT_COLORS[0]}38`; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${ACCENT_COLORS[0]}14`; }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' }); (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,240,0.10)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)'; }}
-            style={{ ...CARD({ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px 16px', cursor: 'pointer', position: 'relative', minHeight: 0 }) }}>
-            <div style={accentLine(ACCENT_COLORS[0])} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: 0 }}>{primary.title}</p>
-              <span style={{ fontSize: 9, color: 'rgba(0,200,240,0.25)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>expand</span>
-            </div>
-            <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={primary} /></div>
+function HeroLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  const kpis      = insights.filter(i => !i.chartOptions && !i.listItems);
+  const charts    = insights.filter(i => !!i.chartOptions);
+  const primary   = charts[0] ?? null;
+  const secondary = charts.slice(1);
+
+  const kpiGridH  = kpis.length > 0 ? Math.ceil(kpis.slice(0, 4).length / 2) * (KPI_H + GAP) : 0;
+  const secH      = secondary.reduce((s, c) => s + getChartMinH(c) + 36 + GAP, 0);
+  const requiredH = HEADER_H + GAP + kpiGridH + secH + 32;
+  const baseZoom  = insights.length <= 4 ? 1.3 : insights.length <= 7 ? 1.1 : 0.95;
+  const zoom      = useAdaptiveZoom(containerRef, requiredH, baseZoom);
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
+      <div style={{ flex: '0 0 38%', display: 'flex', flexDirection: 'column', gap: GAP, minWidth: 0 }}>
+        <HeaderBar query={query} onNewQuery={handleNewQuery} />
+        {kpis.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
+            {kpis.slice(0, 4).map((ins, i) => (
+              <KpiCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length]}
+                cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)} />
+            ))}
           </div>
         )}
+        {secondary.map((ins, i) => (
+          <ChartCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 3) % ACCENT_COLORS.length]}
+            cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+            onClick={() => onExpand(ins)}
+            style={{ flexShrink: 0, height: getChartMinH(ins) + 36 }}
+            preview />
+        ))}
+      </div>
+      {primary && (
+        <div style={{ flex: '0 0 62%', minWidth: 0 }}>
+          <ChartCard ins={primary} accent={ACCENT_COLORS[0]}
+            cardRef={el => { cardRefs.current[insights.indexOf(primary)] = el; }}
+            onClick={() => onExpand(primary)} style={{ height: '100%', minHeight: getChartMinH(primary) + 36 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BentoAsymLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  const kpis      = insights.filter(i => !i.chartOptions && !i.listItems).slice(0, 4);
+  const charts    = insights.filter(i => !!i.chartOptions);
+  const primary   = charts[0] ?? null;
+  const secondary = charts.slice(1);
+
+  const kpiGridH  = kpis.length > 0 ? Math.ceil(kpis.length / 2) * (KPI_H + GAP) : 0;
+  const secH      = secondary.reduce((s, c) => s + getChartMinH(c) + 36 + GAP, 0);
+  const requiredH = HEADER_H + GAP + kpiGridH + secH + 32;
+  const baseZoom  = insights.length <= 5 ? 1.2 : insights.length <= 8 ? 1.0 : 0.85;
+  const zoom      = useAdaptiveZoom(containerRef, requiredH, baseZoom);
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
+      {primary && (
+        <div style={{ flex: '0 0 62%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
+          <HeaderBar query={query} onNewQuery={handleNewQuery} />
+          <ChartCard ins={primary} accent={ACCENT_COLORS[0]}
+            cardRef={el => { cardRefs.current[insights.indexOf(primary)] = el; }}
+            onClick={() => onExpand(primary)}
+            style={{ flex: 1, minHeight: getChartMinH(primary) + 36 }} />
+        </div>
+      )}
+      <div style={{ flex: '0 0 38%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
+        {!primary && <HeaderBar query={query} onNewQuery={handleNewQuery} />}
+        {kpis.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
+            {kpis.map((ins, i) => (
+              <KpiCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length]}
+                cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)} />
+            ))}
+          </div>
+        )}
+        {secondary.map((ins, i) => (
+          <ChartCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 2) % ACCENT_COLORS.length]}
+            cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+            onClick={() => onExpand(ins)}
+            style={{ flexShrink: 0, height: getChartMinH(ins) + 36 }}
+            preview />
+        ))}
       </div>
     </div>
   );
-}
+}
+
+function BentoSymLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  const kpis      = insights.filter(i => !i.chartOptions && !i.listItems);
+  const charts    = insights.filter(i => !!i.chartOptions);
+  const primary   = charts[0] ?? null;
+  const secondary = charts.slice(1);
+  const kpisLeft  = kpis.slice(0, 4);
+
+  const kpiGridH  = kpisLeft.length > 0 ? Math.ceil(kpisLeft.length / 2) * (KPI_H + GAP) : 0;
+  const secH      = secondary.reduce((s, c) => s + getChartMinH(c) + 36 + GAP, 0);
+  const requiredH = HEADER_H + GAP + kpiGridH + secH + 32;
+  const baseZoom  = insights.length <= 4 ? 1.4 : insights.length <= 6 ? 1.2 : insights.length <= 8 ? 1.0 : 0.85;
+  const zoom      = useAdaptiveZoom(containerRef, requiredH, baseZoom);
+
+  return (
+    <div ref={containerRef} key={insights.length} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
+        <HeaderBar query={query} onNewQuery={handleNewQuery} />
+        {kpisLeft.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
+            {kpisLeft.map((ins, i) => (
+              <KpiCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length]}
+                cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)} />
+            ))}
+          </div>
+        )}
+        {secondary.map((ins, i) => (
+          <ChartCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 4) % ACCENT_COLORS.length]}
+            cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+            onClick={() => onExpand(ins)}
+            style={{ flexShrink: 0, height: getChartMinH(ins) + 36 }}
+            preview />
+        ))}
+      </div>
+      {primary && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ChartCard ins={primary} accent={ACCENT_COLORS[0]}
+            cardRef={el => { cardRefs.current[insights.indexOf(primary)] = el; }}
+            onClick={() => onExpand(primary)} style={{ height: '100%', minHeight: getChartMinH(primary) + 36 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComparisonLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  const kpis   = insights.filter(i => !i.chartOptions && !i.listItems).slice(0, 4);
+  const charts = insights.filter(i => !!i.chartOptions);
+  const [chartA, chartB, ...rest] = charts;
+
+  // Required height: header + KPI row + main chart row + extra charts
+  const kpiH    = kpis.length > 0 ? KPI_H + GAP : 0;
+  const mainH   = Math.max(
+    chartA ? getChartMinH(chartA) + 36 : 0,
+    chartB ? getChartMinH(chartB) + 36 : 0,
+  );
+  const extraH  = rest.reduce((s, c) => s + getChartMinH(c) + 36 + GAP, 0);
+  const requiredH = HEADER_H + GAP + kpiH + mainH + GAP + extraH + 32;
+  const baseZoom  = insights.length <= 5 ? 1.2 : insights.length <= 8 ? 1.0 : 0.85;
+  const zoom      = useAdaptiveZoom(containerRef, requiredH, baseZoom);
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
+      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      {kpis.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(kpis.length, 2)}, 1fr)`, gap: GAP, flexShrink: 0 }}>
+          {kpis.map((ins, i) => (
+            <KpiCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length]}
+              cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)} />
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0, height: mainH }}>
+        {chartA && <ChartCard ins={chartA} accent={ACCENT_COLORS[0]} cardRef={el => { cardRefs.current[insights.indexOf(chartA)] = el; }} onClick={() => onExpand(chartA)} style={{ height: '100%' }} />}
+        {chartB && <ChartCard ins={chartB} accent={ACCENT_COLORS[3]} cardRef={el => { cardRefs.current[insights.indexOf(chartB)] = el; }} onClick={() => onExpand(chartB)} style={{ height: '100%' }} />}
+      </div>
+      {rest.map((ins, i) => (
+        <ChartCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 5) % ACCENT_COLORS.length]}
+          cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+          onClick={() => onExpand(ins)}
+          style={{ flexShrink: 0, height: getChartMinH(ins) + 36 }}
+          preview />
+      ))}
+    </div>
+  );
+}
+
+function FocusLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  const kpis   = insights.filter(i => !i.chartOptions && !i.listItems);
+  const charts = insights.filter(i => !!i.chartOptions);
+  const [hero, ...rest] = kpis;
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '16px 20px', gap: GAP }}>
+      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      {hero && (
+        <div data-animate ref={el => { cardRefs.current[insights.indexOf(hero)] = el; }} onClick={() => onExpand(hero)}
+          onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, ACCENT_COLORS[0])}
+          onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
+          style={cardStyle({ padding: '32px 40px', cursor: 'pointer', position: 'relative', textAlign: 'center' })}>
+          <div style={accentLine(ACCENT_COLORS[0])} />
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: ACCENT_COLORS[0], margin: '0 0 12px' }}>{hero.title}</p>
+          <p style={{ fontSize: 56, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>{hero.metric}</p>
+          {hero.metricLabel && <p style={{ fontSize: 11, color: 'rgba(120,165,220,0.5)', margin: '10px 0 0' }}>{hero.metricLabel}</p>}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: GAP }}>
+        {rest.map((ins, i) => (
+          <KpiCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 2) % ACCENT_COLORS.length]}
+            cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }} onClick={() => onExpand(ins)} />
+        ))}
+      </div>
+      {charts.map((ins, i) => (
+        <ChartCard key={ins.id} ins={ins} accent={ACCENT_COLORS[(i + 1) % ACCENT_COLORS.length]}
+          cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+          onClick={() => onExpand(ins)} style={{ flex: 1, minHeight: 200 }} preview />
+      ))}
+    </div>
+  );
+}
+
+function MinimalLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '24px 48px', gap: GAP }}>
+      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: GAP, justifyContent: 'center', maxWidth: 800, margin: '0 auto', width: '100%' }}>
+        {insights.map((ins, i) => {
+          const accent = ACCENT_COLORS[i % ACCENT_COLORS.length];
+          if (ins.chartOptions) {
+            return <ChartCard key={ins.id} ins={ins} accent={accent} cardRef={el => { cardRefs.current[i] = el; }} onClick={() => onExpand(ins)} style={{ minHeight: 260 }} />;
+          }
+          return <KpiCard key={ins.id} ins={ins} accent={accent} cardRef={el => { cardRefs.current[i] = el; }} onClick={() => onExpand(ins)} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cursor: CursorState; onClose: () => void }) {
   const backdropRef = useRef<HTMLDivElement>(null);
   const cardRef     = useRef<HTMLDivElement>(null);
@@ -524,7 +871,11 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
     }));
   }, []);
 
-  const handleClose = () => { gsap.to(backdropRef.current, { opacity: 0, duration: 0.2 }); gsap.to(cardRef.current, { opacity: 0, scale: 0.94, y: 16, duration: 0.2, onComplete: onClose }); };
+  const handleClose = () => {
+    gsap.to(backdropRef.current, { opacity: 0, duration: 0.2 });
+    gsap.to(cardRef.current, { opacity: 0, scale: 0.94, y: 16, duration: 0.2, onComplete: onClose });
+  };
+
   return (
     <div ref={backdropRef} onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 200, opacity: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', cursor: 'pointer' }}>
       <div ref={cardRef} onClick={e => e.stopPropagation()} style={{ position: 'relative', cursor: 'default', width: '100%', maxWidth: 900, height: isStatCard ? 'auto' : '75vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', opacity: 0 }}>
@@ -538,12 +889,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
           {auroraData && !isList && (chartType as string) === 'map' && (
-            <MexicoMapChart
-              data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))}
-              height={340}
-              gradient="aurora"
-              bare
-            />
+            <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={340} gradient="aurora" bare />
           )}
           {auroraData && !isList && (chartType as string) !== 'map' && (
             <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={chartType === 'heatmap' ? Math.max(400, (auroraData.datasets?.length ?? 4) * 40 + 80) : 340} />
@@ -567,4 +913,3 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
     </div>
   );
 }
-

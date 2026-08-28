@@ -2,6 +2,9 @@
 // Completely decoupled from UI and data fetching logic.
 // Connect real backend events by calling transition() from your data layer.
 
+import { selectLayout, reorderByNarrative, classifyNarrative } from './layout-engine';
+import type { LayoutHint } from './layout-engine';
+
 export type ObservatoryState =
   | 'IDLE'
   | 'QUERY_RECEIVED'
@@ -26,6 +29,7 @@ export interface InsightData {
   chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge';
   chartOptions: Record<string, unknown> | null;
   isPrimary?: boolean;
+  narrativeRole?: 'hook' | 'context' | 'detail' | 'cta';
   listItems?: { title: string; subtitle?: string; amount: string; status?: 'positive' | 'negative' | 'neutral' }[];
 }
 
@@ -34,6 +38,7 @@ export interface ObservatoryContext {
   query: QueryContext | null;
   statusMessage: string;
   insights: InsightData[];
+  layoutHint: LayoutHint | null;
   error: string | null;
 }
 
@@ -65,6 +70,7 @@ class ObservatoryStateMachine {
     query: null,
     statusMessage: '',
     insights: [],
+    layoutHint: null,
     error: null,
   };
 
@@ -442,7 +448,7 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         title: props.title ?? 'Progress',
         chartType: 'bar',
         chartOptions: {
-          _auroraType: 'bar',
+          _auroraType: 'progress',  // keep 'progress' so reorderByNarrative can identify it
           _auroraData: { labels: pgLabels, datasets: [{ label: '', data: pgValues }] },
           backgroundColor: 'transparent',
           grid: { top: 4, right: 52, bottom: 4, left: 4, containLabel: true },
@@ -504,22 +510,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── TransactionList → insight con lista renderizada (no chart) ────────────
+    // ── TransactionList → SKIP (not relevant for executives)
     if (component === 'TransactionList') {
-      const items: { title?: string; label?: string; amount?: number | string; subtitle?: string; date?: string; status?: string }[] = (props.items ?? []).slice(0, 8);
-      if (items.length === 0) continue;
-      insights.push({
-        id: `txn-${idx}`,
-        title: props.title ?? 'Transactions',
-        chartType: 'bar',
-        chartOptions: null, // rendered as list, not chart
-        listItems: items.map(it => ({
-          title: String(it.title ?? it.label ?? ''),
-          subtitle: it.subtitle ?? it.date ?? undefined,
-          amount: String(it.amount ?? ''),
-          status: it.status as 'positive' | 'negative' | 'neutral' | undefined,
-        })),
-      });
       continue;
     }
   }
@@ -576,8 +568,10 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extr
   observatory.transition('GENERATING_VISUALIZATIONS');
   await delay(600);
 
-  const insights = uiConfigToInsights(uiConfig);
-  observatory.transition('REVEAL', { insights });
+  const arc      = classifyNarrative(rawQuery);
+  const insights = reorderByNarrative(uiConfigToInsights(uiConfig), arc);
+  const layoutHint = selectLayout(insights, rawQuery);
+  observatory.transition('REVEAL', { insights, layoutHint });
   await delay(900);
   observatory.transition('PRESENTATION');
 }

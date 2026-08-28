@@ -4,7 +4,7 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import type { McpClient } from './mcp-client.js';
 import { generateCacheKey, cacheGet, cacheSet, TTL } from './cache.js';
-import { selectChartType, CHART_DECISION_PROMPT } from './chart-decision.js';
+import { selectChartType, validateChartDecision, CHART_DECISION_PROMPT } from './chart-decision.js';
 
 const bedrockClient = new BedrockRuntimeClient({
   region: process.env.AWS_REGION,
@@ -478,6 +478,13 @@ ${CHART_DECISION_PROMPT}`,
       console.log(`[orchestrator] chart-decision: ${decision.chartType} (${decision.objective}) multiDataset=${decision.multiDataset} — ${decision.reason}`);
     }
 
+    // Post-decision validation (Rules A–J)
+    const validation = validateChartDecision(parsed.chartType, intent, parsed.groupBy, parsed.filters);
+    if (validation.action !== 'allow') {
+      console.log(`[orchestrator] chart-validation: ${validation.action} ${parsed.chartType} → ${validation.chartType} — ${validation.reason}`);
+      parsed.chartType = validation.chartType;
+    }
+
     // Si el chartType es especializado, forzar template:chart para que no lo sobreescriban
     const STANDARD_TYPES = ['bar', 'line', 'area', 'pie', 'doughnut'];
     if (parsed.chartType && !STANDARD_TYPES.includes(parsed.chartType) &&
@@ -531,7 +538,13 @@ async function generateUIConfig(
   dateRange?: { gte?: string; lte?: string },
 ): Promise<unknown> {
   const totalRecords = records.length;
-  const sampleRecords = records.slice(0, totalRecords < 50 ? 10 : 20);
+  // Comparison mode: reduce sample to avoid token overflow with multi-dataset charts
+  const isComparison = (parsedIntent as Record<string, unknown>).multiDataset === true ||
+    (Array.isArray(parsedIntent.filters.categoria) && (parsedIntent.filters.categoria as string[]).length > 1) ||
+    (Array.isArray(parsedIntent.filters.estado) && (parsedIntent.filters.estado as string[]).length > 1);
+  const isRichTemplate = isComparison || parsedIntent.template === 'category';
+  const sampleSize = isRichTemplate ? 8 : (totalRecords < 50 ? 10 : 20);
+  const sampleRecords = records.slice(0, sampleSize);
 
   // Compute basic aggregations to help Bedrock
   const aggregations = computeAggregations(records, parsedIntent);
@@ -692,31 +705,23 @@ COLORES para charts (usa estos exactos):
     parsedIntent.groupBy === 'fecha_venta';
 
   const comparisonCtx = multiCategoria
-    ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterCategoria as string[]).length} categorías: [${multiCategoriaList}].
-REGLAS OBLIGATORIAS para el dashboard de comparación — genera EXACTAMENTE estos 4 charts en este orden:
-1. Chart scatter: correlación precio_contado vs plazo_semanas. Un dataset por categoría (${multiCategoriaList}).
-   labels = valores de precio_contado (como strings numéricos), datasets[i].data = valores de plazo_semanas.
-   Usa los registros de la muestra para poblar los puntos. Cada dataset tiene el label de su categoría.
-2. Chart area: evolución mensual de ventas. Un dataset por categoría (${multiCategoriaList}).
-   Usa fieldSummaries.fecha_venta o agrupa los registros por mes. Eje X = meses, eje Y = conteo.
-3. Chart line: tendencia de monto_total_credito por mes. Un dataset por categoría (${multiCategoriaList}).
-   Eje X = meses, eje Y = suma de monto_total_credito por mes.
-4. Chart bar: comparación directa por estado (top 8 estados). Un dataset por categoría (${multiCategoriaList}).
-   Eje X = estados, cada dataset = conteo de ventas de esa categoría por estado.
-Además incluye:
-- KPIGrid: una StatCard por categoría con su total individual + StatCards de totales generales.
-- TransactionList: últimas 6-8 operaciones.
-NUNCA uses treemap ni doughnut de una sola serie para comparar.`
+    ? `MODO COMPARACION ACTIVO: comparando ${(filterCategoria as string[]).length} categorias: [${multiCategoriaList}].
+REGLAS OBLIGATORIAS — genera EXACTAMENTE estos 4 charts:
+1. Chart scatter: correlacion precio_contado vs plazo_semanas. Un dataset por categoria (${multiCategoriaList}).
+   USA MAXIMO 8 PUNTOS POR DATASET. labels = primeros 8 valores de precio_contado (strings), datasets[i].data = plazo_semanas correspondientes.
+2. Chart area: evolucion mensual. Un dataset por categoria. Usa crossAggregation.data si existe.
+3. Chart line: tendencia monto_total_credito por mes. Un dataset por categoria. Usa crossAggregation.data si existe.
+4. Chart bar: comparacion por estado (top 6 estados). Un dataset por categoria.
+Ademas: KPIGrid con totales por categoria.`
     : multiEstado
-    ? `MODO COMPARACIÓN ACTIVO: se están comparando ${(filterEstado as string[]).length} estados: [${multiEstadoList}].
-REGLAS OBLIGATORIAS para el dashboard de comparación — genera EXACTAMENTE estos 4 charts en este orden:
-1. Chart scatter: correlación precio_contado vs plazo_semanas. Un dataset por estado (${multiEstadoList}).
-2. Chart area: evolución mensual de ventas. Un dataset por estado (${multiEstadoList}).
-3. Chart line: tendencia de monto_total_credito por mes. Un dataset por estado (${multiEstadoList}).
-4. Chart bar: comparación directa por categoría. Un dataset por estado (${multiEstadoList}).
-- KPIGrid: una StatCard por estado con su total individual.
-- TransactionList: últimas 6-8 operaciones.
-NUNCA uses un chart de un solo dataset cuando hay múltiples estados a comparar.`
+    ? `MODO COMPARACION ACTIVO: comparando ${(filterEstado as string[]).length} estados: [${multiEstadoList}].
+REGLAS OBLIGATORIAS — genera EXACTAMENTE estos 4 charts:
+1. Chart scatter: correlacion precio_contado vs plazo_semanas. Un dataset por estado (${multiEstadoList}).
+   USA MAXIMO 8 PUNTOS POR DATASET.
+2. Chart area: evolucion mensual. Un dataset por estado. Usa crossAggregation.data si existe.
+3. Chart line: tendencia monto_total_credito por mes. Un dataset por estado.
+4. Chart bar: comparacion por categoria. Un dataset por estado.
+Ademas: KPIGrid con totales por estado.`
     : isMultiDataset
     ? `MODO MULTI-DATASET ACTIVO: el chart principal debe tener datasets separados por cada serie detectada.
    Usa fieldSummaries para calcular los valores por serie.`
@@ -733,7 +738,7 @@ ${parsedIntent.chartType ? `ChartType forzado: ${parsedIntent.chartType} — USA
 ${topN ? `Top N solicitado: ${topN} — muestra SOLO los ${topN} primeros grupos en el chart (ordenados de mayor a menor). El KPIGrid debe reflejar el total de todos los registros, no solo los top ${topN}.` : ''}
 
 CONTEXTO DE LOS DATOS (${totalRecords} registros totales):
-${JSON.stringify({ ...aggregations, groupBy: aggregations.groupBy ? { ...(aggregations.groupBy as Record<string,unknown>), data: ((aggregations.groupBy as Record<string,unknown>).data as unknown[])?.slice(0, 20) } : undefined, crossAggregation: aggregations.crossAggregation ? { ...(aggregations.crossAggregation as Record<string,unknown>), data: ((aggregations.crossAggregation as Record<string,unknown>).data as unknown[])?.slice(0, 12) } : undefined }, null, 2)}
+${JSON.stringify({ ...aggregations, groupBy: aggregations.groupBy ? { ...(aggregations.groupBy as Record<string,unknown>), data: ((aggregations.groupBy as Record<string,unknown>).data as unknown[])?.slice(0, isRichTemplate ? 8 : 20) } : undefined, crossAggregation: aggregations.crossAggregation ? { ...(aggregations.crossAggregation as Record<string,unknown>), data: ((aggregations.crossAggregation as Record<string,unknown>).data as unknown[])?.slice(0, isRichTemplate ? 6 : 12) } : undefined }, null, 2)}
 
 Muestra de registros (${sampleRecords.length} de ${totalRecords}):
 ${JSON.stringify(sampleRecords, null, 2)}
@@ -1224,6 +1229,68 @@ function sanitizeUIConfig(
       }
     } else {
       barCount = 0;
+    }
+    return comp;
+  });
+
+  // ── Rule 7: deduplicate charts — same type OR same dimension data ──
+  // Fingerprint = type + sorted first 3 labels (catches same data with different titles)
+  function chartFingerprint(comp: Record<string, unknown>): string {
+    const props = comp.props as Record<string, unknown>;
+    const type = props.type as string;
+    const data = props.data as { labels?: string[] } | undefined;
+    const labels = (data?.labels ?? []).slice(0, 3).sort().join('|');
+    return `${type}::${labels}`;
+  }
+
+  const seenFingerprints = new Set<string>();
+  const chartTypeCounts: Record<string, number> = {};
+  // Max allowed per type
+  const TYPE_MAX: Record<string, number> = {
+    bar: 2, doughnut: 1, pie: 1, treemap: 1, area: 2, line: 2,
+    heatmap: 1, radar: 1, scatter: 1, funnel: 1, gauge: 1, map: 1,
+  };
+  const FALLBACK_TYPES = ['treemap', 'heatmap', 'radar', 'area', 'bar', 'funnel'];
+  const usedTypes = new Set<string>();
+
+  config.components = (config.components as Record<string, unknown>[]).map(comp => {
+    if (comp.component !== 'Chart') return comp;
+    const props = comp.props as Record<string, unknown>;
+    const type = props.type as string;
+    const fp = chartFingerprint(comp);
+
+    chartTypeCounts[type] = (chartTypeCounts[type] ?? 0) + 1;
+    const maxAllowed = TYPE_MAX[type] ?? 2;
+    const isDuplicate = seenFingerprints.has(fp) || chartTypeCounts[type] > maxAllowed;
+
+    if (isDuplicate) {
+      const alt = FALLBACK_TYPES.find(t => t !== type && !usedTypes.has(t) && (chartTypeCounts[t] ?? 0) < (TYPE_MAX[t] ?? 2));
+      if (alt) {
+        console.log(`[sanitize] duplicate/excess ${type} (fp=${fp}) → ${alt}`);
+        usedTypes.add(alt);
+        chartTypeCounts[alt] = (chartTypeCounts[alt] ?? 0) + 1;
+        return { ...comp, props: { ...props, type: alt } };
+      }
+      console.log(`[sanitize] duplicate ${type} — no alternative, keeping`);
+    }
+
+    seenFingerprints.add(fp);
+    usedTypes.add(type);
+    return comp;
+  });
+
+  // ── Rule 8: max 1 doughnut/pie per dashboard — convert extras to treemap ──
+  let doughnutCount = 0;
+  config.components = (config.components as Record<string, unknown>[]).map(comp => {
+    if (comp.component !== 'Chart') return comp;
+    const props = comp.props as Record<string, unknown>;
+    const type = props.type as string;
+    if (type === 'doughnut' || type === 'pie') {
+      doughnutCount++;
+      if (doughnutCount > 1) {
+        console.log(`[sanitize] extra ${type} → treemap`);
+        return { ...comp, props: { ...props, type: 'treemap' } };
+      }
     }
     return comp;
   });

@@ -161,7 +161,91 @@ function detectExplicitChartRequest(intent: string): string | null {
   return null;
 }
 
-// ─── Decision tree ────────────────────────────────────────────
+// ─── Cardinality limits ──────────────────────────────────────
+
+const CARDINALITY_LIMITS: Record<string, { max: number; fallback: string }> = {
+  pie:      { max: 6,  fallback: 'bar' },
+  doughnut: { max: 6,  fallback: 'bar' },
+  radar:    { max: 8,  fallback: 'bar' },
+  funnel:   { max: 10, fallback: 'bar' },
+};
+
+// Chart types that require specific data structures
+const CHART_DATA_REQUIREMENTS: Record<string, { needsTwoNumeric?: boolean; needsTime?: boolean; needsGeo?: boolean; needsOHLC?: boolean; needsSequential?: boolean }> = {
+  scatter:          { needsTwoNumeric: true },
+  candlestick:      { needsOHLC: true },
+  bollinger:        { needsTime: true },
+  map:              { needsGeo: true },
+  'bar-race':       { needsTime: true },
+  'stacked-area':   { needsTime: true },
+  funnel:           { needsSequential: true },
+};
+
+/**
+ * Post-Bedrock deterministic validator.
+ * Implements Rules A–J from the chart selection framework.
+ * Returns ALLOW, MODIFY (with new chartType), or FALLBACK.
+ */
+export function validateChartDecision(
+  proposedChart: string,
+  intent: string,
+  groupBy: string | null | undefined,
+  filters: Record<string, unknown> | undefined,
+  labelCount?: number,
+): { action: 'allow' | 'modify' | 'fallback'; chartType: string; reason: string } {
+  const dims = detectDimensions(intent, groupBy, filters);
+
+  // Rule E — chart requires data structure not available
+  const req = CHART_DATA_REQUIREMENTS[proposedChart];
+  if (req) {
+    if (req.needsTwoNumeric && !dims.hasProducto && !dims.hasTiempo) {
+      return { action: 'modify', chartType: 'bar', reason: 'Scatter requiere 2 variables numéricas — fallback a bar' };
+    }
+    if (req.needsOHLC) {
+      const hasOHLC = /precio|monto|venta|financiad|contado/i.test(intent);
+      if (!hasOHLC) return { action: 'modify', chartType: 'line', reason: 'Candlestick requiere OHLC — fallback a line' };
+    }
+    if (req.needsGeo && !dims.hasEstado && groupBy !== 'estado') {
+      return { action: 'modify', chartType: 'bar', reason: 'Map requiere dimensión geográfica — fallback a bar' };
+    }
+    if (req.needsTime && !dims.hasTiempo && groupBy !== 'fecha_venta') {
+      return { action: 'modify', chartType: 'bar', reason: `${proposedChart} requiere dimensión temporal — fallback a bar` };
+    }
+  }
+
+  // Rule F — cardinality limits
+  const limit = CARDINALITY_LIMITS[proposedChart];
+  if (limit && labelCount !== undefined && labelCount > limit.max) {
+    return { action: 'modify', chartType: limit.fallback, reason: `${proposedChart} con ${labelCount} categorías supera límite de ${limit.max} — fallback a ${limit.fallback}` };
+  }
+
+  // Rule: map with single estado filter is useless
+  if (proposedChart === 'map' && filters?.estado && !Array.isArray(filters.estado)) {
+    return { action: 'modify', chartType: 'bar', reason: 'Map con filtro de estado único — fallback a bar por ciudad/categoría' };
+  }
+
+  // Rule: ranking intent → prefer bar over map unless explicitly geographic
+  if (proposedChart === 'map' && OBJECTIVE_KEYWORDS.ranking?.test(intent) && !dims.hasEstado) {
+    return { action: 'modify', chartType: 'bar', reason: 'Ranking sin dimensión geográfica — bar es más claro que map' };
+  }
+
+  // Rule: stacked-area needs ≥2 series
+  if (proposedChart === 'stacked-area' && !dims.isMultiSerie && !dims.hasProducto) {
+    return { action: 'modify', chartType: 'area', reason: 'stacked-area con 1 serie — degradar a area' };
+  }
+
+  // Rule: pie/doughnut for temporal data is wrong
+  if ((proposedChart === 'pie' || proposedChart === 'doughnut') && dims.hasTiempo && !dims.hasProducto) {
+    return { action: 'modify', chartType: 'line', reason: 'Pie/doughnut con datos temporales — usar line' };
+  }
+
+  // Rule: gauge only for single percentage/rate KPI
+  if (proposedChart === 'gauge' && dims.hasEstado && groupBy === 'estado') {
+    return { action: 'modify', chartType: 'bar', reason: 'Gauge no aplica para comparación por estado — usar bar' };
+  }
+
+  return { action: 'allow', chartType: proposedChart, reason: 'Validación OK' };
+}
 
 export function selectChartType(
   intent: string,
@@ -264,53 +348,127 @@ export function selectChartType(
 // ─── System prompt snippet ────────────────────────────────────
 
 export const CHART_DECISION_PROMPT = `
-MODELO DE DECISIÓN PARA SELECCIÓN DE GRÁFICA — MATRIZ COMPLETA:
+MODELO DE DECISION PARA SELECCION DE GRAFICA — REGLAS MAESTRAS:
+
+PRIORIDAD 0 — REGLA MAESTRA:
+El tipo de chart se determina por la INTENCION ANALITICA y la ESTRUCTURA DE DATOS, NO por palabras aisladas.
+Nunca seleccionar un chart solo porque una palabra clave aparece en el prompt.
+Nunca inventar dimensiones, categorias, valores o jerarquias que no existan en los datos.
+
+MATRIZ DE DECISION (intencion -> chart):
+- Comparar categorias / ranking                  -> bar (vertical <=8 items, horizontal >8, ordenado mayor->menor)
+- Evolucion temporal (>3 puntos)                 -> line
+- Tendencia temporal + volumen/acumulado         -> area
+- Composicion de un total (<=6 items)            -> doughnut
+- Composicion de un total (>6 items)             -> treemap
+- Correlacion entre 2 variables numericas        -> scatter
+- Comparar multiples metricas de varias entidades -> radar (min 3, max 8 metricas)
+- Conversion entre etapas secuenciales           -> funnel
+- KPI unico / % de cumplimiento                  -> gauge
+- Distribucion en 2 dimensiones                  -> heatmap
+- Progreso porcentual de varias categorias       -> ProgressGroup
+- Composicion jerarquica                         -> treemap
+- Datos financieros OHLC                         -> candlestick
+- Distribucion geografica por estado             -> map
+- Ranking geografico (top estados)               -> bar (NO map)
+- Participacion temporal multi-serie             -> stacked-area
+- Salud crediticia / riesgo divergente           -> diverging-bar
+
+REGLAS ESPECIFICAS:
+
+BAR: comparar categorias, Top N, Bottom N, ranking, ventas por producto/sucursal/estado cuando objetivo es RANKING.
+NUNCA usar pie para rankings. NUNCA usar bar para composicion de un total.
+
+LINE: X=tiempo, Y=metrica, mas de 3 puntos temporales. Comparacion temporal multi-serie (2024 vs 2025 por mes) -> line multi-series.
+
+AREA: igual que line pero cuando se quiere enfatizar volumen/magnitud. NO usar para porcentajes/tasas -> usar line.
+
+PIE/DOUGHNUT: SOLO cuando los valores son partes de un mismo total. Maximo 6 categorias. Si >6 -> bar o treemap.
+NUNCA para datos temporales, rankings, o comparaciones entre entidades independientes.
+
+SCATTER: SOLO cuando existen 2 variables numericas independientes y el usuario pregunta por relacion/correlacion.
+NUNCA para categorias.
+
+RADAR: SOLO para entidades x multiples metricas (minimo 3, maximo 8 metricas).
+NUNCA para ventas por estado o ventas mensuales.
+
+FUNNEL: SOLO cuando existe una secuencia logica de etapas. Las etapas deben tener orden logico.
+
+GAUGE: SOLO para una sola metrica con rango/meta interpretable (%, tasa, score).
+NUNCA para comparaciones entre multiples entidades.
+
+HEATMAP: SOLO cuando existen 2 dimensiones categoricas/temporales + valor numerico (ej: estado x mes x ventas).
+
+MAP: usar cuando la dimension principal es geografica Y el objetivo es distribucion espacial.
+Estado especifico como FILTRO (ej: "en Jalisco") -> NO usar map.
+"Top 10 estados" con objetivo ranking -> usar BAR, no map.
+groupBy=estado sin filtro de categoria -> map.
+
+CANDLESTICK: SOLO cuando existen datos OHLC (open, high, low, close). NUNCA para ventas mensuales simples.
+
+REGLAS DE VALIDACION (aplicar despues de seleccionar):
+
+A. La pregunta manda sobre el tipo de dato:
+   "Cual vende mas?" -> BAR
+   "Como evoluciono?" -> LINE
+   "Que porcentaje representa?" -> DOUGHNUT
+   "Existe relacion?" -> SCATTER
+   "Como se distribuye geograficamente?" -> MAP
+   "Cual es el porcentaje actual?" -> GAUGE
+
+B. Validar que los datos soporten el chart antes de seleccionarlo.
+
+C. Fallback universal: BAR (el chart generalista mas seguro).
+
+D. NUNCA inventar dimensiones que no existan en el dataset.
+
+E. NO usar un chart si el dataset no lo soporta estructuralmente.
+
+F. Limites de cardinalidad:
+   1 categoria -> KPI/Gauge
+   2-6 categorias -> Pie/Doughnut posible
+   7-15 categorias -> Bar
+   >15 categorias -> Bar horizontal + Top N
+   Pie >6 categorias = PROHIBIDO
+   Radar >8 metricas = PROHIBIDO
+
+G. Time series siempre en orden temporal ASC (enero, febrero, marzo...).
+
+H. Comparacion temporal (2024 vs 2025 por mes) -> Line multi-series.
+   Comparacion agregada (total 2024 vs total 2025) -> Bar.
+
+I. Pregunta simple -> 1 chart. No generar 4 charts para responder "cual fue la moto mas vendida?".
+
+J. Si la pregunta tiene multiples intenciones -> 1 chart por intencion, maximo 3 charts.
 
 DIMENSIONES:
-- TIEMPO: histórico, evolución, tendencia, semanal, mensual, anual, por mes/semana/año
-- PRODUCTO: categoría, tipo de producto (motos, celulares, etc.)
-- ESTADO: entidad federativa, región, zona, cobertura geográfica
-- MULTI-SERIE: 2+ categorías o 2+ estados en el mismo intent
+- TIEMPO: historico, evolucion, tendencia, semanal, mensual, anual, por mes/semana/anio
+- PRODUCTO: categoria, tipo de producto (motos, celulares, etc.)
+- ESTADO: entidad federativa, region, zona, cobertura geografica
+- MULTI-SERIE: 2+ categorias o 2+ estados en el mismo intent
 
-REGLAS DE SELECCIÓN (en orden de prioridad):
-
-1. MULTI-SERIE + TIEMPO  → chartType: "line"  (líneas paralelas, una por serie)
-   Ejemplo: "compara el histórico de motos y celulares"
-
-2. MULTI-SERIE sin tiempo → chartType: "scatter" (correlación precio vs plazo) + charts secundarios: area, line, bar multi-dataset
-   Ejemplo: "compara motos y celulares", "ventas de celulares y motos"
-
-3. TIEMPO solo → chartType: "area"
-   Ejemplo: "histórico de motos", "evolución mensual de ventas"
-
-4. TIEMPO + categorías como dimensión → chartType: "stacked-area"
-   Ejemplo: "participación de categorías por mes"
-
-5. ESTADO + PRODUCTO → chartType: "map" (mapa principal filtrado por ese producto)
-   El heatmap categoría × estado se incluye como chart SECUNDARIO en el dashboard.
-   Ejemplo: "motos por estado", "ventas de celulares por estado"
-
-6. ESTADO solo (sin producto, sin tiempo) → chartType: "map"
-   Aplica cuando: groupBy=estado, o el intent habla de distribución/cobertura/presencia geográfica
-   Ejemplo: "ventas por estado", "qué estados venden más", "distribución geográfica",
-            "cobertura por estado", "presencia en estados", "mapa de ventas",
-            "en qué estados", "alcance geográfico", "ranking de estados"
-
-7. PARTICIPACIÓN simple (≤5 items) → chartType: "doughnut"
-8. PARTICIPACIÓN con muchos items (>5) → chartType: "treemap"
-9. RANKING simple → chartType: "bar"
-10. RANKING geográfico (top estados, sin producto) → chartType: "map"
-11. RANKING + TIEMPO → chartType: "bar-race"
-12. SALUD CREDITICIA → chartType: "diverging-bar"
-13. JERARQUÍA → chartType: "hierarchical-bar"
-14. CORRELACIÓN → chartType: "scatter"
-15. COMPARACIÓN MULTIDIMENSIONAL → chartType: "radar"
-16. EMBUDO → chartType: "funnel"
-17. KPI ÚNICO → chartType: "gauge"
-18. VOLATILIDAD/OHLC → chartType: "candlestick" o "bollinger"
+REGLAS DE SELECCION (en orden de prioridad):
+1. MULTI-SERIE + TIEMPO -> chartType: "line"
+2. MULTI-SERIE sin tiempo -> chartType: "scatter" + charts secundarios
+3. TIEMPO solo -> chartType: "area"
+4. TIEMPO + categorias como dimension -> chartType: "stacked-area"
+5. ESTADO + PRODUCTO -> chartType: "map"
+6. ESTADO solo (sin producto, sin tiempo) -> chartType: "map"
+7. PARTICIPACION simple (<=5 items) -> chartType: "doughnut"
+8. PARTICIPACION con muchos items (>5) -> chartType: "treemap"
+9. RANKING simple -> chartType: "bar"
+10. RANKING geografico (top estados, sin producto) -> chartType: "map"
+11. RANKING + TIEMPO -> chartType: "bar-race"
+12. SALUD CREDITICIA -> chartType: "diverging-bar"
+13. JERARQUIA -> chartType: "hierarchical-bar"
+14. CORRELACION -> chartType: "scatter"
+15. COMPARACION MULTIDIMENSIONAL -> chartType: "radar"
+16. EMBUDO -> chartType: "funnel"
+17. KPI UNICO -> chartType: "gauge"
+18. VOLATILIDAD/OHLC -> chartType: "candlestick" o "bollinger"
 
 FILTROS vs DIMENSIONES:
-- Estado específico (ej: "en Jalisco") = FILTRO, no dimensión → NO usar map
-- 2+ categorías (ej: "motos y celulares") = MULTI-SERIE → comparación
-- groupBy: "estado" sin filtro de categoría = dimensión geográfica → usar map
+- Estado especifico (ej: "en Jalisco") = FILTRO, no dimension -> NO usar map
+- 2+ categorias (ej: "motos y celulares") = MULTI-SERIE -> comparacion
+- groupBy: "estado" sin filtro de categoria = dimension geografica -> usar map
 `;

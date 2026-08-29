@@ -6,6 +6,7 @@ import ReactECharts from 'echarts-for-react';
 import GlassPanel from './GlassPanel';
 import AuroraChart from '@/shared/components/AuroraChart';
 import MexicoMapChart from '@/shared/components/MexicoMapChart';
+import MexicoHexbinChart from '@/shared/components/MexicoHexbinChart';
 import AuroraBackground from './AuroraBackground';
 import type { CursorState } from '../hooks/useCursor';
 import type { InsightData } from '../state-machine';
@@ -191,12 +192,12 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
 
   const chartType = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
-    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap';
     const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
     const t = series?.[0]?.type ?? 'bar';
     if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
-    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
-    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','hexbin-map','treemap'];
+    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap';
   })() : 'bar';
 
   return (
@@ -224,15 +225,20 @@ function InsightContent({ insight, cursor, index, total }: { insight: InsightDat
               })}
             </div>
           )}
-          {auroraData && (chartType as string) === 'map' && (
+          {auroraData && (chartType === 'map') && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={340} gradient="aurora" bare />
+            </div>
+          )}
+          {auroraData && (chartType === 'hexbin-map') && (
+            <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
+              <MexicoHexbinChart data={auroraData as never} height={340} gradient="aurora" bare />
             </div>
           )}
           {auroraData && (chartType as string) === 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8, overflowY: 'auto' }}>{renderChart(insight, 340, true)}</div>
           )}
-          {auroraData && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
+          {auroraData && chartType !== 'map' && chartType !== 'hexbin-map' && (chartType as string) !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, marginTop: 8 }}>
               <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={340} />
             </div>
@@ -268,8 +274,10 @@ function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
   return {
     borderRadius: 16,
     background: 'rgba(255,255,255,0.038)',
-    border: '1px solid rgba(0,200,240,0.10)',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -1px 0 rgba(0,0,0,0.2)',
     overflow: 'hidden',
     transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
     ...extra,
@@ -288,7 +296,7 @@ function hoverIn(el: HTMLElement, accent: string) {
 
 function hoverOut(el: HTMLElement) {
   gsap.to(el, { scale: 1, duration: 0.25, ease: 'power2.out', overwrite: 'auto' });
-  el.style.borderColor = 'rgba(0,200,240,0.10)';
+  el.style.borderColor = '';
   el.style.boxShadow = '0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)';
 }
 
@@ -300,6 +308,10 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
 
   if (chartType === 'map' && auroraData) {
     return <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
+  }
+
+  if (chartType === 'hexbin-map' && auroraData) {
+    return <MexicoHexbinChart data={auroraData as never} height={bare ? '100%' : height} gradient="aurora" bare={bare} />;
   }
 
   if (chartType === 'progress' && auroraData) {
@@ -340,7 +352,7 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
 
 // Minimum heights per chart type — prevents squashing
 const CHART_MIN_H: Record<string, number> = {
-  heatmap: 320, map: 340, radar: 280, scatter: 260, candlestick: 300,
+  heatmap: 320, 'hexbin-map': 360, map: 340, radar: 280, scatter: 260, candlestick: 300,
   'stacked-area': 260, 'diverging-bar': 280, 'bar-race': 300,
   'hierarchical-bar': 300, 'radial-stacked-bar': 280, bollinger: 260,
   treemap: 240, bar: 240, area: 240, line: 240, doughnut: 240, pie: 240,
@@ -403,11 +415,11 @@ function KpiCard({ ins, accent, cardRef, onClick }: { ins: InsightData; accent: 
     <div data-animate ref={cardRef} onClick={onClick}
       onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, accent)}
       onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
-      style={cardStyle({ padding: '14px 16px', cursor: 'pointer', position: 'relative' })}>
+      style={cardStyle({ padding: '14px 16px', cursor: 'pointer', position: 'relative', background: `${accent}35`, borderColor: `${accent}80`, boxShadow: `0 4px 20px ${accent}25, inset 0 1px 0 ${accent}40` })}>
       <div style={accentLine(accent)} />
-      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px' }}>{ins.title}</p>
-      <p style={{ fontSize: 26, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
-      {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(120,165,220,0.45)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
+      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#ffffff', margin: '0 0 8px' }}>{ins.title}</p>
+      <p style={{ fontSize: 26, fontWeight: 700, color: '#ffffff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
+      {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.65)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
     </div>
   );
 }
@@ -420,7 +432,7 @@ function InsightTextCard({ ins, accent, cardRef, onClick }: { ins: InsightData; 
       onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
       style={cardStyle({ padding: '16px 18px', cursor: 'pointer', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' })}>
       <div style={accentLine(accent)} />
-      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 10px' }}>{ins.title}</p>
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#ffffff', margin: '0 0 10px' }}>{ins.title}</p>
       {bullets.length > 1 ? (
         <ul style={{ margin: 0, padding: '0 0 0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {bullets.map((b, i) => (
@@ -441,7 +453,7 @@ function ChartCard({ ins, accent, cardRef, onClick, style, preview = false }: { 
       onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
       style={cardStyle({ display: 'flex', flexDirection: 'column', padding: '12px 14px', cursor: 'pointer', position: 'relative', ...style })}>
       <div style={accentLine(accent)} />
-      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px', flexShrink: 0 }}>{ins.title}</p>
+      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#ffffff', margin: '0 0 8px', flexShrink: 0 }}>{ins.title}</p>
       <div style={{ flex: 1, minHeight: 0 }}><AutoHeightChart insight={ins} preview={preview} /></div>
     </div>
   );
@@ -889,12 +901,12 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
 
   const chartType = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
-    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap';
     const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
     const t = series?.[0]?.type ?? 'bar';
     if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
-    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
-    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','hexbin-map','treemap'];
+    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap';
   })() : 'bar';
 
   useEffect(() => {
@@ -923,15 +935,20 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         </div>
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
-          {auroraData && !isList && (chartType as string) === 'map' && (
+          {auroraData && !isList && (chartType === 'map') && (
             <div style={{ flex: 1, minHeight: 0 }}>
               <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height="100%" gradient="aurora" bare />
+            </div>
+          )}
+          {auroraData && !isList && (chartType === 'hexbin-map') && (
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <MexicoHexbinChart data={auroraData as never} height="100%" gradient="aurora" bare />
             </div>
           )}
           {auroraData && !isList && (chartType as string) === 'progress' && (
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{renderChart(insight, 400, true)}</div>
           )}
-          {auroraData && !isList && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
+          {auroraData && !isList && chartType !== 'map' && chartType !== 'hexbin-map' && (chartType as string) !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <AuroraChart type={chartType} data={auroraData} gradient="aurora" height="100%" bare />
             </div>

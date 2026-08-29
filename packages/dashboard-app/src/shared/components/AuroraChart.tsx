@@ -4,6 +4,8 @@ import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import gsap from 'gsap';
+import MexicoHexbinChart from './MexicoHexbinChart';
+import type { HexbinDataPoint } from './MexicoHexbinChart';
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -29,7 +31,7 @@ export interface LegacyChartData {
   datasets: Array<{ label?: string; data: number[] }>;
 }
 
-export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
+export type AuroraChartData = FlatDataPoint[] | LegacyChartData | HexbinDataPoint[];
 
 // Candlestick-MA specific data format
 export interface CandlestickMAData {
@@ -39,7 +41,7 @@ export interface CandlestickMAData {
 }
 
 export interface AuroraChartProps {
-  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma';
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap' | 'candlestick-ma';
   data: AuroraChartData | CandlestickMAData;
   flint?: FlintSpec;
   flintData?: Record<string, unknown>[];
@@ -511,7 +513,7 @@ function gaugeOption(rawData: AuroraChartData, title: string | undefined, palett
   };
 }
 
-// ─── Heatmap (Punch Card style) ────────────────────────────
+// ─── Heatmap (Punch Card style — legacy fallback) ─────────
 // data.labels = x axis (hours), data.datasets[i].label = y axis (days), data.datasets[i].data = values per x
 
 function heatmapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
@@ -570,7 +572,7 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
       bottom: 2,
       itemHeight: 100,
       itemWidth: 14,
-      inRange: { color: ['#060a10', '#003a5c', '#0077a8', '#00c8f0', '#7ee8fa'] },
+      inRange: { color: ['#060a10', '#001a4a', '#0047BA', '#1a7fff', '#7ee8fa'] },
       textStyle: { color: tk.axisLabel, fontSize: 10 },
       borderColor: tk.axisLine,
       borderWidth: 1,
@@ -592,7 +594,7 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, _pal
       itemStyle: {
         borderColor: 'rgba(15,23,42,0.6)',
         borderWidth: 1,
-        borderRadius: 2,
+        borderRadius: 6,
       },
       emphasis: {
         itemStyle: {
@@ -837,6 +839,19 @@ export default function AuroraChart({
       default:                return barOption(data as AuroraChartData, title, palette, tk!);
     }
   };
+
+  // hexbin-map delegates entirely to MexicoHexbinChart
+  if (type === 'hexbin-map') {
+    return (
+      <MexicoHexbinChart
+        data={data as HexbinDataPoint[]}
+        title={bare ? undefined : title}
+        height={height}
+        gradient={gradient}
+        bare={bare}
+      />
+    );
+  }
 
   return (
     <div

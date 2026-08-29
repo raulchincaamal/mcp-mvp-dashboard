@@ -228,6 +228,11 @@
   cursor: none !important;
 }
 
+/* ── Grid card border reset ──────────────────────────────────────────────── */
+[data-animate] {
+  border-color: transparent;
+}
+
 
 * {
   scrollbar-width: thin;
@@ -235,7 +240,7 @@
 }
 
 body {
-  font-family: "Chivo Mono", "Fira Code", monospace;
+  font-family: "Space Grotesk", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   letter-spacing: -0.01em;
@@ -246,11 +251,11 @@ body {
     color var(--t-slow) var(--ease-in-out);
 }
 
-/* Numbers always use Chivo Mono */
+/* Numbers always use Space Mono */
 .tabular-nums,
 [style*="tabular-nums"],
 input[type="number"] {
-  font-family: "Chivo Mono", monospace;
+  font-family: "Space Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 

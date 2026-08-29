@@ -90,7 +90,7 @@ const COMPONENT_CATALOG = [
   {
     name: 'Chart',
     description:
-      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap, map, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
+      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, hexbin-map, treemap, map, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
   },
   { name: 'DataSummary', description: 'Styled data table with hover effects' },
   {
@@ -583,9 +583,11 @@ Props por componente:
   Ordena de mayor a menor automáticamente. Usa para mostrar conversión por etapas (ej: total → activos → al_corriente → liquidados).
 - Chart (gauge): { type: "gauge", title?, data: { labels: ["Nombre del indicador"], datasets: [{ data: [valor_0_a_100] }] } }
   Un solo valor entre 0 y 100. Ideal para % de cumplimiento, % morosidad, % liquidados.
-- Chart (heatmap): { type: "heatmap", title?, data: { labels: ["col1","col2",...], datasets: [{ label: "fila1", data: [v1,v2,...] }, { label: "fila2", data: [...] }] } }
-  labels = eje X (ej: categorías), datasets[i].label = eje Y (ej: estados), datasets[i].data = valores por columna.
-  CRÍTICO: los valores del heatmap DEBEN calcularse desde fieldSummaries reales cruzando 2 campos. NUNCA interpoles ni inventes valores — si no tienes el cruce exacto, usa los conteos de fieldSummaries.categoria.topValues y fieldSummaries.estado.topValues para aproximar.
+- Chart (hexbin-map): { type: "hexbin-map", title?, data: [{ name: string, lon: number, lat: number, value: number, size?: number }] }
+  Mapa de México con hexágonos. Cada punto tiene coordenadas geográficas (lon/lat en grados decimales) y un valor numérico.
+  El tamaño del hexágono representa la densidad (cantidad de puntos en esa celda) y el color representa el valor promedio.
+  Usa SOLO cuando el análisis sea geográfico con datos de lat/lon por registro. Si no tienes lat/lon, usa Chart type:"map" en su lugar.
+  Coordenadas aproximadas por estado: Ciudad de México (lon:-99.1, lat:19.4), Jalisco (lon:-103.3, lat:20.7), Nuevo León (lon:-100.3, lat:25.7), Yucatán (lon:-89.6, lat:20.9), Veracruz (lon:-96.1, lat:19.2), Chihuahua (lon:-106.1, lat:28.6), Sonora (lon:-110.9, lat:29.1), Oaxaca (lon:-96.7, lat:17.1), Guerrero (lon:-99.5, lat:17.4), Puebla (lon:-98.2, lat:19.0).
 - Chart (treemap): { type: "treemap", title?, data: { labels: ["nombre1","nombre2",...], datasets: [{ data: [v1,v2,...] }] } }
   labels = nombres de los nodos, data = tamaños. Ideal para distribución proporcional de categorías.
 - Chart (map): { type: "map", title?, data: { labels: ["Estado1","Estado2",...], datasets: [{ data: [v1,v2,...] }] } }
@@ -622,7 +624,7 @@ IMPORTANTE PARA CHARTS ESPECIALIZADOS:
 REGLA CRÍTICA — CHART TYPE OBLIGATORIO:
 Si el userMessage especifica un "ChartType forzado", DEBES usar ESE tipo en el Chart principal, sin excepción.
 Esta regla tiene prioridad sobre cualquier template o instrucción posterior.
-Los tipos válidos son: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, heatmap, treemap,
+Los tipos válidos son: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, hexbin-map, treemap,
 bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race.
 
 FILOSOFÍA DE VISUALIZACIÓN:
@@ -632,7 +634,8 @@ REGLAS ANTI-CHART-INÚTIL (obligatorias):
 - NUNCA uses map cuando hay un filtro de estado activo (singleEstado en el contexto) — usa bar por ciudad o categoría
 - NUNCA uses area/line con 1 solo punto temporal — si el rango es ≤ 1 mes y hay pocas fechas, usa bar comparativo
 - NUNCA uses stacked-area con 1 sola serie — degrada a area simple
-- Los valores del heatmap DEBEN ser reales desde fieldSummaries, nunca interpolados
+- Los valores del hexbin-map DEBEN ser puntos reales con lat/lon del dataset, nunca inventados
+- NUNCA uses hexbin-map si no tienes coordenadas lat/lon por registro — usa map en su lugar
 
 REGLA CRÍTICA — NO REPETIR INFORMACIÓN:
 - NUNCA uses dos charts que muestren exactamente la misma dimensión y métrica
@@ -640,7 +643,7 @@ REGLA CRÍTICA — NO REPETIR INFORMACIÓN:
 - Si ya tienes un doughnut de estatus_credito, no uses otro pie/doughnut de estatus_credito
 - Si ya tienes un treemap de categoría, no uses otro bar de categoría con los mismos datos
 - Cada componente debe aportar una perspectiva DIFERENTE del dataset
-- Prefiere cruzar 2 dimensiones (heatmap, stacked-area, diverging-bar) sobre repetir 1 dimensión
+- Prefiere cruzar 2 dimensiones (hexbin-map, stacked-area, diverging-bar) sobre repetir 1 dimensión
 
 DIVERSIDAD DE CHARTS (obligatorio):
 - NUNCA uses doughnut más de 1 vez por dashboard
@@ -699,7 +702,7 @@ REGLAS OBLIGATORIAS para dashboard de categoria unica:
    d. Chart treemap: distribucion geografica — top 10 estados (usa fieldSummaries.estado.topValues)
    e. ProgressGroup: distribucion de estatus_credito — colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
    f. TransactionList: ultimas 6 ventas de ${filterCategoria}
-3. Opcionalmente agrega: Chart heatmap (producto x estado), Chart diverging-bar (salud crediticia por estado), ProgressGroup canal_venta`
+3. Opcionalmente agrega: Chart hexbin-map (distribución geográfica de densidad), Chart diverging-bar (salud crediticia por estado), ProgressGroup canal_venta`
     : '';
   const estadoCtx = singleEstado
     ? `FILTRO ACTIVO: estado="${filterEstado}". Este es un dashboard de UN SOLO ESTADO — genera analisis profundo de ese estado.
@@ -779,9 +782,9 @@ ${
    Usa aggregations para poblar los datos reales.
 ${parsedIntent.chartType === 'map' ? `3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
 4. ProgressGroup: distribución por canal_venta — calcula % reales desde fieldSummaries.canal_venta.topValues, colores: ["#a78bfa","#22d3ee","#fbbf24"]
-5. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
+5. Chart treemap: distribución por categoría (top 8 categorías, valor = conteo)
 6. TransactionList: últimas 6 operaciones` : `3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
-4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
+4. Chart treemap: distribución por categoría (top 8 categorías, valor = conteo)
 5. TransactionList: últimas 6 operaciones`}`
     : effectiveTemplate === '__singleCategoria__'
     ? categoriaCtx
@@ -1051,8 +1054,8 @@ function sanitizeUIConfig(
       }
     }
 
-    // ── Rule 4: singleEstado — bar/heatmap grouped by estado with 1 label ──
-    if (singleEstado && ['bar', 'heatmap'].includes(type) && (labels as unknown[]).length <= 1) {
+    // ── Rule 4: singleEstado — bar/hexbin-map grouped by estado with 1 label ──
+    if (singleEstado && ['bar', 'hexbin-map'].includes(type) && (labels as unknown[]).length <= 1) {
       console.log(`[sanitize] replacing ${type} (1 label, single estado) → bar by categoria`);
       const catTop = fieldSummaries.categoria?.topValues?.slice(0, 8) ?? [];
       if (catTop.length > 0) {
@@ -1097,9 +1100,9 @@ function sanitizeUIConfig(
       }
     }
 
-    // ── Rule 5: heatmap with singleCategoria — replace with treemap by producto ──
-    if (singleCategoria && type === 'heatmap') {
-      console.log(`[sanitize] replacing heatmap (single categoria) → treemap by producto`);
+    // ── Rule 5: hexbin-map with singleCategoria — replace with treemap by producto ──
+    if (singleCategoria && type === 'hexbin-map') {
+      console.log(`[sanitize] replacing hexbin-map (single categoria) → treemap by producto`);
       if (productoTop.length > 0) {
         return {
           ...comp,
@@ -1198,9 +1201,9 @@ function sanitizeUIConfig(
   // Max allowed per type
   const TYPE_MAX: Record<string, number> = {
     bar: 1, doughnut: 1, pie: 1, treemap: 1, area: 2, line: 2,
-    heatmap: 1, radar: 1, scatter: 1, funnel: 1, gauge: 1, map: 1,
+    'hexbin-map': 1, radar: 1, scatter: 1, funnel: 1, gauge: 1, map: 1,
   };
-  const FALLBACK_TYPES = ['treemap', 'heatmap', 'radar', 'area', 'bar', 'funnel'];
+  const FALLBACK_TYPES = ['treemap', 'radar', 'area', 'bar', 'funnel'];
   const usedTypes = new Set<string>();
 
   config.components = (config.components as Record<string, unknown>[]).map(comp => {

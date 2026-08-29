@@ -26,7 +26,7 @@ export interface InsightData {
   subtitle?: string;
   metric?: string;
   metricLabel?: string;
-  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge';
+  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge' | 'text';
   chartOptions: Record<string, unknown> | null;
   isPrimary?: boolean;
   narrativeRole?: 'hook' | 'context' | 'detail' | 'cta';
@@ -173,6 +173,15 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
   const TOOLTIP_STYLE = getTooltipStyle(isDark);
 
   let progressGroupCount = 0;
+  // Track chart types seen — max 1 per type (except area/line: max 2)
+  const chartTypeSeen: Record<string, number> = {};
+  const CHART_TYPE_MAX: Record<string, number> = {
+    bar: 1, treemap: 1, doughnut: 1, pie: 1, heatmap: 1, radar: 1,
+    scatter: 1, funnel: 1, gauge: 1, map: 1, candlestick: 1, bollinger: 1,
+    'stacked-area': 1, 'diverging-bar': 1, 'radial-stacked-bar': 1,
+    'hierarchical-bar': 1, 'bar-race': 1,
+    area: 2, line: 2, progress: 2,
+  };
 
   for (const comp of components) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -391,6 +400,12 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
       const eType = (chartOptions._auroraType as string) ||
         ((type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar');
+
+      // Deduplicate: skip if we've already seen this chart type too many times
+      const typeKey = eType;
+      chartTypeSeen[typeKey] = (chartTypeSeen[typeKey] ?? 0) + 1;
+      if (chartTypeSeen[typeKey] > (CHART_TYPE_MAX[typeKey] ?? 1)) continue;
+
       insights.push({
         id: `chart-${idx}`,
         title: props.title ?? uiConfig.title ?? 'Chart',
@@ -428,6 +443,10 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       const pgValues = pgItems.map(it => Math.min(100, Math.max(0, it.value ?? 0)));
 
       progressGroupCount++;
+
+      // Skip if we've already seen too many progress groups
+      chartTypeSeen['progress'] = (chartTypeSeen['progress'] ?? 0) + 1;
+      if (chartTypeSeen['progress'] > (CHART_TYPE_MAX['progress'] ?? 2)) continue;
 
       if (progressGroupCount >= 2) {
         insights.push({
@@ -512,6 +531,20 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
     // ── TransactionList → SKIP (not relevant for executives)
     if (component === 'TransactionList') {
+      continue;
+    }
+
+    // ── MiniChart / StatCard with text content → InsightText card ──
+    if (component === 'MiniChart' || (component === 'StatCard' && !props.value)) {
+      const ci = insights.length;
+      insights.push({
+        id: `text-${ci}`,
+        title: props.title ?? 'Insight',
+        subtitle: props.description ?? props.insight ?? props.text ?? props.subtitle ?? undefined,
+        metric: props.value ? String(props.value) : undefined,
+        chartType: 'text' as InsightData['chartType'],
+        chartOptions: null,
+      });
       continue;
     }
   }

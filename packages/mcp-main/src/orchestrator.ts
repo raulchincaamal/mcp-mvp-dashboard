@@ -1,4 +1,4 @@
-import {
+﻿﻿﻿import {
   BedrockRuntimeClient,
   ConverseCommand,
 } from '@aws-sdk/client-bedrock-runtime';
@@ -98,7 +98,7 @@ const COMPONENT_CATALOG = [
     description: 'List of items with title, amount, date, status',
   },
   { name: 'ProgressGroup', description: 'Card with multiple progress bars' },
-  { name: 'MiniChart', description: 'Compact sparkline chart inside a card' },
+  { name: 'MiniChart', description: 'Compact insight text card with title and descriptive text bullets. Use for key findings, anomalies, or recommendations derived from the data. Props: { title: string, description: string (use \\n to separate bullet points) }' },
 ];
 
 // ─── Orchestrator ─────────────────────────────────────────────
@@ -527,7 +527,7 @@ Reglas:
 - Usa aggregations.crossAggregation.data para charts multi-serie (si existe)
 - Formatea montos: >=1M -> "$1.2M", >=1K -> "$45.3K"
 - NUNCA generes arrays vacios
-- Genera EXACTAMENTE 3 componentes: KPIGrid + Chart principal + TransactionList
+- Genera EXACTAMENTE 5 componentes: KPIGrid + Chart principal + ProgressGroup + Chart treemap + TransactionList
 - Colores: ["#5bb8f5","#22d3ee","#a78bfa","#34d399","#fbbf24","#f472b6","#60a5fa","#4ade80"]`;
 }
 
@@ -610,6 +610,7 @@ Props por componente:
 - TransactionList: { title?, items: [{ title, subtitle?, amount, date?, status?: "positive"|"negative"|"neutral" }] }
 - ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
 - StatCard: { title, value, subtitle?, trend?, trendDirection?, icon? }
+- MiniChart: { title: string, description: string } — usa \\n para separar bullets. Ideal para insights clave, anomalias o recomendaciones derivadas de los datos. Ejemplo: { title: "Insight Clave", description: "67% de creditos al corriente\\nProducto top: BAJAJ PULSAR\\nEstado con mayor morosidad: Guerrero" }
 
 IMPORTANTE PARA CHARTS ESPECIALIZADOS:
 - Para candlestick: DEBES generar datos OHLC reales agrupando los registros por fecha. Usa aggregations para derivar open/high/low/close. NUNCA generes data vacía [].
@@ -686,12 +687,31 @@ COLORES para charts (usa estos exactos):
   const multiCategoria = Array.isArray(filterCategoria) && filterCategoria.length > 1;
   const multiEstado = Array.isArray(filterEstado) && filterEstado.length > 1;
 
-  // When filtered to 1 categoria, treemap/radar by categoria makes no sense → use producto or estado instead
+  // When filtered to 1 categoria, generate a rich single-category dashboard
   const categoriaCtx = singleCategoria
-    ? `FILTRO ACTIVO: categoria="${filterCategoria}". NUNCA uses Chart treemap/radar/doughnut agrupado por categoría — solo hay una. En su lugar agrupa por: producto (top 8), estado (top 10), o canal_venta.`
+    ? `FILTRO ACTIVO: categoria="${filterCategoria}". Este es un dashboard de UNA SOLA CATEGORIA — genera analisis profundo de esa categoria.
+REGLAS OBLIGATORIAS para dashboard de categoria unica:
+1. NUNCA uses Chart treemap/doughnut/pie agrupado por categoria — solo hay una.
+2. Genera minimo 6 componentes con estas perspectivas DIFERENTES:
+   a. KPIGrid: total ventas, monto total, promedio precio, % al_corriente, top producto
+   b. Chart area o line: evolucion mensual de ventas de ${filterCategoria} (usa crossAggregation.data o groupBy temporal)
+   c. Chart bar: top 8 productos de ${filterCategoria} por volumen (usa fieldSummaries.producto.topValues)
+   d. Chart treemap: distribucion geografica — top 10 estados (usa fieldSummaries.estado.topValues)
+   e. ProgressGroup: distribucion de estatus_credito — colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
+   f. TransactionList: ultimas 6 ventas de ${filterCategoria}
+3. Opcionalmente agrega: Chart heatmap (producto x estado), Chart diverging-bar (salud crediticia por estado), ProgressGroup canal_venta`
     : '';
   const estadoCtx = singleEstado
-    ? `FILTRO ACTIVO: estado="${filterEstado}". NUNCA uses Chart agrupado por estado — solo hay uno. NUNCA uses Chart type:"map" — con un solo estado el mapa es inútil. En su lugar agrupa por: ciudad (top 8), sucursal (top 8), o categoria.`
+    ? `FILTRO ACTIVO: estado="${filterEstado}". Este es un dashboard de UN SOLO ESTADO — genera analisis profundo de ese estado.
+REGLAS OBLIGATORIAS para dashboard de estado unico:
+1. NUNCA uses Chart agrupado por estado — solo hay uno. NUNCA uses Chart type:"map".
+2. Genera minimo 6 componentes con estas perspectivas DIFERENTES:
+   a. KPIGrid: total ventas, monto total, promedio precio, % al_corriente, top categoria
+   b. Chart area o line: evolucion mensual de ventas en ${filterEstado} (usa crossAggregation.data o groupBy temporal)
+   c. Chart bar: top 8 ciudades o sucursales en ${filterEstado} (usa fieldSummaries.ciudad.topValues o fieldSummaries.sucursal.topValues)
+   d. Chart treemap: distribucion por categoria en ${filterEstado} (usa fieldSummaries.categoria.topValues)
+   e. ProgressGroup: distribucion de estatus_credito — colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
+   f. TransactionList: ultimas 6 ventas en ${filterEstado}`
     : '';
   const estatusCtx = singleEstatus
     ? `FILTRO ACTIVO: estatus_credito="${filterEstatus}". NUNCA uses ProgressGroup de estatus_credito — solo hay un estatus. En su lugar usa ProgressGroup por canal_venta o categoria.`
@@ -729,6 +749,11 @@ Ademas: KPIGrid con totales por estado.`
 
   const filterCtxBlock = [categoriaCtx, estadoCtx, estatusCtx, comparisonCtx].filter(Boolean).join('\n');
 
+  // When singleCategoria or singleEstado is active, override template to use the rich single-filter instructions
+  const effectiveTemplate = singleCategoria ? '__singleCategoria__'
+    : singleEstado ? '__singleEstado__'
+    : parsedIntent.template;
+
   const userMessage = `Intent del usuario: "${intent}"
 Template sugerido: ${parsedIntent.template}
 GroupBy detectado: ${parsedIntent.groupBy ?? 'ninguno'}
@@ -758,107 +783,27 @@ ${parsedIntent.chartType === 'map' ? `3. ProgressGroup: distribución de estatus
 6. TransactionList: últimas 6 operaciones` : `3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
 4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
 5. TransactionList: últimas 6 operaciones`}`
-    : parsedIntent.template === 'executive'
-    ? `Genera un dashboard COMPLETO con mínimo 6 componentes:
-1. KPIGrid: total ventas, monto total, promedio precio, % morosidad, total liquidados
-2. Chart bar: ventas por estado (top 10, usa fieldSummaries.estado.topValues)
-3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
-4. Chart area: evolución mensual de ventas (usa aggregations.groupBy si hay datos temporales, si no usa fieldSummaries.fecha_venta o genera tendencia con los datos disponibles)
-5. Chart treemap: distribución por categoría (usa fieldSummaries.categoria.topValues)
-6. TransactionList: últimas 6-8 operaciones de la muestra`
-    : parsedIntent.template === 'category'
-      ? `Genera mínimo 6 componentes:
-1. KPIGrid: total ventas, monto total, promedio, top categoría
-2. Chart treemap: distribución por categoría (tamaño = monto total)
-3. ProgressGroup: top categorías por % de participación en ventas — calcula % reales desde fieldSummaries.categoria.topValues, colores aurora: ["#a78bfa","#22d3ee","#34d399","#fbbf24","#f472b6","#818cf8","#fb923c","#5bb8f5"]
-4. Chart heatmap: categoría × estado (top 6 categorías × top 8 estados, valor = conteo)
-5. Chart radar: comparación multidimensional por categoría (usa top 6 categorías, métricas: conteo, monto promedio, % al_corriente)
-6. TransactionList: últimas 6 operaciones`
-      : parsedIntent.template === 'credit'
-        ? `Genera mínimo 6 componentes:
-1. KPIGrid: totales por estatus, monto en riesgo, % atrasados
-2. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
-3. Chart diverging-bar: salud crediticia por estado (top 10 estados, keys: ["cancelado","atrasado","al_corriente","liquidado"], negativeLabel: "← Más riesgo", positiveLabel: "Más salud →")
-4. Chart treemap: distribución por categoría de créditos atrasados
-5. ProgressGroup: distribución por canal_venta — calcula % reales desde fieldSummaries.canal_venta.topValues, colores: ["#a78bfa","#22d3ee","#fbbf24"]
-6. TransactionList: créditos con mayor riesgo`
-        : parsedIntent.template === 'candlestick'
-          ? `Genera un dashboard de VELAS/CANDLESTICK:
-1. KPIGrid: periodos totales, valor máximo (high), valor mínimo (low), variación total (close final - open inicial)
-2. Chart candlestick: Agrupa los registros por fecha_venta. Para cada fecha calcula:
-   - open: primer valor del campo numérico (monto_total_credito, precio_contado, o monto_financiado según el intent)
-   - high: valor máximo de ese día
-   - low: valor mínimo de ese día
-   - close: último valor de ese día
-   Genera al menos 10-30 velas. Usa aggregations y la muestra para derivar los OHLC reales.
-   El formato DEBE ser: data: [{ date: "YYYY-MM-DD", open: N, high: N, low: N, close: N }]`
-          : parsedIntent.template === 'bollinger'
-            ? `Genera un dashboard de BANDAS DE BOLLINGER:
-1. KPIGrid: promedio, máximo, mínimo, total periodos
-2. Chart bollinger: Serie temporal con un valor por fecha.
-   data: [{ date: "YYYY-MM-DD", value: number }]
-   Agrupa por fecha_venta y suma el campo numérico relevante. Genera al menos 15+ puntos.`
-            : parsedIntent.template === 'stacked-area'
-              ? `Genera un dashboard de ÁREA APILADA:
-1. KPIGrid: total, categorías, top serie
-2. Chart stacked-area: Usa un campo temporal (fecha_venta por mes/semana) como eje X, y un campo categórico para las series.
-   data: [{ label: "periodo", serie1: number, serie2: number, ... }], keys: ["serie1", ...]`
-              : parsedIntent.template === 'diverging-bar'
-                ? `Genera un dashboard DIVERGENTE (estilo Observable):
-1. KPIGrid: total registros, % en estatus negativo (cancelado+atrasado), % en estatus positivo (liquidado+al_corriente)
-2. Chart diverging-bar:
-   - Usa estatus_credito como segmentos divergentes
-   - Usa otro campo categórico (estado, categoria, sucursal según groupBy) como categorías (eje Y)
-   - keys DEBEN estar ordenados de más negativo a más positivo: ["cancelado", "atrasado", "al_corriente", "liquidado"]
-   - values: conteo de registros por combinación categoría+estatus
-   - Incluye negativeLabel: "← Más riesgo" y positiveLabel: "Más salud →"
-   - NO incluyas neutralKey si no hay segmento neutro claro
-   - El frontend normaliza automáticamente a porcentajes y usa colores espectrales
-   Ejemplo: data: [{ label: "CDMX", values: [{ key: "cancelado", value: 5 }, { key: "atrasado", value: 12 }, { key: "al_corriente", value: 30 }, { key: "liquidado", value: 25 }] }]
-   keys: ["cancelado", "atrasado", "al_corriente", "liquidado"]`
-                : parsedIntent.template === 'radial-stacked-bar'
-                  ? `Genera un dashboard RADIAL:
-1. KPIGrid: total, categorías, series
-2. Chart radial-stacked-bar: Similar a stacked-area pero en coordenadas polares.
-   data: [{ label: "cat", serie1: N, serie2: N }], keys: ["serie1", ...]`
-                  : parsedIntent.template === 'hierarchical-bar'
-                    ? `Genera un dashboard JERÁRQUICO con drill-down:
-1. KPIGrid: total, niveles, registros
-2. Chart hierarchical-bar: Construye un árbol de 2 niveles usando 2 campos categóricos (ej: categoria → producto, o estado → ciudad).
-   data: { name: "Total", children: [{ name: "Grupo", value: N, children: [{ name: "Sub", value: N }] }] }`
-                    : parsedIntent.template === 'bar-race'
-                      ? `Genera un dashboard de CARRERA DE BARRAS ANIMADA:
-1. KPIGrid: total, frames/periodos, líder final
-2. Chart bar-race: Genera frames temporales acumulativos. Agrupa por fecha (mes o semana) y por un campo categórico.
-   Cada frame es la suma ACUMULADA hasta ese periodo.
-   frames: [{ label: "YYYY-MM", items: [{ name: "cat", value: N }] }], maxBars: 10`
-                      : parsedIntent.template === 'chart'
-                        ? (totalRecords < 100
-                          ? `Genera EXACTAMENTE 3 componentes (pocos registros):
-1. KPIGrid: 3 metricas de resumen
-2. Chart principal tipo "${parsedIntent.chartType ?? 'area'}" usando aggregations.groupBy.data para labels y values
-3. TransactionList: ultimas 5 operaciones`
-                          : `Genera mínimo 5 componentes:
-1. KPIGrid: 3 métricas de resumen (total registros, monto total, promedio)
-2. Chart principal usando aggregations.groupBy.data para labels y values.
-   - Si granularity es "month" o "week" o "year" → usa type:"${parsedIntent.chartType ?? 'area'}" con eje X temporal
-   - Si chartType es "scatter" → usa labels=valores de un campo numérico, data=valores de otro campo numérico
-   - Si chartType es "radar" → usa labels=categorías/estados (top 6-8), datasets=una serie por métrica
-   - Si chartType es "funnel" → usa labels=etapas de crédito, data=conteos
-   - Si chartType es "gauge" → usa labels=["% Morosidad"], data=[valor 0-100]
-   - Si chartType es "heatmap" → labels=categorías (eje X), datasets=estados top 8 (eje Y)
-   - Si chartType es "treemap" → labels=categorías/productos, data=montos o conteos
-   NUNCA uses fieldSummaries.estado para una gráfica temporal.
-3. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"
-4. Chart heatmap: categoría × estado (top 5 categorías × top 8 estados, valor = conteo)
-5. TransactionList: últimas 6 operaciones`)
-                        : parsedIntent.template === 'table'
-                          ? `Genera mínimo 4 componentes:
-1. KPIGrid: 3 métricas de resumen
-2. DataSummary con las columnas más relevantes
-3. Chart treemap: distribución por categoría (usa fieldSummaries.categoria.topValues)
-4. ProgressGroup: distribución de estatus_credito — calcula % reales desde fieldSummaries.estatus_credito.topValues, colores: al_corriente="#10d97e", liquidado="#5bb8f5", atrasado="#fbbf24", cancelado="#f5455a"`
-                          : 'Genera el dashboard más útil posible para este intent.'
+    : effectiveTemplate === '__singleCategoria__'
+    ? categoriaCtx
+    : effectiveTemplate === '__singleEstado__'
+    ? estadoCtx
+    : effectiveTemplate === 'candlestick'
+          ? `Genera un dashboard de VELAS/CANDLESTICK con KPIGrid + Chart candlestick (OHLC por fecha: open=primer valor, high=max, low=min, close=ultimo) + TransactionList.`
+          : effectiveTemplate === 'bollinger'
+            ? `Genera un dashboard de BANDAS DE BOLLINGER con KPIGrid + Chart bollinger (data: [{date,value}]) + TransactionList.`
+            : effectiveTemplate === 'stacked-area'
+              ? `Genera un dashboard de AREA APILADA con KPIGrid + Chart stacked-area (data:[{label,serie1,serie2,...}], keys:[...]) + TransactionList.`
+              : effectiveTemplate === 'diverging-bar'
+                ? `Genera un dashboard DIVERGENTE con KPIGrid + Chart diverging-bar (keys ordenados neg→pos: ["cancelado","atrasado","al_corriente","liquidado"], negativeLabel, positiveLabel) + TransactionList.`
+                : effectiveTemplate === 'radial-stacked-bar'
+                  ? `Genera un dashboard RADIAL con KPIGrid + Chart radial-stacked-bar (data:[{label,serie1,serie2}], keys:[...]) + TransactionList.`
+                  : effectiveTemplate === 'hierarchical-bar'
+                    ? `Genera un dashboard JERARQUICO con KPIGrid + Chart hierarchical-bar (data:{name,children:[{name,value,children:[...]}]}) + TransactionList.`
+                    : effectiveTemplate === 'bar-race'
+                      ? `Genera un dashboard de CARRERA DE BARRAS con KPIGrid + Chart bar-race (frames:[{label,items:[{name,value}]}], maxBars:10) + TransactionList.`
+                      : effectiveTemplate === 'table'
+                        ? `Genera minimo 4 componentes: KPIGrid + DataSummary (columnas relevantes) + 2 charts de distribucion variados.`
+                        : `Genera el dashboard mas util, rico y variado posible para este intent. Minimo 6 componentes con perspectivas completamente diferentes entre si. Usa los datos de aggregations para elegir los charts mas informativos. INCLUYE al menos 1 componente MiniChart con insights clave derivados de los datos (anomalias, tendencias, recomendaciones en bullets).`
 }
 
 IMPORTANTE: Usa los datos reales de aggregations. Si fieldSummaries.estado.uniqueValues > 5, usa Chart bar para estado, nunca KPIGrid por estado. NUNCA generes arrays de datos vacíos — siempre usa los registros disponibles para calcular valores reales.
@@ -1005,9 +950,12 @@ function sanitizeUIConfig(
     }
 
     // ── Rule 1: treemap/doughnut/pie/radar with 1 label and singleCategoria filter ──
-    // Replace with bar chart grouped by producto or estado
+    // Only replace if the single label IS the filtered category (useless chart)
     if (singleCategoria && ['treemap', 'doughnut', 'pie', 'radar'].includes(type) && (labels as unknown[]).length <= 1) {
-      console.log(`[sanitize] replacing ${type} (1 label, single categoria) → bar by producto`);
+      const singleLabel = String((labels as unknown[])[0] ?? '');
+      const isFilteredCat = singleLabel === filterCategoria || singleLabel === '';
+      if (!isFilteredCat) return comp; // has valid data, keep it
+      console.log(`[sanitize] replacing ${type} (1 label = filtered categoria) → bar by producto`);
       if (productoTop.length > 0) {
         return {
           ...comp,
@@ -1038,37 +986,44 @@ function sanitizeUIConfig(
       }
     }
 
-    // ── Rule 2: treemap/doughnut/pie with singleCategoria — always replace with bar by producto or estado ──
+    // ── Rule 2: treemap/doughnut/pie with singleCategoria — only replace if labels are the category itself ──
+    // Do NOT replace if Bedrock already generated valid multi-label data (estados, productos, etc.)
     if (singleCategoria && ['treemap', 'doughnut', 'pie'].includes(type)) {
-      console.log(`[sanitize] replacing ${type} (singleCategoria) → bar by producto`);
-      if (productoTop.length > 0) {
-        return {
-          ...comp,
-          props: {
-            ...props,
-            type: 'bar',
-            data: {
-              labels: productoTop.map(p => p.value),
-              datasets: [{ label: 'Ventas', data: productoTop.map(p => p.count), backgroundColor: '#34d399' }],
+      const labelCount = (labels as unknown[]).length;
+      // Only intervene if: 0 labels, or all labels equal the filtered category
+      const allLabelsAreCategory = labelCount > 0 && (labels as string[]).every(l => l === filterCategoria);
+      if (labelCount === 0 || allLabelsAreCategory) {
+        console.log(`[sanitize] replacing ${type} (labels = filtered categoria) → bar by producto`);
+        if (productoTop.length > 0) {
+          return {
+            ...comp,
+            props: {
+              ...props,
+              type: 'bar',
+              data: {
+                labels: productoTop.map(p => p.value),
+                datasets: [{ label: 'Ventas', data: productoTop.map(p => p.count), backgroundColor: '#34d399' }],
+              },
+              title: props.title ?? `Ventas por Producto — ${filterCategoria}`,
             },
-            title: props.title ?? `Ventas por Producto — ${filterCategoria}`,
-          },
-        };
-      }
-      if (estadoTop.length > 0) {
-        return {
-          ...comp,
-          props: {
-            ...props,
-            type: 'bar',
-            data: {
-              labels: estadoTop.map(e => e.value),
-              datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#34d399' }],
+          };
+        }
+        if (estadoTop.length > 0) {
+          return {
+            ...comp,
+            props: {
+              ...props,
+              type: 'bar',
+              data: {
+                labels: estadoTop.map(e => e.value),
+                datasets: [{ label: 'Ventas', data: estadoTop.map(e => e.count), backgroundColor: '#34d399' }],
+              },
+              title: props.title ?? `Ventas por Estado — ${filterCategoria}`,
             },
-            title: props.title ?? `Ventas por Estado — ${filterCategoria}`,
-          },
-        };
+          };
+        }
       }
+      // Has valid multi-label data — keep the chart as-is
     }
 
     // ── Rule 3: ProgressGroup with singleEstatus — replace with canal_venta ──
@@ -1198,42 +1153,37 @@ function sanitizeUIConfig(
     return comp;
   });
 
-  // ── Rule 6: 2+ consecutive bar charts — convert second onward to ProgressGroup ──
+    // -- Rule 6: max 1 bar chart -- convert excess bars to treemap --
   let barCount = 0;
   config.components = (config.components as Record<string, unknown>[]).map(comp => {
-    if (comp.component !== 'Chart') { barCount = 0; return comp; }
+    if (comp.component !== 'Chart') return comp;
     const props = comp.props as Record<string, unknown>;
     const type = props.type as string;
     const data = props.data as { labels?: string[]; datasets?: { data?: number[] }[] } | undefined;
     const labels = data?.labels ?? [];
 
-    if (type === 'bar' && (labels as unknown[]).length <= 6) {
+    if (type === 'bar') {
       barCount++;
-      if (barCount >= 2) {
+      if (barCount > 1) {
         const values = data?.datasets?.[0]?.data ?? [];
-        const maxVal = Math.max(...values, 1);
-        const PROGRESS_COLORS = ['#10d97e','#5bb8f5','#fbbf24','#f472b6','#a78bfa','#22d3ee'];
-        console.log(`[sanitize] converting duplicate bar → ProgressGroup`);
+        console.log('[sanitize] converting excess bar to treemap');
         return {
           ...comp,
-          component: 'ProgressGroup',
           props: {
-            title: props.title,
-            items: (labels as string[]).map((label, i) => ({
-              label,
-              value: Math.round((values[i] ?? 0) / maxVal * 100),
-              color: PROGRESS_COLORS[i % PROGRESS_COLORS.length],
-            })),
+            ...props,
+            type: 'treemap',
+            data: {
+              labels: labels as string[],
+              datasets: [{ data: values }],
+            },
           },
         };
       }
-    } else {
-      barCount = 0;
     }
     return comp;
   });
 
-  // ── Rule 7: deduplicate charts — same type OR same dimension data ──
+// ── Rule 7: deduplicate charts — same type OR same dimension data ──
   // Fingerprint = type + sorted first 3 labels (catches same data with different titles)
   function chartFingerprint(comp: Record<string, unknown>): string {
     const props = comp.props as Record<string, unknown>;
@@ -1247,7 +1197,7 @@ function sanitizeUIConfig(
   const chartTypeCounts: Record<string, number> = {};
   // Max allowed per type
   const TYPE_MAX: Record<string, number> = {
-    bar: 2, doughnut: 1, pie: 1, treemap: 1, area: 2, line: 2,
+    bar: 1, doughnut: 1, pie: 1, treemap: 1, area: 2, line: 2,
     heatmap: 1, radar: 1, scatter: 1, funnel: 1, gauge: 1, map: 1,
   };
   const FALLBACK_TYPES = ['treemap', 'heatmap', 'radar', 'area', 'bar', 'funnel'];

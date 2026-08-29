@@ -340,10 +340,10 @@ function renderChart(insight: InsightData, height: number, bare = false, preview
 
 // Minimum heights per chart type — prevents squashing
 const CHART_MIN_H: Record<string, number> = {
-  heatmap: 280, map: 300, radar: 240, scatter: 220, candlestick: 260,
-  'stacked-area': 220, 'diverging-bar': 240, 'bar-race': 260,
-  'hierarchical-bar': 260, 'radial-stacked-bar': 240, bollinger: 220,
-  treemap: 200, bar: 200, area: 200, line: 200, doughnut: 200, pie: 200,
+  heatmap: 320, map: 340, radar: 280, scatter: 260, candlestick: 300,
+  'stacked-area': 260, 'diverging-bar': 280, 'bar-race': 300,
+  'hierarchical-bar': 300, 'radial-stacked-bar': 280, bollinger: 260,
+  treemap: 240, bar: 240, area: 240, line: 240, doughnut: 240, pie: 240,
 };
 
 function getChartMinH(insight: InsightData): number {
@@ -408,6 +408,28 @@ function KpiCard({ ins, accent, cardRef, onClick }: { ins: InsightData; accent: 
       <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 8px' }}>{ins.title}</p>
       <p style={{ fontSize: 26, fontWeight: 700, color: '#e4f0ff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
       {ins.metricLabel && <p style={{ fontSize: 9, color: 'rgba(120,165,220,0.45)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
+    </div>
+  );
+}
+
+function InsightTextCard({ ins, accent, cardRef, onClick }: { ins: InsightData; accent: string; cardRef?: (el: HTMLDivElement | null) => void; onClick: () => void }) {
+  const bullets = ins.subtitle?.split('\n').filter(Boolean) ?? [];
+  return (
+    <div data-animate ref={cardRef} onClick={onClick}
+      onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, accent)}
+      onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
+      style={cardStyle({ padding: '16px 18px', cursor: 'pointer', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' })}>
+      <div style={accentLine(accent)} />
+      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, margin: '0 0 10px' }}>{ins.title}</p>
+      {bullets.length > 1 ? (
+        <ul style={{ margin: 0, padding: '0 0 0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {bullets.map((b, i) => (
+            <li key={i} style={{ fontSize: 12, color: 'rgba(200,220,240,0.85)', lineHeight: 1.5, letterSpacing: '0.01em' }}>{b}</li>
+          ))}
+        </ul>
+      ) : (
+        <p style={{ fontSize: 13, color: 'rgba(200,220,240,0.85)', margin: 0, lineHeight: 1.6 }}>{ins.subtitle ?? ins.metric}</p>
+      )}
     </div>
   );
 }
@@ -516,7 +538,7 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
     return maxH + 32;
   }, [gridSpec]);
 
-  const baseZoom = insights.length <= 4 ? 1.3 : insights.length <= 7 ? 1.1 : 0.95;
+  const baseZoom = insights.length <= 4 ? 1.3 : insights.length <= 7 ? 1.15 : 1.0;
   const zoom = useAdaptiveZoom(containerRef, requiredH, baseZoom);
 
   if (!gridSpec) {
@@ -553,16 +575,29 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
         const ins = byId[cell.insightId];
         if (!ins) return null;
 
-        const isKpi = !ins.chartOptions && !ins.listItems;
+        const isKpi = !ins.chartOptions && !ins.listItems && ins.chartType !== 'text';
+        const isText = ins.chartType === 'text';
         const style: React.CSSProperties = {
           gridColumn: `span ${cell.colSpan}`,
           gridRow: `span ${cell.rowSpan}`,
           minHeight: cell.minH,
         };
 
+        if (isText) {
+          return (
+            <InsightTextCard
+              key={ins.id}
+              ins={ins}
+              accent={accent}
+              cardRef={el => { cardRefs.current[insights.indexOf(ins)] = el; }}
+              onClick={() => onExpand(ins)}
+            />
+          );
+        }
+
         if (isKpi) {
           return (
-            <div key={ins.id} style={{ gridColumn: `span ${cell.colSpan}`, gridRow: `span ${cell.rowSpan}`, minHeight: cell.minH }}>
+            <div key={ins.id} style={{ gridColumn: `span ${cell.colSpan}`, gridRow: `span ${cell.rowSpan}`, minHeight: cell.minH, display: 'flex', flexDirection: 'column' }}>
               <KpiCard
                 ins={ins}
                 accent={accent}
@@ -877,8 +912,8 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
   };
 
   return (
-    <div ref={backdropRef} onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 200, opacity: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', cursor: 'pointer' }}>
-      <div ref={cardRef} onClick={e => e.stopPropagation()} style={{ position: 'relative', cursor: 'default', width: '100%', maxWidth: 900, height: isStatCard ? 'auto' : '75vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', opacity: 0 }}>
+    <div ref={backdropRef} onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 200, opacity: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', cursor: 'pointer' }}>
+      <div ref={cardRef} onClick={e => e.stopPropagation()} style={{ position: 'relative', cursor: 'default', width: '100%', maxWidth: 900, height: isStatCard ? 'auto' : 'min(75vh, calc(100vh - 64px))', maxHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', background: 'var(--surface-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', opacity: 0 }}>
         <button onClick={handleClose} style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text-tertiary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         <div style={{ flexShrink: 0, padding: '28px 56px 20px 32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
@@ -889,13 +924,22 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
         <div style={{ height: 1, background: 'var(--border-color)', flexShrink: 0 }} />
         <div style={{ flex: 1, minHeight: 0, padding: '20px 32px 28px', display: 'flex', flexDirection: 'column' }}>
           {auroraData && !isList && (chartType as string) === 'map' && (
-            <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height={340} gradient="aurora" bare />
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <MexicoMapChart data={auroraData.labels.map((name, i) => ({ name, value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0 }))} height="100%" gradient="aurora" bare />
+            </div>
           )}
-          {auroraData && !isList && (chartType as string) !== 'map' && (
-            <AuroraChart type={chartType} data={auroraData} gradient="aurora" height={chartType === 'heatmap' ? Math.max(400, (auroraData.datasets?.length ?? 4) * 40 + 80) : 340} />
+          {auroraData && !isList && (chartType as string) === 'progress' && (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>{renderChart(insight, 400, true)}</div>
+          )}
+          {auroraData && !isList && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <AuroraChart type={chartType} data={auroraData} gradient="aurora" height="100%" bare />
+            </div>
           )}
           {!auroraData && !isList && insight.chartOptions && !!(insight.chartOptions as Record<string,unknown>).series && (
-            <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={340} />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <EChartsRaw opts={insight.chartOptions as Record<string,unknown>} height={400} />
+            </div>
           )}
           {isList && insight.listItems && (
             <div style={{ flex: 1, overflowY: 'auto' }}>

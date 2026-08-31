@@ -21,10 +21,10 @@ export interface MexicoMapChartProps {
 // ─── Palette per gradient ─────────────────────────────────
 
 const GRADIENT_COLORS: Record<string, string[]> = {
-  aurora: ['#1e1b4b', '#3730a3', '#6366f1', '#a5b4fc', '#c084fc', '#f9a8d4', '#fcd34d'],
-  neon:   ['#0d0d1a', '#0066ff', '#00f5ff', '#00ff99', '#ffff00', '#ff8800', '#ff0088'],
-  fire:   ['#1a0500', '#7c2d12', '#c2410c', '#f97316', '#fbbf24', '#fef08a', '#ffffff'],
-  ocean:  ['#0c1a2e', '#0e4d7a', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd', '#e0f2fe'],
+  aurora: ['#312e81', '#4f46e5', '#818cf8', '#c084fc', '#f472b6', '#fb923c', '#fcd34d'],
+  neon:   ['#0066ff', '#00c6ff', '#00f5a0', '#a8ff3e', '#ffee00', '#ff8800', '#ff0088'],
+  fire:   ['#f97316', '#fb923c', '#fbbf24', '#fde68a', '#fef9c3', '#ffffff', '#ffe4e6'],
+  ocean:  ['#0ea5e9', '#38bdf8', '#7dd3fc', '#a5f3fc', '#6ee7b7', '#86efac', '#d9f99d'],
 };
 
 // ─── Component ────────────────────────────────────────────
@@ -103,6 +103,13 @@ export default function MexicoMapChart({
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params];
+          const p = list[0] as { name?: string; value?: number; axisValueLabel?: string };
+          const name = p.name ?? p.axisValueLabel ?? '';
+          const val = p.value != null ? Number(p.value).toLocaleString('es-MX') : 'N/A';
+          return `<b>${name}</b><br/>${val}`;
+        },
         backgroundColor: 'rgba(255,255,255,0.06)',
         borderColor: 'rgba(200,210,230,0.1)',
         borderWidth: 1,
@@ -135,7 +142,7 @@ export default function MexicoMapChart({
         id: 'geo-data',
         type: 'bar',
         universalTransition: true,
-        data: sorted.map(d => d.value),
+        data: sorted.map(d => ({ name: d.name, value: d.value })),
         barMaxWidth: 16,
         itemStyle: { borderRadius: [0, 3, 3, 0] },
         emphasis: { itemStyle: { opacity: 0.85 } },
@@ -202,7 +209,7 @@ export default function MexicoMapChart({
       overflow: 'hidden',
       boxShadow: 'var(--shadow-sm)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 1.1rem 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.9rem 1.1rem 0.5rem' }}>
         {title && (
           <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em' }}>
             {title}
@@ -210,20 +217,20 @@ export default function MexicoMapChart({
         )}
         {ready && (
           <button
-            onClick={toggle}
+            onClick={(e) => { e.stopPropagation(); toggle(); }}
             style={{
               fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.04em',
               color: 'var(--text-tertiary)', background: 'var(--surface-2)',
               border: '1px solid var(--border-color)', borderRadius: 6,
               padding: '3px 10px', cursor: 'pointer', transition: 'color 0.15s',
-              flexShrink: 0, marginLeft: 'auto',
+              flexShrink: 0, marginLeft: 'auto', position: 'relative', zIndex: 10,
             }}
           >
             {mode === 'map' ? '▦ Ver barras' : '🗺 Ver mapa'}
           </button>
         )}
       </div>
-      <div ref={containerRef} style={{ width: '100%', height: h }} />
+      <div ref={containerRef} style={{ width: '100%', height: `calc(${h} - 44px)` }} />
     </div>
   );
 }

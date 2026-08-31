@@ -251,13 +251,20 @@ body {
     color var(--t-slow) var(--ease-in-out);
 }
 
-/* Numbers use Hubot Sans condensed */
+/* Numbers use DM Mono — monospace ejecutivo, alineación perfecta */
 .tabular-nums,
 [style*="tabular-nums"],
 input[type="number"] {
-  font-family: "Hubot Sans", system-ui, sans-serif;
+  font-family: "DM Mono", "Fira Code", monospace;
   font-variant-numeric: tabular-nums;
-  font-stretch: condensed;
+}
+
+/* Utility class for KPI metric values */
+.kpi-number {
+  font-family: "DM Mono", "Fira Code", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.04em;
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */

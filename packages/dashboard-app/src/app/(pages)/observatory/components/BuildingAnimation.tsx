@@ -253,11 +253,11 @@ function PhaseAnalyzing({ active }: { active: boolean }) {
 
 // ── Phase 3: OBTENIENDO — data stream rows con sub-fases ─
 const FETCH_SUB_PHASES = [
-  { label: 'Consultando dataset...', icon: '⬡' },
-  { label: 'Interpretando intent con IA...', icon: '◎' },
-  { label: 'Filtrando registros...', icon: '◈' },
-  { label: 'Calculando agregaciones...', icon: '◇' },
-  { label: 'Generando visualizaciones...', icon: '✦' },
+  { label: 'Consultando dataset...' },
+  { label: 'Interpretando intent con IA...' },
+  { label: 'Filtrando registros...' },
+  { label: 'Calculando agregaciones...' },
+  { label: 'Generando visualizaciones...' },
 ];
 
 function PhaseFetching({ active }: { active: boolean }) {
@@ -321,17 +321,16 @@ function PhaseFetching({ active }: { active: boolean }) {
           />
         ))}
       </div>
-      {/* Sub-phase indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 18, color: 'var(--primary)', animation: 'stepPulse 1.5s ease-in-out infinite' }}>{current.icon}</span>
-        <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em', transition: 'opacity 0.4s ease' }}>{current.label}</p>
-      </div>
+      {/* Sub-phase label */}
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>
+        {current.label}
+      </p>
       {/* Sub-phase dots */}
       <div style={{ display: 'flex', gap: 6 }}>
         {FETCH_SUB_PHASES.map((_, i) => (
           <div key={i} style={{
             width: i === subPhase ? 20 : 6, height: 6, borderRadius: 3,
-            background: i <= subPhase ? 'var(--primary)' : 'var(--surface-3)',
+            background: i <= subPhase ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
             transition: 'all 0.4s ease',
             boxShadow: i === subPhase ? '0 0 8px var(--primary)' : 'none',
           }} />
@@ -469,15 +468,15 @@ function PhaseReady({ active }: { active: boolean }) {
 // ── Steps ─────────────────────────────────────────────────
 function Steps({ phase }: { phase: number }) {
   const steps = [
-    { label: 'Recibiendo', icon: '◈' },
-    { label: 'Analizando', icon: '◎' },
-    { label: 'Obteniendo', icon: '⬡' },
-    { label: 'Generando',  icon: '◇' },
-    { label: 'Listo',      icon: '✦' },
+    { label: 'Recibiendo' },
+    { label: 'Analizando' },
+    { label: 'Obteniendo' },
+    { label: 'Generando'  },
+    { label: 'Listo'      },
   ];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      {steps.map(({ label, icon }, i) => {
+      {steps.map(({ label }, i) => {
         const active = phase === i + 1;
         const done   = phase > i + 1;
         return (
@@ -496,11 +495,11 @@ function Steps({ phase }: { phase: number }) {
                 boxShadow: active ? '0 0 20px var(--primary), 0 0 40px var(--primary-light)' : done ? '0 0 10px #34d39966' : 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                fontSize: active ? 14 : 11,
+                fontSize: active ? 13 : 10,
                 color: done || active ? '#fff' : 'var(--text-tertiary)',
                 animation: active ? 'stepPulse 2s ease-in-out infinite' : 'none',
               }}>
-                {done ? '✓' : icon}
+                {done ? '✓' : String(i + 1)}
               </div>
               <span style={{
                 fontSize: 10, fontWeight: active ? 700 : 400,
@@ -614,25 +613,30 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
         <Steps phase={phase} />
       </div>
 
-      {/* Cancel button */}
+      {/* Cancel button — top left, back-style */}
       {isProcessing && (
         <button
           onClick={cancelFlow}
           style={{
-            position: 'absolute', top: 20, right: 24, zIndex: 10,
-            padding: '8px 18px', borderRadius: 10,
-            background: 'rgba(255,255,255,0.05)',
+            position: 'absolute', top: 20, left: 24, zIndex: 10,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.04)',
             border: '1px solid var(--border-color)',
-            color: 'var(--text-tertiary)', fontSize: 12,
+            color: 'var(--text-tertiary)', fontSize: 13,
             cursor: 'pointer', fontFamily: 'inherit',
-            letterSpacing: '0.06em',
+            letterSpacing: '0.04em',
             transition: 'all 0.2s ease',
             backdropFilter: 'blur(8px)',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff453a'; e.currentTarget.style.color = '#ff453a'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
         >
-          Cancelar  <span style={{ opacity: 0.5, fontSize: 10 }}>ESC</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M9 2L4 7L9 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Volver
+          <span style={{ opacity: 0.35, fontSize: 10, marginLeft: 2 }}>ESC</span>
         </button>
       )}
 

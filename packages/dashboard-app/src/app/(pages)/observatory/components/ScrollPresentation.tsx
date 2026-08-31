@@ -31,6 +31,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset, l
   const [currentSlide, setCurrentSlide] = useState(0);
   const [autoPlay, setAutoPlay] = useState(false);
   const [expandedInsight, setExpandedInsight] = useState<InsightData | null>(null);
+  const [cornerHovered, setCornerHovered] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
   const gridRef2        = useRef<HTMLDivElement>(null);
   const isTransitioning = useRef(false);
@@ -96,13 +97,31 @@ export default function ScrollPresentation({ insights, cursor, query, onReset, l
       <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1, overflow: 'hidden' }}>
         <LayoutRenderer insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} layoutHint={layoutHint} />
       </div>
-      <div style={{ position: 'absolute', bottom: 24, left: 24, zIndex: 100, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Hot corner — bottom-left 80×80 invisible trigger zone */}
+      <div
+        onMouseEnter={() => setCornerHovered(true)}
+        onMouseLeave={() => setCornerHovered(false)}
+        style={{ position: 'absolute', bottom: 0, left: 0, width: 80, height: 80, zIndex: 99 }}
+      />
+      {/* Slides / Grid toggle — visible only on hover or when in presentation mode */}
+      <div
+        onMouseEnter={() => setCornerHovered(true)}
+        onMouseLeave={() => setCornerHovered(false)}
+        style={{
+          position: 'absolute', bottom: 20, left: 20, zIndex: 100,
+          display: 'flex', flexDirection: 'column', gap: 8,
+          opacity: viewMode === 'presentation' || cornerHovered ? 1 : 0,
+          transform: viewMode === 'presentation' || cornerHovered ? 'translateY(0)' : 'translateY(8px)',
+          transition: 'opacity 0.2s ease, transform 0.2s ease',
+          pointerEvents: viewMode === 'presentation' || cornerHovered ? 'auto' : 'none',
+        }}
+      >
         {viewMode === 'presentation' && (
-          <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={() => setAutoPlay(!autoPlay)} style={{ padding: '8px 14px', background: 'var(--surface, #1a1f2e)', border: '1px solid var(--border-color)', borderRadius: 8, color: autoPlay ? 'var(--primary)' : 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {autoPlay ? '⏸' : '▶'} {currentSlide + 1}/{totalSlides}
           </button>
         )}
-        <button onClick={() => switchMode(viewMode === 'presentation' ? 'grid' : 'presentation')} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button onClick={() => switchMode(viewMode === 'presentation' ? 'grid' : 'presentation')} style={{ padding: '8px 14px', background: 'var(--surface, #1a1f2e)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           {viewMode === 'presentation' ? '⊞ Grid' : '▶ Slides'}
         </button>
       </div>
@@ -362,34 +381,42 @@ function getChartMinH(insight: InsightData): number {
 const KPI_H   = 72;   // approximate rendered height of a KpiCard
 const LIST_H  = 180;  // approximate rendered height of a list/transaction card
 const HEADER_H = 52;  // HeaderBar height
-const MIN_ZOOM = 0.55;
+const MIN_ZOOM = 0.45;
 const MAX_ZOOM = 1.4;
 
 /**
- * Computes the zoom factor needed so the tallest column fits within the
- * available viewport height without scrolling.
- * Falls back to scroll (zoom=1) if content is only slightly taller.
+ * Measures the actual scrollHeight of the container after render and computes
+ * the zoom factor needed so all content fits without scrolling.
  */
 function useAdaptiveZoom(
   containerRef: React.RefObject<HTMLDivElement | null>,
-  requiredH: number,
+  _requiredH: number,
   baseZoom: number,
 ): number {
   const [zoom, setZoom] = useState(baseZoom);
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const measure = () => {
-      const availH = containerRef.current?.clientHeight ?? window.innerHeight;
-      if (requiredH <= availH) {
+      // Temporarily reset zoom to measure true content size
+      const prev = el.style.zoom;
+      el.style.zoom = '1';
+      const contentH = el.scrollHeight;
+      const availH   = el.clientHeight || window.innerHeight;
+      el.style.zoom = prev;
+      if (contentH <= availH) {
         setZoom(Math.min(baseZoom, MAX_ZOOM));
       } else {
-        const computed = Math.max(MIN_ZOOM, availH / requiredH);
-        setZoom(computed);
+        setZoom(Math.max(MIN_ZOOM, availH / contentH));
       }
     };
-    measure();
+    // Measure after paint
+    const raf = requestAnimationFrame(() => requestAnimationFrame(measure));
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [requiredH, baseZoom]);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [baseZoom]);
   return zoom;
 }
 
@@ -403,22 +430,27 @@ function KpiCard({ ins, accent, cardRef, onClick }: { ins: InsightData; accent: 
   const isUp = trend === 'up';
   const isDown = trend === 'down';
   const isTrend = isUp || isDown || trend === 'neutral';
-  const arrowColor = isUp ? '#34d399' : isDown ? '#f87171' : '#60a5fa';
-  const arrowSymbol = isUp ? '▲' : isDown ? '▼' : '●';
+  const trendColor = isUp ? '#34d399' : isDown ? '#f87171' : '#60a5fa';
+  const trendLabel = isUp ? '↑ up' : isDown ? '↓ down' : '● neutral';
   return (
     <div data-animate ref={cardRef} onClick={onClick}
       onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, accent)}
       onMouseLeave={e => hoverOut(e.currentTarget as HTMLElement)}
-      style={cardStyle({ padding: '14px 16px', cursor: 'pointer', position: 'relative', background: `${accent}35`, borderColor: `${accent}80`, boxShadow: `0 4px 20px ${accent}25, inset 0 1px 0 ${accent}40` })}>
-      <div style={accentLine(accent)} />
-      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#ffffff', margin: '0 0 8px' }}>{ins.title}</p>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-        <p style={{ fontSize: 26, fontWeight: 700, color: '#ffffff', margin: 0, lineHeight: 1, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{ins.metric}</p>
-        {isTrend && (
-          <span style={{ fontSize: 13, fontWeight: 700, color: arrowColor, lineHeight: 1, paddingBottom: 2, flexShrink: 0 }}>{arrowSymbol}</span>
-        )}
+      style={cardStyle({ padding: '18px 20px 16px', cursor: 'pointer', position: 'relative', background: `linear-gradient(135deg, ${accent}22 0%, ${accent}0a 100%)`, borderColor: `${accent}55`, boxShadow: `0 4px 24px ${accent}20, inset 0 1px 0 ${accent}30` })}>
+      {/* top accent line */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${accent}cc, transparent)`, borderRadius: '16px 16px 0 0' }} />
+      {/* accent dot */}
+      <div style={{ position: 'absolute', top: 14, right: 16, width: 6, height: 6, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}` }} />
+      <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: accent, margin: '0 0 10px', opacity: 0.9, paddingRight: 16 }}>{ins.title}</p>
+      <p style={{ fontSize: 30, fontWeight: 500, color: '#ffffff', margin: 0, lineHeight: 1, letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums', fontFamily: '"DM Mono", monospace' }}>{ins.metric}</p>
+      <div style={{ marginTop: 10, height: 1, background: `linear-gradient(90deg, ${accent}40, transparent)` }} />
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isTrend ? (
+          <span style={{ fontSize: 11, fontWeight: 600, color: trendColor, background: `${trendColor}18`, padding: '2px 8px', borderRadius: 20, border: `1px solid ${trendColor}30` }}>{trendLabel}</span>
+        ) : ins.metricLabel ? (
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.03em' }}>{ins.metricLabel}</span>
+        ) : null}
       </div>
-      {ins.metricLabel && !isTrend && <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.65)', margin: '5px 0 0', letterSpacing: '0.04em' }}>{ins.metricLabel}</p>}
     </div>
   );
 }
@@ -466,15 +498,16 @@ function ChartCard({ ins, accent, cardRef, onClick, style, preview = false }: { 
 
 function HeaderBar({ query, onNewQuery }: { query: string | null; onNewQuery: () => void }) {
   return (
-    <div data-animate style={cardStyle({ gridColumn: 'span 2', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' })}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,200,240,0.5), transparent)' }} />
-      <button onClick={onNewQuery} style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: 'rgba(0,200,240,0.06)', border: '1px solid rgba(0,200,240,0.15)', color: 'rgba(0,200,240,0.55)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        <span>New</span>
+    <div data-animate style={cardStyle({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, position: 'relative', background: 'rgba(0,200,240,0.04)', borderColor: 'rgba(0,200,240,0.12)' })}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent 0%, rgba(0,200,240,0.7) 40%, rgba(100,120,255,0.5) 70%, transparent 100%)', borderRadius: '16px 16px 0 0' }} />
+      <button onClick={onNewQuery} style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 10, background: 'rgba(0,200,240,0.08)', border: '1px solid rgba(0,200,240,0.2)', color: 'rgba(0,200,240,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,240,0.16)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,240,0.08)'; }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--primary)', margin: '0 0 4px', opacity: 0.7 }}>Executive Intelligence</p>
-        <h1 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{query}</h1>
+      <div style={{ width: 1, height: 32, background: 'rgba(0,200,240,0.15)', flexShrink: 0 }} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{query}</h1>
       </div>
     </div>
   );
@@ -536,26 +569,28 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
     return m;
   }, [insights]);
 
-  // Compute total required height for adaptive zoom
-  // We estimate by summing the tallest "column" of cells
+  // Compute total required height: sum of unique row heights + gaps
+  // Each cell's rowStart maps to a row; we sum the max minH per unique rowStart
   const requiredH = React.useMemo(() => {
     if (!gridSpec) return 600;
+    // Collect unique rowStarts and their max minH using the same simulation as cellRowStart
     const COLS = gridSpec.cols;
-    // Simulate row placement: track column cursor
-    const colCursor = new Array(COLS).fill(0); // height used per column
-    let maxH = 0;
+    const colCursor = new Array(COLS).fill(0);
+    const rowMap = new Map<number, number>();
     gridSpec.cells.forEach(cell => {
-      // Find the earliest row where this cell fits
       const startCol = colCursor.indexOf(Math.min(...colCursor.slice(0, COLS - cell.colSpan + 1)));
       const rowStart = Math.max(...colCursor.slice(startCol, startCol + cell.colSpan));
+      rowMap.set(rowStart, Math.max(rowMap.get(rowStart) ?? 0, cell.minH));
       const rowEnd = rowStart + cell.minH + GAP;
       for (let c = startCol; c < startCol + cell.colSpan; c++) colCursor[c] = rowEnd;
-      maxH = Math.max(maxH, rowEnd);
     });
-    return maxH + 32;
+    // Total = sum of all row heights + gaps between them + bottom padding
+    let total = 0;
+    rowMap.forEach(h => { total += h + GAP; });
+    return total + 32;
   }, [gridSpec]);
 
-  const baseZoom = insights.length <= 4 ? 1.3 : insights.length <= 7 ? 1.15 : 1.0;
+  const baseZoom = insights.length <= 4 ? 1.2 : insights.length <= 7 ? 1.05 : 0.95;
   const zoom = useAdaptiveZoom(containerRef, requiredH, baseZoom);
 
   if (!gridSpec) {
@@ -600,7 +635,7 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
     <div
       ref={containerRef}
       style={{
-        flex: 1, minHeight: 0, padding: '16px 20px', overflow: 'hidden', zoom,
+        flex: 1, minHeight: 0, height: '100%', padding: '16px 20px', overflow: 'hidden', zoom,
         display: 'grid',
         gridTemplateColumns: `repeat(${COLS}, 1fr)`,
         gridAutoRows: 'min-content',

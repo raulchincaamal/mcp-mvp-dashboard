@@ -555,7 +555,20 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 export const ALEXA_USER_ID = 'alexa-display';
 export const ENV_USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? null;
 
+// Active abort controller — cancel ongoing pipeline
+let activeAbortController: AbortController | null = null;
+
+export function cancelFlow() {
+  activeAbortController?.abort();
+  activeAbortController = null;
+  observatory.transition('IDLE');
+}
+
 export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extraFilters?: Record<string, unknown>) {
+  const abortController = new AbortController();
+  activeAbortController = abortController;
+  const signal = abortController.signal;
+
   const keywords = rawQuery
     .toLowerCase()
     .replace(/[^a-záéíóúüñ\s]/gi, '')
@@ -564,9 +577,13 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extr
     .slice(0, 4);
 
   observatory.transition('QUERY_RECEIVED', { query: { raw: rawQuery, keywords } });
-  await delay(600);
+  await delay(600, signal);
+  if (signal.aborted) return;
+
   observatory.transition('ANALYZING');
-  await delay(800);
+  await delay(800, signal);
+  if (signal.aborted) return;
+
   observatory.transition('FETCHING_DATA');
 
   let uiConfig: unknown;
@@ -577,6 +594,7 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extr
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -592,23 +610,32 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extr
     const json = await res.json();
     uiConfig = json.data ?? json;
   } catch (err) {
+    if (signal.aborted) return;
     console.error('[runMockFlow] fetch error:', err);
     observatory.setError(String(err));
     observatory.transition('IDLE');
     return;
   }
 
+  if (signal.aborted) return;
   observatory.transition('GENERATING_VISUALIZATIONS');
-  await delay(600);
+  await delay(600, signal);
+  if (signal.aborted) return;
 
   const arc      = classifyNarrative(rawQuery);
   const insights = reorderByNarrative(uiConfigToInsights(uiConfig), arc);
   const layoutHint = selectLayout(insights, rawQuery);
   observatory.transition('REVEAL', { insights, layoutHint });
-  await delay(900);
+  await delay(900, signal);
+  if (signal.aborted) return;
   observatory.transition('PRESENTATION');
+
+  activeAbortController = null;
 }
 
-function delay(ms: number) {
-  return new Promise(r => setTimeout(r, ms));
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+  }).catch(() => {});
 }

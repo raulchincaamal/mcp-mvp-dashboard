@@ -937,13 +937,19 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
 
   const chartType = insight.chartOptions ? (() => {
     const opts = insight.chartOptions as Record<string, unknown>;
-    if (opts._auroraType) return opts._auroraType as 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    if (opts._auroraType) return opts._auroraType as string;
     const series = opts.series as { type?: string; radius?: unknown }[] | undefined;
     const t = series?.[0]?.type ?? 'bar';
     if (t === 'pie') { const r = series?.[0]?.radius; return Array.isArray(r) && r[0] !== '0%' ? 'doughnut' : 'pie'; }
     const supported = ['bar','line','area','pie','doughnut','scatter','radar','funnel','gauge','heatmap','treemap'];
-    return (supported.includes(t) ? t : 'bar') as 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
+    return (supported.includes(t) ? t : 'bar') as string;
   })() : 'bar';
+
+  // Adaptive modal sizing
+  const WIDE_TYPES = new Set(['line','area','stacked-area','bollinger','bar-race','theme-river','calendar-heatmap','candlestick','candlestick-ma']);
+  const TALL_TYPES = new Set(['map','heatmap','hierarchical-bar','diverging-bar','radial-stacked-bar','sankey','sunburst']);
+  const modalMaxW = WIDE_TYPES.has(chartType) ? 1280 : TALL_TYPES.has(chartType) ? 860 : 900;
+  const modalH = isStatCard ? 'auto' : WIDE_TYPES.has(chartType) ? 'min(78vh, calc(100vh - 48px))' : 'min(80vh, calc(100vh - 48px))';
 
   useEffect(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -961,7 +967,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
 
   return (
     <div ref={backdropRef} onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 200, opacity: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', cursor: 'pointer' }}>
-      <div ref={cardRef} onClick={e => e.stopPropagation()} style={{ position: 'relative', cursor: 'default', width: '100%', maxWidth: 900, height: isStatCard ? 'auto' : 'min(75vh, calc(100vh - 64px))', maxHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', background: 'var(--surface-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', opacity: 0 }}>
+      <div ref={cardRef} onClick={e => e.stopPropagation()} style={{ position: 'relative', cursor: 'default', width: '100%', maxWidth: modalMaxW, height: modalH, maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', background: 'var(--surface-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden', opacity: 0 }}>
         <button onClick={handleClose} style={{ position: 'absolute', top: 16, right: 16, zIndex: 10, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text-tertiary)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         <div style={{ flexShrink: 0, padding: '28px 56px 20px 32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
@@ -981,7 +987,7 @@ function ExpandedModal({ insight, cursor, onClose }: { insight: InsightData; cur
           )}
           {auroraData && !isList && (chartType as string) !== 'map' && (chartType as string) !== 'progress' && (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <AuroraChart type={chartType} data={auroraData} gradient="aurora" height="100%" bare />
+              <AuroraChart type={chartType as never} data={auroraData} gradient="aurora" height="100%" bare />
             </div>
           )}
           {!auroraData && !isList && insight.chartOptions && !!(insight.chartOptions as Record<string,unknown>).series && (

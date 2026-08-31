@@ -1563,7 +1563,7 @@ function HeaderBar({
 					opacity: 0.9,
 					fontFamily: '"Inter", sans-serif',
 				}}>
-				{query}
+				{query ? query.charAt(0).toUpperCase() + query.slice(1) : query}
 			</h1>
 			{description && (
 				<div

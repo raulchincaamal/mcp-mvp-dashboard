@@ -84,7 +84,7 @@ export default function Navbar() {
           ✦
         </div>
         <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '-0.2px' }}>
-          MCP Dashboard
+          Space Insight AI
         </span>
       </button>
 

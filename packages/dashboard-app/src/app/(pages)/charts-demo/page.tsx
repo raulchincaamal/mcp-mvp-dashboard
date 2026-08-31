@@ -1,6 +1,6 @@
 'use client';
 
-import AuroraChart, { type CandlestickMAData } from '@/shared/components/AuroraChart';
+import AuroraChart, { type CandlestickMAData, type SankeyData } from '@/shared/components/AuroraChart';
 import MexicoMapChart from '@/shared/components/MexicoMapChart';
 
 // ─── Datasets ──────────────────────────────────────────────
@@ -210,6 +210,90 @@ const CANDLESTICK_MA_DATA: CandlestickMAData = {
   ohlc: RAW_OHLC.map(r => [+r[1], +r[2], +r[3], +r[4]]),
 };
 
+// Sankey: canal_venta → categoria → estatus_credito
+const SANKEY_DATA: SankeyData = {
+  nodes: [
+    { name: 'Tienda Física' }, { name: 'En Línea' }, { name: 'Teléfono' },
+    { name: 'Motos' }, { name: 'Celulares' }, { name: 'Tablets' }, { name: 'Audio' },
+    { name: 'Al Corriente' }, { name: 'Liquidado' }, { name: 'Atrasado' }, { name: 'Cancelado' },
+  ],
+  links: [
+    { source: 'Tienda Física', target: 'Motos',     value: 180 },
+    { source: 'Tienda Física', target: 'Celulares', value: 140 },
+    { source: 'Tienda Física', target: 'Tablets',   value: 60  },
+    { source: 'En Línea',      target: 'Celulares', value: 120 },
+    { source: 'En Línea',      target: 'Audio',     value: 80  },
+    { source: 'En Línea',      target: 'Tablets',   value: 50  },
+    { source: 'Teléfono',      target: 'Motos',     value: 90  },
+    { source: 'Teléfono',      target: 'Celulares', value: 70  },
+    { source: 'Motos',         target: 'Al Corriente', value: 160 },
+    { source: 'Motos',         target: 'Atrasado',     value: 60  },
+    { source: 'Motos',         target: 'Liquidado',    value: 40  },
+    { source: 'Motos',         target: 'Cancelado',    value: 10  },
+    { source: 'Celulares',     target: 'Al Corriente', value: 190 },
+    { source: 'Celulares',     target: 'Liquidado',    value: 80  },
+    { source: 'Celulares',     target: 'Atrasado',     value: 50  },
+    { source: 'Celulares',     target: 'Cancelado',    value: 10  },
+    { source: 'Tablets',       target: 'Al Corriente', value: 70  },
+    { source: 'Tablets',       target: 'Liquidado',    value: 30  },
+    { source: 'Tablets',       target: 'Atrasado',     value: 10  },
+    { source: 'Audio',         target: 'Al Corriente', value: 55  },
+    { source: 'Audio',         target: 'Liquidado',    value: 20  },
+    { source: 'Audio',         target: 'Atrasado',     value: 5   },
+  ],
+};
+
+// Calendar Heatmap: ventas diarias 2025
+const CALENDAR_DATA = (() => {
+  const labels: string[] = [];
+  const values: number[] = [];
+  const start = new Date('2025-01-01');
+  const end   = new Date('2025-06-30');
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    labels.push(iso);
+    const dow = d.getDay();
+    const base = dow === 0 || dow === 6 ? 5 : 25;
+    values.push(Math.round(base + Math.random() * 40));
+  }
+  return { labels, datasets: [{ data: values }] };
+})();
+
+// Sunburst: categoria / producto
+const SUNBURST_DATA = {
+  labels: [
+    'Motos/BAJAJ PULSAR', 'Motos/ITALIKA FT150', 'Motos/HONDA CB190',
+    'Celulares/iPhone 15', 'Celulares/Samsung A54', 'Celulares/Motorola G84',
+    'Tablets/iPad Air', 'Tablets/Samsung Tab A9',
+    'Audio/JBL Charge 5', 'Audio/Sony WH-1000XM5',
+  ],
+  datasets: [{ data: [180, 140, 95, 210, 175, 130, 88, 72, 95, 68] }],
+};
+
+// Boxplot: distribución de precios por categoría [min, Q1, median, Q3, max]
+const BOXPLOT_DATA = {
+  labels: ['Motos', 'Celulares', 'Tablets', 'Audio', 'Consolas'],
+  datasets: [
+    { label: 'Motos',     data: [8500,  14200, 18500, 24000, 42000] },
+    { label: 'Celulares', data: [3200,  6800,  9500,  14000, 28000] },
+    { label: 'Tablets',   data: [4500,  7200,  10800, 15500, 22000] },
+    { label: 'Audio',     data: [1200,  2800,  4500,  7200,  15000] },
+    { label: 'Consolas',  data: [6000,  9500,  12000, 16000, 24000] },
+  ],
+};
+
+// ThemeRiver: evolución mensual por categoría
+const THEME_RIVER_DATA = {
+  labels: ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06'],
+  datasets: [
+    { label: 'Motos',     data: [420, 380, 510, 470, 530, 490] },
+    { label: 'Celulares', data: [310, 290, 400, 350, 410, 370] },
+    { label: 'Tablets',   data: [180, 160, 220, 200, 240, 210] },
+    { label: 'Audio',     data: [140, 120, 170, 150, 180, 160] },
+    { label: 'Consolas',  data: [200, 180, 250, 220, 270, 240] },
+  ],
+};
+
 // ─── Section divider ────────────────────────────────────────
 
 function Section({ label }: { label: string }) {
@@ -347,6 +431,30 @@ export default function ChartsDemoPage() {
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <AuroraChart type="candlestick-ma" data={CANDLESTICK_MA_DATA} title="Candlestick + MA — Neon" gradient="neon" height={420} />
+        </div>
+
+        <Section label="Sankey — flujo canal → categoría → estatus" />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <AuroraChart type="sankey" data={SANKEY_DATA} title="Sankey — Canal de Venta → Categoría → Estatus Crédito" gradient="aurora" height={380} />
+        </div>
+
+        <Section label="Calendar Heatmap — actividad diaria de ventas" />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <AuroraChart type="calendar-heatmap" data={CALENDAR_DATA} title="Calendar Heatmap — Ventas Diarias 2025" gradient="aurora" height={220} />
+        </div>
+
+        <Section label="Sunburst — jerarquía circular categoría → producto" />
+        <AuroraChart type="sunburst" data={SUNBURST_DATA} title="Sunburst — Categoría / Producto" gradient="aurora" height={380} />
+        <AuroraChart type="sunburst" data={SUNBURST_DATA} title="Sunburst — Neon"                 gradient="neon"   height={380} />
+
+        <Section label="Boxplot — distribución de precios por categoría" />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <AuroraChart type="boxplot" data={BOXPLOT_DATA} title="Boxplot — Rango de Precios por Categoría (MXN)" gradient="aurora" height={320} />
+        </div>
+
+        <Section label="ThemeRiver — evolución de composición mensual" />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <AuroraChart type="theme-river" data={THEME_RIVER_DATA} title="ThemeRiver — Ventas por Categoría (Ene–Jun 2025)" gradient="aurora" height={320} />
         </div>
 
         <Section label="Mapa de México — coroplético + transición a barras" />

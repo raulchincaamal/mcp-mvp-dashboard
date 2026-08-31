@@ -5,9 +5,9 @@ import SmoothScroll from '@/shared/components/SmoothScroll';
 import BarbaWrapper from '@/shared/components/BarbaWrapper';
 
 export const metadata = {
-  title: 'MCP Dashboard',
+  title: 'Space Insight AI',
   description:
-    'Dashboard generado por MCP pipeline — datos transformados en visualizaciones D3.js',
+    'Space Insight AI — dashboards generados por MCP pipeline con AWS Bedrock',
   icons: {
     icon: [
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },

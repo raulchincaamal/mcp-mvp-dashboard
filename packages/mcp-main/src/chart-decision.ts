@@ -22,7 +22,11 @@ export type ChartObjective =
   | 'correlacion'
   | 'salud_credito'
   | 'jerarquia'
-  | 'volatilidad';
+  | 'volatilidad'
+  | 'flujo'
+  | 'estacionalidad'
+  | 'dispersion_distribucion'
+  | 'composicion_temporal';
 
 export interface ChartDimensions {
   hasTiempo: boolean;
@@ -65,6 +69,14 @@ const OBJECTIVE_KEYWORDS: Partial<Record<ChartObjective, RegExp>> = {
     /jer[aá]rquic|drill.?down|hierarchical|desglose|nivel|subcategor[ií]a|dentro\s+de/i,
   volatilidad:
     /bollinger|banda|volatilidad|desviaci[oó]n|vela|candlestick|ohlc/i,
+  flujo:
+    /flujo|sankey|de\s+d[oó]nde\s+viene|c[oó]mo\s+llega|canal.*categor|categor.*canal|origen.*destino|destino.*origen/i,
+  estacionalidad:
+    /calendario|por\s+d[ií]a|d[ií]as\s+de\s+la\s+semana|estacional|d[ií]a\s+del\s+mes|calor\s+por\s+d[ií]a|actividad\s+diaria/i,
+  dispersion_distribucion:
+    /boxplot|caja\s+y\s+bigote|distribuci[oó]n\s+de\s+precios|dispersi[oó]n\s+de\s+montos|rango\s+de\s+precios|outlier|valor\s+at[ií]pico/i,
+  composicion_temporal:
+    /theme.?river|r[ií]o\s+tem[aá]tico|flujo\s+temporal|evoluci[oó]n\s+de\s+la\s+composici[oó]n|c[oó]mo\s+cambia\s+la\s+mezcla/i,
   relacion:
     /relaci[oó]n|afecta|dependencia|conexi[oó]n|influye|impacto/i,
 };
@@ -128,7 +140,7 @@ export function detectObjective(
     if (pattern && pattern.test(intent)) return objective as ChartObjective;
   }
 
-  if (dims.hasTiempo && dims.hasProducto) return 'participacion_temporal';
+  if (dims.hasTiempo && dims.hasProducto) return 'composicion_temporal';
   if (dims.hasTiempo) return 'tendencia';
   if (dims.hasEstado && dims.hasProducto) return 'distribucion_geografica';
   if (dims.hasEstado) return 'distribucion_geografica';
@@ -140,6 +152,11 @@ export function detectObjective(
 
 function detectExplicitChartRequest(intent: string): string | null {
   const lower = intent.toLowerCase();
+  if (/sankey|flujo|de\s+d[oó]nde\s+viene|canal.*categor/i.test(lower)) return 'sankey';
+  if (/calendario|calor\s+por\s+d[ií]a|estacional|actividad\s+diaria/i.test(lower)) return 'calendar-heatmap';
+  if (/sunburst|sol|jerarqu[ií]a\s+circular|drill.?down\s+circular/i.test(lower)) return 'sunburst';
+  if (/boxplot|caja\s+y\s+bigote|distribuci[oó]n\s+de\s+precios/i.test(lower)) return 'boxplot';
+  if (/theme.?river|r[ií]o\s+tem[aá]tico|evoluci[oó]n\s+de\s+la\s+composici[oó]n/i.test(lower)) return 'theme-river';
   if (/pastel|pie\s+chart|gr[aá]fica\s+de\s+pastel/.test(lower)) return 'pie';
   if (/dona|donut|doughnut/.test(lower)) return 'doughnut';
   if (/l[ií]nea|line\s+chart|gr[aá]fica\s+de\s+l[ií]nea/.test(lower)) return 'line';
@@ -178,7 +195,9 @@ const CHART_DATA_REQUIREMENTS: Record<string, { needsTwoNumeric?: boolean; needs
   map:              { needsGeo: true },
   'bar-race':       { needsTime: true },
   'stacked-area':   { needsTime: true },
-  funnel:           { needsSequential: true },
+  'theme-river':    { needsTime: true },
+  'calendar-heatmap': { needsTime: true },
+  'sankey':         { needsTwoNumeric: false },
 };
 
 /**
@@ -289,6 +308,14 @@ export function selectChartType(
       return { chartType: 'stacked-area', objective, confidence: 'high', reason: 'Participación temporal → área apilada', multiDataset: false };
     }
 
+    case 'composicion_temporal': {
+      const singleFilter2 = (filters?.categoria && !Array.isArray(filters.categoria)) ||
+                            (filters?.estado && !Array.isArray(filters.estado));
+      if (singleFilter2)
+        return { chartType: 'area', objective, confidence: 'high', reason: 'Composición temporal con filtro único → área simple', multiDataset: false };
+      return { chartType: 'theme-river', objective, confidence: 'high', reason: 'Composición temporal multi-serie → theme river', multiDataset: false };
+    }
+
     case 'participacion': {
       if (dims.hasProducto && dims.hasTiempo)
         return { chartType: 'stacked-area', objective, confidence: 'high', reason: 'Participación en el tiempo → área apilada', multiDataset: false };
@@ -319,6 +346,15 @@ export function selectChartType(
 
     case 'salud_credito':
       return { chartType: 'diverging-bar', objective, confidence: 'high', reason: 'Salud crediticia → barras divergentes', multiDataset: false };
+
+    case 'flujo':
+      return { chartType: 'sankey', objective, confidence: 'high', reason: 'Flujo entre dimensiones → sankey', multiDataset: false };
+
+    case 'estacionalidad':
+      return { chartType: 'calendar-heatmap', objective, confidence: 'high', reason: 'Actividad diaria/estacional → calendar heatmap', multiDataset: false };
+
+    case 'dispersion_distribucion':
+      return { chartType: 'boxplot', objective, confidence: 'high', reason: 'Distribución de valores → boxplot', multiDataset: false };
 
     case 'jerarquia':
       return { chartType: 'hierarchical-bar', objective, confidence: 'high', reason: 'Jerarquía → barras jerárquicas', multiDataset: false };
@@ -373,6 +409,11 @@ MATRIZ DE DECISION (intencion -> chart):
 - Ranking geografico (top estados)               -> bar (NO map)
 - Participacion temporal multi-serie             -> stacked-area
 - Salud crediticia / riesgo divergente           -> diverging-bar
+- Flujo entre dimensiones (canal->categoria->estatus) -> sankey
+- Actividad diaria / estacionalidad por dia      -> calendar-heatmap
+- Jerarquia circular con drill-down              -> sunburst
+- Distribucion estadistica de precios/montos     -> boxplot
+- Evolucion fluida de composicion temporal       -> theme-river
 
 REGLAS ESPECIFICAS:
 
@@ -466,6 +507,11 @@ REGLAS DE SELECCION (en orden de prioridad):
 16. EMBUDO -> chartType: "funnel"
 17. KPI UNICO -> chartType: "gauge"
 18. VOLATILIDAD/OHLC -> chartType: "candlestick" o "bollinger"
+19. FLUJO entre dimensiones -> chartType: "sankey"
+20. ESTACIONALIDAD / actividad diaria -> chartType: "calendar-heatmap"
+21. JERARQUIA CIRCULAR -> chartType: "sunburst"
+22. DISTRIBUCION ESTADISTICA de precios -> chartType: "boxplot"
+23. COMPOSICION TEMPORAL fluida -> chartType: "theme-river"
 
 FILTROS vs DIMENSIONES:
 - Estado especifico (ej: "en Jalisco") = FILTRO, no dimension -> NO usar map

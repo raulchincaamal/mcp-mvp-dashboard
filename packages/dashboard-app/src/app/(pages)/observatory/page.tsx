@@ -320,7 +320,7 @@ export default function ObservatoryPage() {
           fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.01em',
           color: 'rgba(255,255,255,0.55)',
           fontFamily: '"Chivo Mono", monospace',
-        }}>Macropay AI Diagrams | Ventas</span>
+        }}>Space Insight AI</span>
       </div>
 
       {/* Layer 0 — Three.js + widgets + Coconauta 3D */}

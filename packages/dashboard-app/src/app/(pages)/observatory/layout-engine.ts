@@ -49,11 +49,33 @@ const CHART_WEIGHT: Record<string, number> = {
   bar: 1, doughnut: 1, pie: 1, funnel: 1, gauge: 1, progress: 1,
 };
 
+// ── Canonical widget sizes (iOS-style) ───────────────────────────────────────
+// small: 160px  — KPI / gauge / mini-donut
+// medium: 260px — bar, doughnut, pie, progress, funnel, radar
+// wide: 320px   — area, line, scatter, treemap, stacked-area, bollinger
+// tall: 400px   — map, heatmap, candlestick, bar-race, hierarchical-bar, diverging-bar, radial-stacked-bar
+
+export const WIDGET_SIZE = {
+  small:  160,
+  medium: 260,
+  wide:   320,
+  tall:   400,
+} as const;
+
 const CHART_MIN_H_SPEC: Record<string, number> = {
-  map: 340, heatmap: 320, scatter: 260, candlestick: 300, 'bar-race': 300,
-  'hierarchical-bar': 300, 'diverging-bar': 280, radar: 280, 'stacked-area': 260,
-  'radial-stacked-bar': 280, bollinger: 260, treemap: 240,
-  bar: 240, area: 240, line: 240, doughnut: 240, pie: 240, progress: 200,
+  // tall
+  map: WIDGET_SIZE.tall, heatmap: WIDGET_SIZE.tall, candlestick: WIDGET_SIZE.tall,
+  'bar-race': WIDGET_SIZE.tall, 'hierarchical-bar': WIDGET_SIZE.tall,
+  'diverging-bar': WIDGET_SIZE.tall, 'radial-stacked-bar': WIDGET_SIZE.tall,
+  // wide
+  scatter: WIDGET_SIZE.wide, 'stacked-area': WIDGET_SIZE.wide,
+  bollinger: WIDGET_SIZE.wide, area: WIDGET_SIZE.wide, line: WIDGET_SIZE.wide,
+  treemap: WIDGET_SIZE.wide,
+  // medium
+  bar: WIDGET_SIZE.medium, doughnut: WIDGET_SIZE.medium, pie: WIDGET_SIZE.medium,
+  radar: WIDGET_SIZE.medium, funnel: WIDGET_SIZE.medium, progress: WIDGET_SIZE.medium,
+  // small
+  gauge: WIDGET_SIZE.small,
 };
 
 function chartWeight(ins: InsightData): number {

@@ -90,7 +90,7 @@ const COMPONENT_CATALOG = [
   {
     name: 'Chart',
     description:
-      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, hexbin-map, treemap, map, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race',
+      'Chart supporting types: bar, line, area, pie, doughnut, scatter, radar, funnel, gauge, hexbin-map, treemap, map, bollinger, stacked-area, diverging-bar, radial-stacked-bar, candlestick, hierarchical-bar, bar-race, sankey, calendar-heatmap, sunburst, boxplot, theme-river',
   },
   { name: 'DataSummary', description: 'Styled data table with hover effects' },
   {
@@ -338,8 +338,8 @@ async function interpretIntent(intent: string): Promise<{
   const fallback = {
     filters: {},
     groupBy: null,
-    metric: 'count',
-    metricField: null,
+    metric: 'sum',
+    metricField: 'monto_total_credito',
     chartType: null,
     template: 'executive',
     limit: null,
@@ -359,7 +359,7 @@ IMPORTANTE: El usuario puede escribir sin acentos, en minúsculas, con errores o
 
 Responde SOLO con JSON válido, sin markdown, sin explicaciones.
 Estructura exacta:
-{"filters":{},"groupBy":null,"metric":"count","metricField":null,"chartType":null,"template":"executive","limit":null,"title":null}
+{"filters":{},"groupBy":null,"metric":"sum","metricField":"monto_total_credito","chartType":null,"template":"executive","limit":null,"title":null}
 
 Campos disponibles: id, fecha_venta, cliente, edad_cliente, genero, estado, ciudad, sucursal, categoria, producto, precio_contado, monto_total_credito, estatus_credito, canal_venta, vendedor.
 
@@ -425,7 +425,14 @@ Ejemplos:
   "ventas de motos por estado" → groupBy:"estado", filters:{categoria:"Motos"}
   "creditos atrasados en jalisco" → groupBy:null, filters:{estatus_credito:"atrasado", estado:"Jalisco"}, template:"credit"
   "evolucion mensual de ventas" → groupBy:"fecha_venta", filters:{}, template:"chart"
-  "cuantas motos se vendieron" → groupBy:null, filters:{categoria:"Motos"}, metric:"count"
+  "cuantas motos se vendieron" → groupBy:null, filters:{categoria:"Motos"}, metric:"count", metricField:null
+  "ventas de motos" → groupBy:null, filters:{categoria:"Motos"}, metric:"sum", metricField:"monto_total_credito"
+
+REGLA DE MÉTRICA (muy importante):
+- Por defecto usa metric:"sum" y metricField:"monto_total_credito" para mostrar el valor financiero real
+- Usa metric:"count" SOLO cuando el usuario pide explícitamente cantidad, número, cuántos, conteo
+- Palabras que activan count: "cuántos", "cuantas", "número de", "cantidad de", "conteo", "registros"
+- Palabras que activan sum de monto: "ventas", "ingresos", "monto", "valor", "facturación", "total", "dinero"
   "ventas de celulares y motos en yucatan" → groupBy:null, filters:{categoria:["Celulares","Motos"], estado:"Yucatán"}
   "creditos atrasados de motos en agosto" → groupBy:null, filters:{categoria:"Motos", estatus_credito:"atrasado", fecha_venta:{gte:"2025-08-01",lte:"2025-08-31"}}, template:"credit"
   "ventas de celulares y motos atrasadas de yucatan en agosto" → filters:{categoria:["Celulares","Motos"], estatus_credito:"atrasado", estado:"Yucatán", fecha_venta:{gte:"2025-08-01",lte:"2025-08-31"}}
@@ -444,6 +451,14 @@ ${CHART_DECISION_PROMPT}`,
       .replace(/\s*```\s*$/i, '')
       .trim();
     const parsed = { ...fallback, ...JSON.parse(clean) };
+    // Default metric to sum/monto_total_credito unless user explicitly asked for count
+    if (!parsed.metric || parsed.metric === 'count') {
+      const countKeywords = /cu[aá]ntos?|n[uú]mero\s+de|cantidad\s+de|conteo|registros/i;
+      if (!countKeywords.test(intent)) {
+        parsed.metric = 'sum';
+        parsed.metricField = parsed.metricField ?? 'monto_total_credito';
+      }
+    }
 
     // Infer temporal granularity from intent
     if (parsed.groupBy === 'fecha_venta' && !parsed.granularity) {
@@ -608,6 +623,21 @@ Props por componente:
   Construye un árbol jerárquico de 2-3 niveles con sumas por nivel.
 - Chart (bar-race): { type: "bar-race", title?, frames: [{ label: "periodo", items: [{ name: "categoría", value: number }] }], maxBars?: 10, duration?: 800 }
   Genera frames temporales. Cada frame muestra el ranking acumulado hasta ese periodo. Los items deben estar ordenados por value descendente.
+- Chart (sankey): { type: "sankey", title?, data: { nodes: [{ name: string }], links: [{ source: string, target: string, value: number }] } }
+  Flujo entre dimensiones. Ideal para mostrar cómo se distribuyen las ventas: canal_venta → categoria → estatus_credito.
+  REGLA: todos los nombres en links.source y links.target deben existir en nodes. value = monto_total_credito o conteo.
+- Chart (calendar-heatmap): { type: "calendar-heatmap", title?, data: { labels: ["YYYY-MM-DD", ...], datasets: [{ data: [value, ...] }] } }
+  Mapa de calor en formato calendario. labels = fechas ISO, data = valor por día (monto o conteo).
+  Ideal para detectar estacionalidad, días pico, patrones semanales. Usa fieldSummaries de fecha_venta.
+- Chart (sunburst): { type: "sunburst", title?, data: { labels: ["Categoria/Producto", ...], datasets: [{ data: [value, ...] }] } }
+  Jerarquía circular con drill-down. labels en formato "Padre/Hijo" (ej: "Motos/BAJAJ PULSAR").
+  Ideal para mostrar composición: categoría → producto. Usa fieldSummaries.categoria y fieldSummaries.producto.
+- Chart (boxplot): { type: "boxplot", title?, data: { labels: ["categoria1", ...], datasets: [{ label: "cat", data: [min, Q1, median, Q3, max] }] } }
+  Distribución estadística de precios o montos por categoría. Cada dataset es una categoría con 5 valores precomputados.
+  Usa numericSummaries para derivar min/max y estima Q1/Q3 como avg±(max-min)*0.25.
+- Chart (theme-river): { type: "theme-river", title?, data: { labels: ["YYYY-MM", ...], datasets: [{ label: "serie", data: [value, ...] }] } }
+  Evolución fluida de la composición en el tiempo. Cada dataset es una serie (categoría/canal/estatus).
+  Usa crossAggregation.data si existe. Requiere mínimo 2 series y 4+ puntos temporales.
 - DataSummary: { title?, columns: [{ key, label }], rows: [...] }
 - TransactionList: { title?, items: [{ title, subtitle?, amount, date?, status?: "positive"|"negative"|"neutral" }] }
 - ProgressGroup: { title?, items: [{ label, value (0-100), color? }] }
@@ -657,9 +687,11 @@ REGLAS DE VISUALIZACIÓN (obligatorias):
 1. SIEMPRE incluye un KPIGrid con 4-5 métricas de resumen
 2. SIEMPRE incluye al menos 3 Charts de TIPOS DIFERENTES con perspectivas distintas
 3. SIEMPRE incluye un TransactionList con las últimas 6-8 operaciones
-4. Usa aggregations.groupBy.data para labels/values del Chart principal
-5. Usa aggregations.numericSummaries para los valores de KPIGrid
-6. Usa aggregations.fieldSummaries[campo].topValues para charts de distribución
+4. Usa aggregations.groupBy.data para labels/values del Chart principal — los values son MONTOS en MXN (sum de monto_total_credito) salvo que metric sea "count"
+   REGLA CRÍTICA DE MÉTRICAS: En TODOS los charts (bar, treemap, doughnut, area, line, map, etc.), usa SIEMPRE el campo [sum] de monto_total_credito como valor, NO el campo [count]. Solo usa [count] cuando el usuario pida explícitamente "cuántos", "cantidad", "número de". Los valores de fieldSummaries.topValues tienen tanto [count] como [sum] — usa [sum].
+   REGLA CRÍTICA DE MÉTRICAS: En TODOS los charts (bar, treemap, doughnut, area, line, map, etc.), usa SIEMPRE el campo [sum] de monto_total_credito como valor, NO el campo [count]. Solo usa [count] cuando el usuario pida explícitamente "cuántos", "cantidad", "número de". Los valores de fieldSummaries.topValues tienen tanto [count] como [sum] — usa [sum].
+5. Usa aggregations.numericSummaries para los valores de KPIGrid — prioriza monto_total_credito sobre conteos
+6. Usa aggregations.fieldSummaries[campo].topValues para charts de distribución secundarios — usa el campo [sum] (monto_total_credito) de cada topValue como valor del chart, NO el campo [count]. El campo [sum] ya está pre-calculado en cada topValue.
 7. Responde SOLO con el JSON del UIConfig, sin markdown, sin explicaciones
 8. Formatea montos: >= 1M → "$1.2M", >= 1K → "$45.3K", resto → "$1,234"
 
@@ -886,11 +918,13 @@ function sanitizeUIConfig(
   const singleEstatus   = typeof filterEstatus === 'string';
 
   // Pre-compute fallback data for replacements
-  const fieldSummaries = (aggregations.fieldSummaries ?? {}) as Record<string, { topValues: { value: string; count: number }[] }>;
+  const fieldSummaries = (aggregations.fieldSummaries ?? {}) as Record<string, { topValues: { value: string; count: number; sum?: number }[] }>;
   const productoTop = fieldSummaries.producto?.topValues?.slice(0, 8) ?? [];
   const estadoTop   = fieldSummaries.estado?.topValues?.slice(0, 10) ?? [];
   const canalTop    = fieldSummaries.canal_venta?.topValues?.slice(0, 3) ?? [];
   const estatusTop  = fieldSummaries.estatus_credito?.topValues ?? [];
+  // Use monto sum when available, else count
+  const metricVal = (item: { count: number; sum?: number }) => item.sum ?? item.count;
 
   config.components = (config.components as Record<string, unknown>[]).map(comp => {
     if (comp.component !== 'Chart') return comp;
@@ -1167,7 +1201,7 @@ function sanitizeUIConfig(
 
     if (type === 'bar') {
       barCount++;
-      if (barCount > 1) {
+      if (barCount > 2) {
         const values = data?.datasets?.[0]?.data ?? [];
         console.log('[sanitize] converting excess bar to treemap');
         return {
@@ -1292,7 +1326,7 @@ function repairEmptyCharts(
         data: {
           labels,
           datasets: [{
-            label: parsedIntent.metricField ?? 'Ventas',
+            label: parsedIntent.metricField ?? 'Monto Total Crédito',
             data: values,
             backgroundColor: bgColors,
             borderColor: bgColors,
@@ -1327,20 +1361,27 @@ function computeAggregations(
     totalRecords: records.length,
   };
 
-  // ─── String fields: cardinality + top values ──────────────
+    // ─── String fields: cardinality + top values (with monto sum) ──────────────
   const fieldSummaries: Record<string, unknown> = {};
+  const montoField = numericFields.includes('monto_total_credito') ? 'monto_total_credito'
+    : numericFields.includes('precio_contado') ? 'precio_contado' : null;
   for (const field of stringFields) {
     const counts: Record<string, number> = {};
+    const montoSums: Record<string, number> = {};
     for (const r of records) {
       const key = String(r[field] ?? '');
       counts[key] = (counts[key] ?? 0) + 1;
+      if (montoField) montoSums[key] = (montoSums[key] ?? 0) + Number(r[montoField] ?? 0);
     }
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    // Sort by monto sum (financial value) when available, else by count
+    const sorted = Object.entries(counts).sort((a, b) =>
+      montoField ? (montoSums[b[0]] ?? 0) - (montoSums[a[0]] ?? 0) : b[1] - a[1]
+    );
     fieldSummaries[field] = {
       uniqueValues: sorted.length,
       topValues: sorted
         .slice(0, 10)
-        .map(([value, count]) => ({ value, count })),
+        .map(([value, count]) => ({ value, count, sum: montoField ? Math.round(montoSums[value] ?? 0) : count })),
     };
   }
   agg.fieldSummaries = fieldSummaries;
@@ -1368,6 +1409,8 @@ function computeAggregations(
     const topCrossValues = ((fieldSummaries[crossField] as { topValues: { value: string }[] }).topValues ?? [])
       .slice(0, 5).map(v => v.value);
     const crossGroups: Record<string, Record<string, number>> = {};
+    // Use monto_total_credito sum for cross aggregation (financial value over count)
+    const crossMetricField = numericFields.includes('monto_total_credito') ? 'monto_total_credito' : null;
     for (const record of records) {
       const dateRaw = String(record['fecha_venta'] ?? '');
       const d = new Date(dateRaw);
@@ -1376,16 +1419,18 @@ function computeAggregations(
       const serieKey = String(record[crossField] ?? '');
       if (!topCrossValues.includes(serieKey)) continue;
       if (!crossGroups[monthKey]) crossGroups[monthKey] = {};
-      crossGroups[monthKey][serieKey] = (crossGroups[monthKey][serieKey] ?? 0) + 1;
+      const addValue = crossMetricField ? Number(record[crossMetricField] ?? 0) : 1;
+      crossGroups[monthKey][serieKey] = (crossGroups[monthKey][serieKey] ?? 0) + addValue;
     }
     const sortedMonths = Object.keys(crossGroups).sort();
     agg.crossAggregation = {
       xField: 'fecha_venta',
       serieField: crossField,
+      metric: crossMetricField ? 'sum_monto_total_credito' : 'count',
       series: topCrossValues,
       data: sortedMonths.map(month => ({
         label: month,
-        ...Object.fromEntries(topCrossValues.map(s => [s, crossGroups[month]?.[s] ?? 0])),
+        ...Object.fromEntries(topCrossValues.map(s => [s, Math.round(crossGroups[month]?.[s] ?? 0)])),
       })),
     };
   }
@@ -1419,12 +1464,16 @@ function computeAggregations(
         key = String(record[field] ?? 'N/A');
       }
 
-      if (parsedIntent.metric === 'count') {
+      if (parsedIntent.metric === 'count' && !parsedIntent.metricField) {
         groups[key] = (groups[key] ?? 0) + 1;
-      } else if (parsedIntent.metricField) {
-        groups[key] = (groups[key] ?? 0) + Number(record[parsedIntent.metricField] ?? 0);
       } else {
-        groups[key] = (groups[key] ?? 0) + 1;
+        // Prefer monto_total_credito as default metric field for financial value
+        const mField = parsedIntent.metricField ?? (numericFields.includes('monto_total_credito') ? 'monto_total_credito' : null);
+        if (mField) {
+          groups[key] = (groups[key] ?? 0) + Number(record[mField] ?? 0);
+        } else {
+          groups[key] = (groups[key] ?? 0) + 1;
+        }
       }
     }
 
@@ -1432,12 +1481,14 @@ function computeAggregations(
       isDateField ? a.localeCompare(b) : groups[b] - groups[a],
     );
     const maxSlice = granularity === 'week' ? 12 : granularity === 'year' ? 10 : 36;
+    const effectiveMetricField = parsedIntent.metricField ?? (numericFields.includes('monto_total_credito') ? 'monto_total_credito' : null);
     agg.groupBy = {
       field,
       granularity: granularity ?? (isDateField ? 'month' : 'value'),
       metric: parsedIntent.metric,
+      metricField: effectiveMetricField,
       uniqueGroups: sortedGroups.length,
-      data: sortedGroups.slice(0, maxSlice).map(([label, value]) => ({ label, value })),
+      data: sortedGroups.slice(0, maxSlice).map(([label, value]) => ({ label, value: Math.round(value) })),
     };
   }
 

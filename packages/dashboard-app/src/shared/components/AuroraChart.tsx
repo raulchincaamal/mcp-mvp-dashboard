@@ -4,8 +4,7 @@ import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import gsap from 'gsap';
-import MexicoHexbinChart from './MexicoHexbinChart';
-import type { HexbinDataPoint } from './MexicoHexbinChart';
+
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -31,7 +30,7 @@ export interface LegacyChartData {
   datasets: Array<{ label?: string; data: number[] }>;
 }
 
-export type AuroraChartData = FlatDataPoint[] | LegacyChartData | HexbinDataPoint[];
+export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
 
 // Candlestick-MA specific data format
 export interface CandlestickMAData {
@@ -40,9 +39,13 @@ export interface CandlestickMAData {
   ohlc: [number, number, number, number][];
 }
 
+export interface SankeyNode { name: string; }
+export interface SankeyLink { source: string; target: string; value: number; }
+export interface SankeyData { nodes: SankeyNode[]; links: SankeyLink[]; }
+
 export interface AuroraChartProps {
-  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'hexbin-map' | 'treemap' | 'candlestick-ma';
-  data: AuroraChartData | CandlestickMAData;
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma' | 'sankey' | 'calendar-heatmap' | 'sunburst' | 'boxplot' | 'theme-river';
+  data: AuroraChartData | CandlestickMAData | SankeyData;
   flint?: FlintSpec;
   flintData?: Record<string, unknown>[];
   title?: string;
@@ -188,6 +191,21 @@ function rGrad(top: string, bot: string) {
   };
 }
 
+// ─── Money formatter ───────────────────────────────────────
+function fmtMXN(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000)     return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${v.toLocaleString('es-MX')}`;
+}
+
+// Detect if a dataset looks like monetary values (avg > 500 suggests MXN amounts)
+function looksLikeMoney(data: LegacyChartData): boolean {
+  const allVals = data.datasets.flatMap(d => d.data).filter(v => v > 0);
+  if (allVals.length === 0) return false;
+  const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+  return avg > 500;
+}
+
 // ─── Option builders ────────────────────────────────────────
 
 type Tokens = ReturnType<typeof readTokens>;
@@ -195,6 +213,7 @@ type Tokens = ReturnType<typeof readTokens>;
 function barOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
+  const money = looksLikeMoney(data);
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -205,6 +224,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
@@ -218,7 +238,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit' },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', formatter: money ? (v: number) => fmtMXN(v) : undefined },
       splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => ({
@@ -240,6 +260,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
 function lineOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isArea: boolean): EChartsOption {
   const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
+  const money = looksLikeMoney(data);
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -247,6 +268,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
       backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
@@ -257,7 +279,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit' },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', formatter: money ? (v: number) => fmtMXN(v) : undefined },
       splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => {
@@ -745,10 +767,15 @@ function candlestickMAOption(rawData: CandlestickMAData, title: string | undefin
 function treemapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
+  const money = looksLikeMoney(data);
+  const fmt = (v: number) => money ? fmtMXN(v) : v.toLocaleString('es-MX');
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      formatter: '{b}: {c}',
+      formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number };
+        return `${d.name}: <b>${fmt(d.value)}</b>`;
+      }) as never,
       backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
@@ -759,7 +786,10 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
-      label: { show: true, formatter: '{b}\n{c}', color: '#fff', fontSize: 11, fontWeight: 600 },
+      label: { show: true, formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number };
+        return `${d.name}\n${fmt(d.value)}`;
+      }) as never, color: '#fff', fontSize: 11, fontWeight: 600 },
       itemStyle: { borderWidth: 1, borderColor: tk.border, gapWidth: 2 },
       emphasis: { itemStyle: { opacity: 0.85 } },
       data: data.labels.map((name, i) => ({
@@ -771,6 +801,264 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
       })),
     }],
     animationDuration: 800,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Sankey ───────────────────────────────────────────────
+// data: { nodes: [{name}], links: [{source, target, value}] }
+
+function sankeyOption(rawData: SankeyData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const d = p as { data: { source?: string; target?: string; value?: number; name?: string } };
+        if (d.data.source) return `${d.data.source} → ${d.data.target}: <b>${d.data.value?.toLocaleString('es-MX')}</b>`;
+        return d.data.name ?? '';
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    series: [{
+      type: 'sankey' as const,
+      top: title ? 40 : 16, bottom: 16, left: 16, right: 16,
+      nodeWidth: 18,
+      nodeGap: 12,
+      orient: 'horizontal',
+      draggable: false,
+      label: { color: tk.text, fontSize: 11, fontFamily: 'inherit' },
+      lineStyle: { color: 'gradient', opacity: 0.4, curveness: 0.5 },
+      itemStyle: { borderWidth: 0 },
+      emphasis: { focus: 'adjacency', lineStyle: { opacity: 0.7 } },
+      data: rawData.nodes.map((n, i) => ({
+        name: n.name,
+        itemStyle: { color: palette[i % palette.length][0] },
+      })),
+      links: rawData.links,
+    }],
+    animationDuration: 1000,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Calendar Heatmap ──────────────────────────────────────
+// data.labels = ['YYYY-MM-DD', ...], data.datasets[0].data = [value, ...]
+
+function calendarHeatmapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  const pairs = data.labels.map((d, i) => [d, data.datasets[0]?.data[i] ?? 0]);
+  const allVals = data.datasets[0]?.data ?? [];
+  const maxVal = Math.max(...allVals, 1);
+  const years = [...new Set(data.labels.map(d => d.slice(0, 4)))];
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: ((p: unknown) => {
+        const v = (p as { value: [string, number] }).value;
+        return `${v[0]}: <b>${Number(v[1]).toLocaleString('es-MX')}</b>`;
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    visualMap: {
+      min: 0, max: maxVal,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 4,
+      inRange: { color: ['#001a4a', '#0047BA', '#1a7fff', '#00c8f0', '#00d97e'] },
+      textStyle: { color: tk.axisLabel, fontSize: 10 },
+    },
+    calendar: years.map((year, i) => ({
+      top: title ? 56 + i * 140 : 32 + i * 140,
+      left: 48,
+      right: 16,
+      cellSize: ['auto', 16],
+      range: year,
+      itemStyle: { borderWidth: 2, borderColor: tk.bg },
+      yearLabel: { color: tk.axisLabel, fontSize: 11 },
+      monthLabel: { color: tk.axisLabel, fontSize: 10 },
+      dayLabel: { color: tk.textTertiary, fontSize: 9, firstDay: 1 },
+      splitLine: { lineStyle: { color: tk.splitLine } },
+    })),
+    series: years.map((year, i) => ({
+      type: 'heatmap' as const,
+      coordinateSystem: 'calendar',
+      calendarIndex: i,
+      data: pairs.filter(([d]) => String(d).startsWith(year)),
+    })),
+    animationDuration: 800,
+  };
+}
+
+// ─── Sunburst ──────────────────────────────────────────────
+// data: { labels: ['root/child/grandchild', ...], datasets[0].data: [value, ...] }
+// OR hierarchical: data.datasets[0] has nested structure via labels as paths
+// Simplified: labels = ['Cat/Prod', ...], values = counts
+
+function sunburstOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // Build tree from path-style labels (e.g. 'Motos/BAJAJ PULSAR')
+  const root: Record<string, { value: number; children: Record<string, number> }> = {};
+  data.labels.forEach((label, i) => {
+    const parts = String(label).split('/');
+    const parent = parts[0];
+    const child = parts[1] ?? parts[0];
+    if (!root[parent]) root[parent] = { value: 0, children: {} };
+    root[parent].value += data.datasets[0]?.data[i] ?? 0;
+    if (parts.length > 1) {
+      root[parent].children[child] = (root[parent].children[child] ?? 0) + (data.datasets[0]?.data[i] ?? 0);
+    }
+  });
+  const treeData = Object.entries(root).map(([name, node], i) => ({
+    name,
+    value: node.value,
+    itemStyle: { color: palette[i % palette.length][0] },
+    children: Object.entries(node.children).map(([cname, cval], j) => ({
+      name: cname,
+      value: cval,
+      itemStyle: { color: palette[i % palette.length][0] + (j % 2 === 0 ? 'cc' : '88') },
+    })),
+  }));
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: '{b}: {c}',
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    series: [{
+      type: 'sunburst' as const,
+      center: ['50%', '50%'],
+      radius: [0, '88%'],
+      sort: 'desc',
+      nodeClick: false,
+      label: { rotate: 'radial', color: '#fff', fontSize: 10, minAngle: 8 },
+      itemStyle: { borderWidth: 1, borderColor: tk.bg },
+      emphasis: { focus: 'ancestor', itemStyle: { opacity: 0.85 } },
+      data: treeData,
+    }],
+    animationDuration: 900,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Boxplot ───────────────────────────────────────────────
+// data.labels = categories, data.datasets[0].data = raw values per category
+// OR data.datasets[i] = one box per category with [min, Q1, median, Q3, max]
+
+function boxplotOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // If each dataset is a category with 5 values [min,Q1,median,Q3,max]
+  const isPrecomputed = data.datasets.length > 1 && data.datasets[0].data.length === 5;
+  let boxData: number[][];
+  let categories: string[];
+  if (isPrecomputed) {
+    categories = data.datasets.map(ds => ds.label ?? '');
+    boxData = data.datasets.map(ds => ds.data);
+  } else {
+    // Single dataset: each label is a category, each value is a raw data point
+    // Group by label and compute box stats
+    const groups: Record<string, number[]> = {};
+    data.labels.forEach((l, i) => {
+      if (!groups[l]) groups[l] = [];
+      groups[l].push(data.datasets[0]?.data[i] ?? 0);
+    });
+    categories = Object.keys(groups);
+    boxData = categories.map(cat => {
+      const vals = groups[cat].sort((a, b) => a - b);
+      const q = (p: number) => vals[Math.floor(vals.length * p)] ?? 0;
+      return [vals[0], q(0.25), q(0.5), q(0.75), vals[vals.length - 1]];
+    });
+  }
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number[] };
+        return `<b>${d.name}</b><br/>Mín: ${d.value[1]?.toLocaleString('es-MX')}<br/>Q1: ${d.value[2]?.toLocaleString('es-MX')}<br/>Mediana: ${d.value[3]?.toLocaleString('es-MX')}<br/>Q3: ${d.value[4]?.toLocaleString('es-MX')}<br/>Máx: ${d.value[5]?.toLocaleString('es-MX')}`;
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    grid: { left: 16, right: 16, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: {
+      type: 'category', data: categories,
+      axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, rotate: categories.length > 6 ? 30 : 0 },
+    },
+    yAxis: {
+      type: 'value', axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+    },
+    series: [{
+      type: 'boxplot' as const,
+      data: boxData.map((d, i) => ({
+        value: d,
+        itemStyle: { color: palette[i % palette.length][0] + '44', borderColor: palette[i % palette.length][0], borderWidth: 2 },
+      })),
+      boxWidth: ['20%', '40%'],
+    }],
+    animationDuration: 800,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── ThemeRiver ────────────────────────────────────────────
+// data: { labels: ['YYYY-MM', ...], datasets: [{ label: 'serie', data: [v,...] }] }
+
+function themeRiverOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // ThemeRiver expects: [[date, value, name], ...]
+  const riverData: [string, number, string][] = [];
+  data.datasets.forEach(ds => {
+    data.labels.forEach((label, i) => {
+      riverData.push([label, ds.data[i] ?? 0, ds.label ?? '']);
+    });
+  });
+  const seriesNames = data.datasets.map(ds => ds.label ?? '');
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: tk.axisLine } },
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    legend: {
+      data: seriesNames,
+      bottom: 4,
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
+      icon: 'roundRect',
+    },
+    singleAxis: {
+      top: title ? 56 : 32,
+      bottom: 40,
+      left: 16,
+      right: 16,
+      type: 'time',
+      axisLine: { lineStyle: { color: tk.axisLine } },
+      axisTick: { lineStyle: { color: tk.axisLine } },
+      axisLabel: { color: tk.axisLabel, fontSize: 10 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+    },
+    series: [{
+      type: 'themeRiver' as const,
+      emphasis: { focus: 'series' },
+      label: { show: false },
+      data: riverData,
+      color: palette.map(p => p[0]),
+    }],
+    animationDuration: 1000,
     animationEasing: 'cubicOut' as const,
   };
 }
@@ -836,22 +1124,14 @@ export default function AuroraChart({
       case 'heatmap':         return heatmapOption(data as AuroraChartData, title, palette, tk!);
       case 'treemap':         return treemapOption(data as AuroraChartData, title, palette, tk!);
       case 'candlestick-ma':  return candlestickMAOption(data as CandlestickMAData, title, palette, tk!);
+      case 'sankey':           return sankeyOption(data as SankeyData, title, palette, tk!);
+      case 'calendar-heatmap': return calendarHeatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'sunburst':         return sunburstOption(data as AuroraChartData, title, palette, tk!);
+      case 'boxplot':          return boxplotOption(data as AuroraChartData, title, palette, tk!);
+      case 'theme-river':      return themeRiverOption(data as AuroraChartData, title, palette, tk!);
       default:                return barOption(data as AuroraChartData, title, palette, tk!);
     }
   };
-
-  // hexbin-map delegates entirely to MexicoHexbinChart
-  if (type === 'hexbin-map') {
-    return (
-      <MexicoHexbinChart
-        data={data as HexbinDataPoint[]}
-        title={bare ? undefined : title}
-        height={height}
-        gradient={gradient}
-        bare={bare}
-      />
-    );
-  }
 
   return (
     <div

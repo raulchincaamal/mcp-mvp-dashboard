@@ -261,6 +261,16 @@ export async function orchestrate(
     // If 0 records and intent mentions "ultimo dia" / "ayer" / "hoy", find the most recent date with data
     let finalRecords = Array.isArray(records) ? records : [];
     let finalDateRange = filters.fecha_venta as { gte?: string; lte?: string } | undefined;
+
+    // If no explicit date range was applied, compute it from the actual records
+    if (!finalDateRange && finalRecords.length > 0) {
+      const dates = finalRecords
+        .map(r => String(r.fecha_venta ?? '')).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
+      if (dates.length > 0) {
+        finalDateRange = { gte: dates[0].slice(0, 10), lte: dates[dates.length - 1].slice(0, 10) };
+        console.log(`[orchestrator] computed date range from records: ${JSON.stringify(finalDateRange)}`);
+      }
+    }
     if (finalRecords.length === 0 && isLastDayIntent) {
       console.log('[orchestrator] 0 records for last-day query — fetching most recent date with data');
       const allRecent = (await gcpClient.callTool('query_data', {
@@ -702,13 +712,33 @@ COLORES para charts (usa estos exactos):
     ? (() => {
         const from = dateRange.gte ? new Date(dateRange.gte) : null;
         const to   = dateRange.lte ? new Date(dateRange.lte) : null;
-        const fmt  = (d: Date) => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
-        if (from && to) return `${fmt(from)} – ${fmt(to)}`;
-        if (from) return `desde ${fmt(from)}`;
-        if (to)   return `hasta ${fmt(to)}`;
+        const fmtFull  = (d: Date) => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+        const fmtMonth = (d: Date) => d.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
+        if (from && to) {
+          const diffDays = (to.getTime() - from.getTime()) / 86400000;
+          // Same month → "agosto 2025"
+          if (from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear())
+            return to.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+          // > 45 days → month-level range
+          if (diffDays > 45) return `${fmtMonth(from)} – ${fmtMonth(to)}`;
+          return `${fmtFull(from)} – ${fmtFull(to)}`;
+        }
+        if (from) return `desde ${fmtFull(from)}`;
+        if (to)   return `hasta ${fmtFull(to)}`;
         return null;
       })()
     : null;
+
+  // Build a deterministic description from active filters when no date range
+  const filterDescription = (() => {
+    if (dateRangeLabel) return dateRangeLabel;
+    const parts: string[] = [];
+    const cat = parsedIntent.filters.categoria;
+    const est = parsedIntent.filters.estado;
+    if (cat) parts.push(Array.isArray(cat) ? cat.join(', ') : String(cat));
+    if (est) parts.push(Array.isArray(est) ? est.join(', ') : String(est));
+    return parts.length > 0 ? parts.join(' · ') : null;
+  })();
 
   const topN = (parsedIntent as Record<string, unknown>).topN as number | null;
 
@@ -871,6 +901,7 @@ Genera el UIConfig JSON ahora.`;
   try {
     const parsed = JSON.parse(raw);
     const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
+    if (filterDescription) (uiConfig as Record<string, unknown>).description = filterDescription;
     const repaired = repairEmptyCharts(uiConfig, aggregations, parsedIntent);
     return sanitizeUIConfig(repaired, parsedIntent, aggregations);
   } catch {
@@ -880,6 +911,7 @@ Genera el UIConfig JSON ahora.`;
         const recovered = raw.slice(0, lastBracket + 1) + ']}';
         const parsed = JSON.parse(recovered);
         const uiConfig = (parsed as Record<string, unknown>).uiConfig ?? parsed;
+        if (filterDescription) (uiConfig as Record<string, unknown>).description = filterDescription;
         const repaired = repairEmptyCharts(uiConfig, aggregations, parsedIntent);
         return sanitizeUIConfig(repaired, parsedIntent, aggregations);
       } catch {

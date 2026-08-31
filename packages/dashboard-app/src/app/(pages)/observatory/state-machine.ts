@@ -40,6 +40,7 @@ export interface ObservatoryContext {
   insights: InsightData[];
   layoutHint: LayoutHint | null;
   error: string | null;
+  description: string | null;
 }
 
 type Listener = (ctx: ObservatoryContext) => void;
@@ -72,6 +73,7 @@ class ObservatoryStateMachine {
     insights: [],
     layoutHint: null,
     error: null,
+    description: null,
   };
 
   private listeners: Set<Listener> = new Set();
@@ -625,7 +627,8 @@ export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extr
   const arc      = classifyNarrative(rawQuery);
   const insights = reorderByNarrative(uiConfigToInsights(uiConfig), arc);
   const layoutHint = selectLayout(insights, rawQuery);
-  observatory.transition('REVEAL', { insights, layoutHint });
+  const description = (uiConfig as Record<string, unknown>)?.description as string | null ?? null;
+  observatory.transition('REVEAL', { insights, layoutHint, description });
   await delay(900, signal);
   if (signal.aborted) return;
   observatory.transition('PRESENTATION');

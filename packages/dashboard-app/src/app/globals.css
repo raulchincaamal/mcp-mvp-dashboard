@@ -240,7 +240,7 @@
 }
 
 body {
-  font-family: "Hubot Sans", system-ui, sans-serif;
+  font-family: "Exo 2", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   letter-spacing: -0.01em;

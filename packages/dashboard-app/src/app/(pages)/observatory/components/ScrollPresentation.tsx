@@ -20,13 +20,14 @@ interface Props {
   insights: InsightData[];
   cursor: CursorState;
   query: string | null;
+  description: string | null;
   onReset: () => void;
   layoutHint?: LayoutHint | null;
 }
 
 type ViewMode = 'presentation' | 'grid';
 
-export default function ScrollPresentation({ insights, cursor, query, onReset, layoutHint }: Props) {
+export default function ScrollPresentation({ insights, cursor, query, description, onReset, layoutHint }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [autoPlay, setAutoPlay] = useState(false);
@@ -95,7 +96,7 @@ export default function ScrollPresentation({ insights, cursor, query, onReset, l
         <PresentationMode insights={insights} cursor={cursor} query={query} onReset={onReset} currentSlide={currentSlide} totalSlides={totalSlides} />
       </div>
       <div ref={gridRef2} style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', zIndex: 1, overflow: 'hidden' }}>
-        <LayoutRenderer insights={insights} cursor={cursor} query={query} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} layoutHint={layoutHint} />
+        <LayoutRenderer insights={insights} cursor={cursor} query={query} description={description} onReset={onReset} visible={viewMode === 'grid'} cardRefs={gridCardRefs} onExpand={setExpandedInsight} layoutHint={layoutHint} />
       </div>
       {/* Hot corner — bottom-left 80×80 invisible trigger zone */}
       <div
@@ -496,9 +497,9 @@ function ChartCard({ ins, accent, cardRef, onClick, style, preview = false }: { 
   );
 }
 
-function HeaderBar({ query, onNewQuery }: { query: string | null; onNewQuery: () => void }) {
+function HeaderBar({ query, description, onNewQuery }: { query: string | null; description: string | null; onNewQuery: () => void }) {
   return (
-    <div data-animate style={cardStyle({ gridColumn: 'span 2', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, position: 'relative', background: 'rgba(0,200,240,0.04)', borderColor: 'rgba(0,200,240,0.12)' })}>
+    <div data-animate style={cardStyle({ gridColumn: 'span 2', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 16, position: 'relative', background: 'rgba(0,200,240,0.04)', borderColor: 'rgba(0,200,240,0.12)' })}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent 0%, rgba(0,200,240,0.7) 40%, rgba(100,120,255,0.5) 70%, transparent 100%)', borderRadius: '16px 16px 0 0' }} />
       <button onClick={onNewQuery} style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 10, background: 'rgba(0,200,240,0.08)', border: '1px solid rgba(0,200,240,0.2)', color: 'rgba(0,200,240,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,240,0.16)'; }}
@@ -506,9 +507,13 @@ function HeaderBar({ query, onNewQuery }: { query: string | null; onNewQuery: ()
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
       <div style={{ width: 1, height: 32, background: 'rgba(0,200,240,0.15)', flexShrink: 0 }} />
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{query}</h1>
-      </div>
+20      <h1 style={{ flex: 1, fontSize: 20, fontWeight: 300, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '0.04em', lineHeight: 1.4, opacity: 0.85 }}>{query}</h1>
+      {description && (
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(0,200,240,0.08)', border: '1px solid rgba(0,200,240,0.18)' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,240,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          <span style={{ fontSize: 11, color: 'rgba(0,200,240,0.8)', fontWeight: 500, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>{description}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -539,16 +544,16 @@ function useGridAnimation(visible: boolean, containerRef: React.RefObject<HTMLDi
   return { handleNewQuery };
 }
 
-function LayoutRenderer({ insights, cursor, query, onReset, visible, cardRefs, onExpand, layoutHint }: GridProps) {
+function LayoutRenderer({ insights, cursor, query, description, onReset, visible, cardRefs, onExpand, layoutHint }: GridProps) {
   const variant = layoutHint?.variant ?? 'procedural';
   switch (variant) {
-    case 'procedural': return <ProceduralLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} gridSpec={layoutHint?.gridSpec} />;
-    case 'hero':       return <HeroLayout       insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
-    case 'bento-asym': return <BentoAsymLayout  insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
-    case 'comparison': return <ComparisonLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
-    case 'focus':      return <FocusLayout      insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
-    case 'minimal':    return <MinimalLayout    insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
-    default:           return <BentoSymLayout   insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'procedural': return <ProceduralLayout insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} gridSpec={layoutHint?.gridSpec} />;
+    case 'hero':       return <HeroLayout       insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'bento-asym': return <BentoAsymLayout  insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'comparison': return <ComparisonLayout insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'focus':      return <FocusLayout      insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    case 'minimal':    return <MinimalLayout    insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    default:           return <BentoSymLayout   insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
   }
 }
 
@@ -558,7 +563,7 @@ function LayoutRenderer({ insights, cursor, query, onReset, visible, cardRefs, o
 
 type ProceduralProps = LayoutProps & { gridSpec?: GridSpec };
 
-function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpand, gridSpec }: ProceduralProps) {
+function ProceduralLayout({ insights, query, description, onReset, visible, cardRefs, onExpand, gridSpec }: ProceduralProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
 
@@ -595,7 +600,7 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
 
   if (!gridSpec) {
     // Fallback to BentoSymLayout if no spec
-    return <BentoSymLayout insights={insights} query={query} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
+    return <BentoSymLayout insights={insights} query={query} description={description} onReset={onReset} visible={visible} cardRefs={cardRefs} onExpand={onExpand} />;
   }
 
   const COLS = gridSpec.cols;
@@ -650,7 +655,7 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
         if (cell.insightId === '__header__') {
           return (
             <div key="__header__" style={{ gridColumn: `span ${cell.colSpan}` }}>
-              <HeaderBar query={query} onNewQuery={handleNewQuery} />
+              <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
             </div>
           );
         }
@@ -707,7 +712,7 @@ function ProceduralLayout({ insights, query, onReset, visible, cardRefs, onExpan
   );
 }
 
-function HeroLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function HeroLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   const kpis      = insights.filter(i => !i.chartOptions && !i.listItems);
@@ -724,7 +729,7 @@ function HeroLayout({ insights, query, onReset, visible, cardRefs, onExpand }: L
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
       <div style={{ flex: '0 0 38%', display: 'flex', flexDirection: 'column', gap: GAP, minWidth: 0 }}>
-        <HeaderBar query={query} onNewQuery={handleNewQuery} />
+        <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
         {kpis.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
             {kpis.slice(0, 4).map((ins, i) => (
@@ -752,7 +757,7 @@ function HeroLayout({ insights, query, onReset, visible, cardRefs, onExpand }: L
   );
 }
 
-function BentoAsymLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function BentoAsymLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   const kpis      = insights.filter(i => !i.chartOptions && !i.listItems).slice(0, 4);
@@ -770,7 +775,7 @@ function BentoAsymLayout({ insights, query, onReset, visible, cardRefs, onExpand
     <div ref={containerRef} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
       {primary && (
         <div style={{ flex: '0 0 62%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
-          <HeaderBar query={query} onNewQuery={handleNewQuery} />
+          <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
           <ChartCard ins={primary} accent={ACCENT_COLORS[0]}
             cardRef={el => { cardRefs.current[insights.indexOf(primary)] = el; }}
             onClick={() => onExpand(primary)}
@@ -778,7 +783,7 @@ function BentoAsymLayout({ insights, query, onReset, visible, cardRefs, onExpand
         </div>
       )}
       <div style={{ flex: '0 0 38%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
-        {!primary && <HeaderBar query={query} onNewQuery={handleNewQuery} />}
+        {!primary && <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />}
         {kpis.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
             {kpis.map((ins, i) => (
@@ -799,7 +804,7 @@ function BentoAsymLayout({ insights, query, onReset, visible, cardRefs, onExpand
   );
 }
 
-function BentoSymLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function BentoSymLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   const kpis      = insights.filter(i => !i.chartOptions && !i.listItems);
@@ -817,7 +822,7 @@ function BentoSymLayout({ insights, query, onReset, visible, cardRefs, onExpand 
   return (
     <div ref={containerRef} key={insights.length} style={{ flex: 1, display: 'flex', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: GAP }}>
-        <HeaderBar query={query} onNewQuery={handleNewQuery} />
+        <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
         {kpisLeft.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: GAP, flexShrink: 0 }}>
             {kpisLeft.map((ins, i) => (
@@ -845,7 +850,7 @@ function BentoSymLayout({ insights, query, onReset, visible, cardRefs, onExpand 
   );
 }
 
-function ComparisonLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function ComparisonLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   const kpis   = insights.filter(i => !i.chartOptions && !i.listItems).slice(0, 4);
@@ -865,7 +870,7 @@ function ComparisonLayout({ insights, query, onReset, visible, cardRefs, onExpan
 
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '16px 20px', gap: GAP, zoom, overflow: 'hidden' }}>
-      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
       {kpis.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(kpis.length, 2)}, 1fr)`, gap: GAP, flexShrink: 0 }}>
           {kpis.map((ins, i) => (
@@ -889,7 +894,7 @@ function ComparisonLayout({ insights, query, onReset, visible, cardRefs, onExpan
   );
 }
 
-function FocusLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function FocusLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   const kpis   = insights.filter(i => !i.chartOptions && !i.listItems);
@@ -897,7 +902,7 @@ function FocusLayout({ insights, query, onReset, visible, cardRefs, onExpand }: 
   const [hero, ...rest] = kpis;
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '16px 20px', gap: GAP }}>
-      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
       {hero && (
         <div data-animate ref={el => { cardRefs.current[insights.indexOf(hero)] = el; }} onClick={() => onExpand(hero)}
           onMouseEnter={e => hoverIn(e.currentTarget as HTMLElement, ACCENT_COLORS[0])}
@@ -924,12 +929,12 @@ function FocusLayout({ insights, query, onReset, visible, cardRefs, onExpand }: 
   );
 }
 
-function MinimalLayout({ insights, query, onReset, visible, cardRefs, onExpand }: LayoutProps) {
+function MinimalLayout({ insights, query, description, onReset, visible, cardRefs, onExpand }: LayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleNewQuery } = useGridAnimation(visible, containerRef, onReset);
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '24px 48px', gap: GAP }}>
-      <HeaderBar query={query} onNewQuery={handleNewQuery} />
+      <HeaderBar query={query} description={description ?? null} onNewQuery={handleNewQuery} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: GAP, justifyContent: 'center', maxWidth: 800, margin: '0 auto', width: '100%' }}>
         {insights.map((ins, i) => {
           const accent = ACCENT_COLORS[i % ACCENT_COLORS.length];

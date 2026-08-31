@@ -436,6 +436,7 @@ export default function ObservatoryPage() {
               insights={visibleInsights}
               cursor={{ x: 0, y: 0, normalizedX: 0, normalizedY: 0, velocityX: 0, velocityY: 0, speed: 0, isMoving: false }}
               query={ctx.query?.raw ?? null}
+              description={ctx.description ?? null}
               layoutHint={ctx.layoutHint}
               onReset={handleReset}
             />

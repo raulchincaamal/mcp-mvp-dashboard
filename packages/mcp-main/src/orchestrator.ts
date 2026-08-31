@@ -1108,6 +1108,33 @@ function sanitizeUIConfig(
       }
     }
 
+    // ── Rule 5a: temporal chart (bar/area/line) with ≤1 data point — replace with useful chart ──
+    if (['bar', 'area', 'line'].includes(type)) {
+      const isTemporal = (labels as string[]).some(l => /^\d{4}(-\d{2})?(-\d{2})?$/.test(l));
+      if (isTemporal && (labels as unknown[]).length <= 1) {
+        console.log(`[sanitize] ${type} with ≤1 temporal point → bar by producto/estado/categoria`);
+        const source = productoTop.length >= 3 ? productoTop
+          : estadoTop.length >= 3 ? estadoTop
+          : (fieldSummaries.categoria?.topValues?.slice(0, 8) ?? []);
+        const groupLabel = productoTop.length >= 3 ? 'Producto'
+          : estadoTop.length >= 3 ? 'Estado' : 'Categoría';
+        if (source.length > 0) {
+          return {
+            ...comp,
+            props: {
+              ...props,
+              type: 'bar',
+              title: `Distribución por ${groupLabel}`,
+              data: {
+                labels: source.map(s => s.value),
+                datasets: [{ label: groupLabel, data: source.map(s => metricVal(s)), backgroundColor: '#5bb8f5' }],
+              },
+            },
+          };
+        }
+      }
+    }
+
     // ── Rule 5b: stacked-area with only 1 key — degrade to area ──
     if (type === 'stacked-area') {
       const keys = props.keys as string[] | undefined;

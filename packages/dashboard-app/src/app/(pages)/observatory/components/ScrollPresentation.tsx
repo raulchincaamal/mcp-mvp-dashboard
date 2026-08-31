@@ -509,9 +509,9 @@ function HeaderBar({ query, description, onNewQuery }: { query: string | null; d
       <div style={{ width: 1, height: 32, background: 'rgba(0,200,240,0.15)', flexShrink: 0 }} />
       <h1 style={{ flex: 1, fontSize: 17, fontWeight: 300, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '0.04em', lineHeight: 1.4, opacity: 0.85 }}>{query}</h1>
       {description && (
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(0,200,240,0.08)', border: '1px solid rgba(0,200,240,0.18)' }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,240,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-          <span style={{ fontSize: 11, color: 'rgba(0,200,240,0.8)', fontWeight: 500, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>{description}</span>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px 5px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(180,210,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          <span style={{ fontSize: 11, color: 'rgba(180,210,255,0.55)', fontWeight: 400, letterSpacing: '0.06em', whiteSpace: 'nowrap', fontFamily: '"DM Mono", monospace', textTransform: 'uppercase' }}>{description}</span>
         </div>
       )}
     </div>

@@ -763,44 +763,81 @@ function candlestickMAOption(rawData: CandlestickMAData, title: string | undefin
 
 // ─── Treemap ───────────────────────────────────────────────
 // data.labels = names, data.datasets[0].data = values
+// Tricromático: cian (#00c8f0) · verde (#00d97e) · ámbar (#f5a623)
+// Variaciones de opacidad por rango de valor para crear jerarquía visual.
 
-function treemapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function treemapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
   const money = looksLikeMoney(data);
   const fmt = (v: number) => money ? fmtMXN(v) : v.toLocaleString('es-MX');
+
+  // Paleta tricromática fija: 3 colores base del sistema aurora
+  const TRI: [string, string][] = [
+    ['#00c8f0', '#005a70'],  // cian
+    ['#00d97e', '#005a35'],  // verde
+    ['#f5a623', '#7a4e00'],  // ámbar
+  ];
+
+  // Ordenar por valor desc para asignar color por rango (top → cian, mid → verde, low → ámbar)
+  const sorted = [...data.labels.map((name, i) => ({ name, value: ds.data[i] ?? 0, origIdx: i }))]
+    .sort((a, b) => b.value - a.value);
+  const n = sorted.length;
+  const colorMap: Record<string, [string, string]> = {};
+  sorted.forEach((item, rank) => {
+    const tier = rank < Math.ceil(n / 3) ? 0 : rank < Math.ceil((2 * n) / 3) ? 1 : 2;
+    colorMap[item.name] = TRI[tier];
+  });
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
       formatter: ((p: unknown) => {
         const d = p as { name: string; value: number };
-        return `${d.name}: <b>${fmt(d.value)}</b>`;
+        return `<span style="font-weight:600">${d.name}</span><br/>${fmt(d.value)}`;
       }) as never,
       backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;padding:8px 12px;',
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 8, right: 16,
+      top: title ? 40 : 8, bottom: 8, left: 8, right: 8,
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
-      label: { show: true, formatter: ((p: unknown) => {
-        const d = p as { name: string; value: number };
-        return `${d.name}\n${fmt(d.value)}`;
-      }) as never, color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 1, borderColor: tk.border, gapWidth: 2 },
-      emphasis: { itemStyle: { opacity: 0.85 } },
-      data: data.labels.map((name, i) => ({
-        name,
-        value: ds.data[i],
-        itemStyle: {
-          color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]),
+      label: {
+        show: true,
+        formatter: ((p: unknown) => {
+          const d = p as { name: string; value: number };
+          return `{name|${d.name}}\n{val|${fmt(d.value)}}`;
+        }) as never,
+        rich: {
+          name: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: 700, lineHeight: 18 },
+          val:  { color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 400, lineHeight: 16 },
         },
-      })),
+      },
+      upperLabel: { show: false },
+      itemStyle: {
+        borderWidth: 2,
+        borderColor: 'rgba(6,10,16,0.55)',
+        gapWidth: 3,
+        borderRadius: 4,
+      },
+      emphasis: {
+        itemStyle: { opacity: 0.88, borderColor: 'rgba(255,255,255,0.25)', borderWidth: 2 },
+        label: { show: true },
+      },
+      data: data.labels.map((name) => {
+        const [top, bot] = colorMap[name] ?? TRI[2];
+        return {
+          name,
+          value: ds.data[data.labels.indexOf(name)],
+          itemStyle: { color: vGrad(top, bot) },
+        };
+      }),
     }],
-    animationDuration: 800,
+    animationDuration: 900,
     animationEasing: 'cubicOut' as const,
   };
 }

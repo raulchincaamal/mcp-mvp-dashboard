@@ -1,79 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { signIn } from 'next-auth/react';
 
-function HalftoneCanvas({ src }: { src: string }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = src;
-
-    img.onload = () => {
-      const scale = Math.min(
-        window.innerWidth / img.width,
-        window.innerHeight / img.height,
-      );
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-
-      const drawWidth = img.width * scale;
-      const drawHeight = img.height * scale;
-      const offsetX = (canvas.width - drawWidth) / 2;
-      const offsetY = (canvas.height - drawHeight) / 2;
-
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const dotSpacing = 5;
-      const maxRadius = dotSpacing / 2;
-
-      for (let y = 0; y < canvas.height; y += dotSpacing) {
-        for (let x = 0; x < canvas.width; x += dotSpacing) {
-          const i = (y * canvas.width + x) * 4;
-          const r = imageData.data[i];
-          const g = imageData.data[i + 1];
-          const b = imageData.data[i + 2];
-
-          const brightness = (r + g + b) / (3 * 255);
-          const radius = brightness * maxRadius;
-
-          if (radius > 0.3) {
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            ctx.fill();
-          }
-        }
-      }
-    };
-
-    const handleResize = () => {
-      img.onload?.(new Event('load') as unknown as Event);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [src]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full object-cover opacity-70"
-    />
-  );
-}
+// El efecto dot halftone usa canvas del lado del cliente, se carga solo en el navegador.
+const DotHalftone = dynamic(() => import('./DotHalftone'), {
+  ssr: false,
+});
 
 export default function LoginPage() {
   const handleLogin = () => {
@@ -81,55 +14,72 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black">
-      <HalftoneCanvas src="/images/login-bg.jpg" />
+    <div className="relative w-screen h-screen overflow-hidden">
+      {/* Fondo degradado azul oscuro */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_70%,#0a2a5e_0%,#05152e_45%,#020a18_100%)]" />
 
-      {/* Vignette overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.8)_100%)] pointer-events-none" />
+      {/* Textura de puntos sutil */}
+      <div
+        className="absolute inset-0 opacity-[0.4]"
+        style={{
+          backgroundImage:
+            'radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
+      />
 
-      {/* Content */}
-      <div className="relative z-10 flex items-center justify-center h-full p-8">
-        <div className="flex flex-col items-center gap-6 p-12 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] max-w-[400px] w-full">
-          {/* Logo */}
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <rect
-              width="40"
-              height="40"
-              rx="8"
-              fill="white"
-              fillOpacity="0.1"
-            />
-            <path
-              d="M12 20L20 12L28 20L20 28L12 20Z"
-              stroke="white"
-              strokeWidth="2"
-            />
-          </svg>
+      {/* Contenido */}
+      <div className="relative z-10 flex items-center justify-center h-full px-8">
+        <div className="flex items-center gap-8 md:gap-16 flex-col md:flex-row">
+          {/* Lobo con efecto Dot Halftone */}
+          <DotHalftone
+            src="/images/wolf.png"
+            alt="Macropay"
+            width={315}
+            height={473}
+            dotSpacing={7}
+            dotColor="#ffffff"
+            animate
+            className="drop-shadow-[0_0_40px_rgba(60,110,220,0.25)]"
+          />
 
-          <h1 className="text-3xl font-bold text-white tracking-tight">
-            Macropay
-          </h1>
+          {/* Texto + botón */}
+          <div className="flex flex-col items-start gap-8">
+            <h1
+              className="text-4xl md:text-5xl text-white tracking-[0.15em] font-light"
+              style={{ fontFamily: 'ui-monospace, "Courier New", monospace' }}
+            >
+              BIENVENIDO
+            </h1>
 
-          <p className="text-sm text-white/50 text-center">
-            Dashboard Intelligence Platform
-          </p>
-
-          <button
-            className="flex items-center gap-3 px-6 py-3.5 rounded-lg border border-white/15 bg-white/5 text-white text-[0.9375rem] font-medium cursor-pointer transition-all duration-200 w-full justify-center mt-4 hover:bg-white/10 hover:border-white/30 hover:-translate-y-0.5 active:translate-y-0"
-            onClick={handleLogin}
-            type="button"
-          >
-            <svg width="20" height="20" viewBox="0 0 21 21" fill="none">
-              <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-              <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-              <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-              <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-            </svg>
-            <span>Iniciar sesión con Microsoft 365</span>
-          </button>
+            <button
+              onClick={handleLogin}
+              type="button"
+              className="group flex items-center gap-1 cursor-pointer"
+              aria-label="Ingresar con Microsoft 365"
+            >
+              <span className="px-7 py-3 rounded-full bg-[#93b4f5] text-[#0a1a30] text-lg font-medium transition-colors duration-200 group-hover:bg-[#a8c4f8]">
+                Ingresar
+              </span>
+              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-[#93b4f5] transition-colors duration-200 group-hover:bg-[#a8c4f8]">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#0a1a30"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

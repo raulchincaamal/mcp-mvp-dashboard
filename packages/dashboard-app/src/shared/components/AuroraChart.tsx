@@ -227,7 +227,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
-    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels,
       axisLine: { lineStyle: { color: tk.axisLine } },
@@ -271,7 +271,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
-    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
       axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
@@ -1404,6 +1404,14 @@ export default function AuroraChart({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Force resize after mount and after option changes
+  useEffect(() => {
+    const t = setTimeout(() => {
+      echartsRef.current?.getEchartsInstance()?.resize();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [type, gradient]);
 
   useEffect(() => {
     const el = wrapperRef.current;

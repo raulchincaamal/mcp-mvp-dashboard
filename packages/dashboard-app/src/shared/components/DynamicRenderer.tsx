@@ -265,48 +265,47 @@ function StatCard({ props }: { props: Record<string, unknown> }) {
   const title = props.title as string;
   const value = props.value as string;
   const subtitle = props.subtitle as string | undefined;
-  const icon = typeof props.icon === 'string' ? props.icon : '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
-      {/* Card — icon only */}
-      <div
-        style={{
-          width: '100%',
-          aspectRatio: '1 / 1',
-          background: 'var(--surface)',
-          backdropFilter: 'var(--surface-blur)',
-          WebkitBackdropFilter: 'var(--surface-blur)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius)',
-          boxShadow: 'var(--shadow-sm)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.35rem',
-          padding: '0.75rem',
-        }}
-      >
-        <StockTicker value={value} />
-        <span style={{ fontSize: '2rem', lineHeight: 1 }}>
-          {icon ? resolveIcon(icon) : '📌'}
-        </span>
-      </div>
-      {/* Label below card */}
-      <div style={{ textAlign: 'center', width: '100%' }}>
-        <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#ffffff', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.055)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        borderRadius: 14,
+        padding: '1rem 1.1rem',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.3rem',
+      }}
+    >
+      <p style={{
+        fontSize: '0.72rem',
+        fontWeight: 600,
+        color: 'rgba(255,255,255,0.55)',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        lineHeight: 1,
+      }}>
+        {title}
+      </p>
+      <p style={{
+        fontSize: '1.65rem',
+        fontWeight: 700,
+        color: '#ffffff',
+        letterSpacing: '-0.03em',
+        lineHeight: 1.1,
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {value}
+      </p>
+      {subtitle && (
+        <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.38)', marginTop: '0.1rem' }}>
+          {subtitle}
         </p>
-        <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px', marginTop: '0.1rem' }}>
-          {value}
-        </p>
-        {subtitle && (
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '0.1rem' }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -334,8 +333,8 @@ function renderKPIGrid(props: Record<string, unknown>) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-        gap: '1.25rem',
+        gridTemplateColumns: `repeat(${Math.min(items.length, 5)}, 1fr)`,
+        gap: '0.75rem',
       }}
     >
       {items.map((item, i) => (

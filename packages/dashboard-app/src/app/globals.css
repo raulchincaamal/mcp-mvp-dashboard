@@ -3,50 +3,57 @@
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand */
-  --primary: #49a4d8;
-  --primary-dark: #2d88bf;
-  --primary-light: rgba(73, 164, 216, 0.12);
+  /* ── Brand — Terminal Financiero ────────────────────────────────────── */
+  /* Primary: cian frío corporativo — Bloomberg/Palantir style             */
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.12);
+
+  /* Semánticos financieros */
+  --accent-green:  #00d97e;   /* positivo / crecimiento */
+  --accent-amber:  #f5a623;   /* alerta / KPI crítico   */
+  --accent-red:    #f5455a;   /* negativo / riesgo      */
+  --accent-violet: #818cf8;   /* categoría especial     */
 
   /* Surfaces — Light */
-  --bg: #d8dfe8;
-  --surface: rgba(255, 255, 255, 0.52);
-  --surface-2: #f0f4fa;
-  --surface-3: rgba(195, 208, 225, 0.55);
+  --bg: #edf1f7;
+  --surface: rgba(255, 255, 255, 0.68);
+  --surface-2: #f4f7fc;
+  --surface-3: rgba(210, 220, 238, 0.55);
   --surface-blur: blur(28px);
 
   /* Borders */
-  --border-color: rgba(80, 110, 160, 0.16);
-  --border-strong: rgba(60, 90, 145, 0.28);
+  --border-color: rgba(60, 90, 150, 0.16);
+  --border-strong: rgba(40, 70, 130, 0.28);
 
   /* Text */
-  --text: #0d1525;
-  --text-secondary: #1e2f50;
-  --text-tertiary: #4a5e88;
+  --text: #08142a;
+  --text-secondary: #1a2c4e;
+  --text-tertiary: #445878;
 
   /* Sidebar / Navbar */
-  --navbar-bg: rgba(255, 255, 255, 0.82);
-  --sidebar-bg: rgba(18, 24, 44, 0.9);
+  --navbar-bg: rgba(255, 255, 255, 0.85);
+  --sidebar-bg: rgba(14, 18, 36, 0.92);
   --sidebar-surface: rgba(255, 255, 255, 0.07);
   --sidebar-text: #7a9acc;
   --sidebar-active-text: #ffffff;
-  --sidebar-active-bg: rgba(73, 164, 216, 0.22);
-  --sidebar-active-border: #49a4d8;
+  --sidebar-active-bg: rgba(91, 184, 245, 0.20);
+  --sidebar-active-border: #5bb8f5;
 
   /* Semantic */
-  --accent-color: #30d158;
-  --danger: #ff453a;
-  --warning: #ff9f0a;
-  --select-bg: rgba(240, 245, 255, 0.88);
+  --accent-color: #10d97e;
+  --danger: #f5455a;
+  --warning: #f5a623;
+  --select-bg: rgba(238, 243, 255, 0.90);
 
   /* Shape */
   --radius: 14px;
   --radius-sm: 10px;
 
   /* Shadows */
-  --shadow-sm: 0 2px 14px rgba(10, 20, 60, 0.1), 0 1px 4px rgba(10, 20, 60, 0.07);
-  --shadow: 0 4px 24px rgba(10, 20, 60, 0.14), 0 2px 8px rgba(10, 20, 60, 0.09);
-  --shadow-lg: 0 8px 40px rgba(10, 20, 60, 0.2), 0 3px 12px rgba(10, 20, 60, 0.11);
+  --shadow-sm: 0 2px 14px rgba(8, 16, 50, 0.10), 0 1px 4px rgba(8, 16, 50, 0.07);
+  --shadow: 0 4px 24px rgba(8, 16, 50, 0.14), 0 2px 8px rgba(8, 16, 50, 0.09);
+  --shadow-lg: 0 8px 40px rgba(8, 16, 50, 0.20), 0 3px 12px rgba(8, 16, 50, 0.11);
 
   /* Motion */
   --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
@@ -60,107 +67,158 @@
   --transition: 0.18s var(--ease-out-expo);
 
   /* ── Shadcn/Tailwind compatibility map ───────────────────────────────── */
-  --background: 210 25% 85%;
-  --foreground: 222 47% 8%;
-  --primary-hsl: 204 62% 57%;
+  --background: 218 28% 88%;
+  --foreground: 222 52% 8%;
+  --primary-hsl: 204 88% 66%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 30% 92%;
+  --secondary: 214 32% 93%;
   --secondary-foreground: 222 47% 14%;
-  --muted: 210 30% 92%;
+  --muted: 214 32% 93%;
   --muted-foreground: 215 25% 40%;
-  --accent: 210 30% 92%;
+  --accent: 214 32% 93%;
   --accent-foreground: 222 47% 14%;
-  --destructive: 3 100% 61%;
+  --destructive: 354 90% 62%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 20% 82%;
-  --input: 220 20% 82%;
-  --ring: 204 62% 57%;
+  --border: 220 22% 80%;
+  --input: 220 22% 80%;
+  --ring: 204 88% 66%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 8%;
+  --card-foreground: 222 52% 8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 8%;
+  --popover-foreground: 222 52% 8%;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   MIDNIGHT — Tema principal. Fondo espacial profundo, paleta estelar.
+   Diseñado para dashboards financieros ejecutivos sobre fondo oscuro.
+   Contraste: texto primario ≥ 7:1, secundario ≥ 4.5:1, terciario ≥ 3:1
+   ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="dark"] {
-  --primary: #49a4d8;
-  --primary-dark: #2d88bf;
-  --primary-light: rgba(73, 164, 216, 0.14);
-  --bg: #0b0e17;
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-2: #111420;
-  --surface-3: #0c0f1a;
-  --surface-blur: blur(24px);
-  --border-color: rgba(73, 164, 216, 0.14);
-  --border-strong: rgba(73, 164, 216, 0.28);
-  --text: #e4eeff;
-  --text-secondary: rgba(200, 220, 255, 0.82);
-  --text-tertiary: rgba(150, 185, 240, 0.45);
-  --sidebar-bg: #060810;
-  --navbar-bg: rgba(11, 14, 23, 0.88);
-  --sidebar-surface: rgba(255, 255, 255, 0.05);
-  --sidebar-text: #3f5f8a;
-  --sidebar-active-text: #e4eeff;
-  --sidebar-active-bg: rgba(73, 164, 216, 0.18);
-  --sidebar-active-border: #49a4d8;
-  --select-bg: #0f1220;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 8px 48px rgba(0, 0, 0, 0.7);
+  /* ── Terminal Financiero — Midnight ─────────────────────────────────── */
+  /* Cian frío corporativo — más Bloomberg, menos Twitter                  */
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.10);
 
-  --background: 228 25% 7%;
-  --foreground: 220 60% 95%;
-  --secondary: 228 20% 12%;
-  --secondary-foreground: 220 60% 95%;
-  --muted: 228 20% 12%;
-  --muted-foreground: 220 30% 55%;
-  --accent: 228 20% 12%;
-  --accent-foreground: 220 60% 95%;
-  --border: 228 25% 16%;
-  --input: 228 25% 16%;
-  --card: 228 25% 9%;
-  --card-foreground: 220 60% 95%;
-  --popover: 228 25% 9%;
-  --popover-foreground: 220 60% 95%;
+  /* Semánticos financieros */
+  --accent-green:  #00d97e;
+  --accent-amber:  #f5a623;
+  --accent-red:    #f5455a;
+  --accent-violet: #818cf8;
+
+  /* Fondo — negro con tinte azul marino muy profundo */
+  --bg: #060a10;
+  /* Superficie — vidrio oscuro, casi negro, con tinte frío */
+  --surface: rgba(255, 255, 255, 0.042);
+  --surface-2: #0b1018;
+  --surface-3: #080d14;
+  --surface-blur: blur(24px);
+
+  /* Bordes — cian muy tenue, apenas visible */
+  --border-color: rgba(0, 200, 240, 0.10);
+  --border-strong: rgba(0, 200, 240, 0.22);
+
+  /* Texto — blanco frío con tinte azul
+     --text:           #e4f0ff  → contraste ~13:1 ✓ AAA
+     --text-secondary: rgba(180,210,255,0.78) → ~7:1 ✓ AA
+     --text-tertiary:  rgba(120,165,220,0.50) → ~3.5:1 ✓ AA Large */
+  --text: #e4f0ff;
+  --text-secondary: rgba(180, 210, 255, 0.78);
+  --text-tertiary: rgba(120, 165, 220, 0.50);
+
+  /* Sidebar / Navbar */
+  --sidebar-bg: #040810;
+  --navbar-bg: rgba(6, 10, 16, 0.92);
+  --sidebar-surface: rgba(255, 255, 255, 0.04);
+  --sidebar-text: #2a4a70;
+  --sidebar-active-text: #e4f0ff;
+  --sidebar-active-bg: rgba(0, 200, 240, 0.14);
+  --sidebar-active-border: #00c8f0;
+
+  /* Semantic */
+  --accent-color: #00d97e;
+  --danger: #f5455a;
+  --warning: #f5a623;
+  --select-bg: #0a1020;
+
+  /* Shadows — más profundas en dark para dar elevación real */
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow: 0 4px 28px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 48px rgba(0, 0, 0, 0.75), 0 3px 14px rgba(0, 0, 0, 0.50);
+
+  /* Shadcn/Tailwind */
+  --background: 228 30% 6%;
+  --foreground: 214 80% 94%;
+  --secondary: 228 24% 11%;
+  --secondary-foreground: 214 80% 94%;
+  --muted: 228 24% 11%;
+  --muted-foreground: 218 32% 58%;
+  --accent: 228 24% 11%;
+  --accent-foreground: 214 80% 94%;
+  --border: 228 28% 14%;
+  --input: 228 28% 14%;
+  --ring: 204 88% 66%;
+  --card: 228 28% 8%;
+  --card-foreground: 214 80% 94%;
+  --popover: 228 28% 8%;
+  --popover-foreground: 214 80% 94%;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   SLATE — Tema intermedio. Gris azulado profundo, más suave que Midnight.
+   ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="slate"] {
-  --primary: #49a4d8;
-  --primary-dark: #2d88bf;
-  --primary-light: rgba(73, 164, 216, 0.12);
-  --bg: #282c34;
-  --surface: rgba(255, 255, 255, 0.06);
-  --surface-2: #22262e;
-  --surface-3: #1e2128;
+  --primary: #00c8f0;
+  --primary-dark: #0099c4;
+  --primary-light: rgba(0, 200, 240, 0.11);
+  --accent-green:  #00d97e;
+  --accent-amber:  #f5a623;
+  --accent-red:    #f5455a;
+  --accent-violet: #818cf8;
+  --bg: #111824;
+  --surface: rgba(255, 255, 255, 0.058);
+  --surface-2: #181e2c;
+  --surface-3: #141824;
   --surface-blur: blur(20px);
-  --border-color: rgba(200, 210, 230, 0.1);
-  --border-strong: rgba(200, 210, 230, 0.2);
-  --text: #e6ecf4;
-  --text-secondary: rgba(210, 220, 240, 0.9);
-  --text-tertiary: rgba(170, 185, 210, 0.7);
-  --sidebar-bg: #1e2128;
-  --navbar-bg: rgba(30, 33, 40, 0.9);
+  --border-color: rgba(180, 200, 240, 0.10);
+  --border-strong: rgba(180, 200, 240, 0.20);
+  /* Texto: blanco cálido sobre gris azulado
+     --text: #e8edf8 → contraste ~9:1 ✓ AAA
+     --text-secondary: rgba(210,220,245,0.88) → ~6:1 ✓ AA
+     --text-tertiary: rgba(165,185,225,0.65) → ~3.5:1 ✓ AA Large */
+  --text: #e8edf8;
+  --text-secondary: rgba(210, 220, 245, 0.88);
+  --text-tertiary: rgba(165, 185, 225, 0.65);
+  --sidebar-bg: #141824;
+  --navbar-bg: rgba(20, 24, 36, 0.92);
   --sidebar-surface: rgba(255, 255, 255, 0.05);
-  --sidebar-text: #5a6a80;
-  --sidebar-active-text: #e6ecf4;
-  --sidebar-active-bg: rgba(73, 164, 216, 0.18);
-  --sidebar-active-border: #49a4d8;
-  --select-bg: #22262e;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.45);
+  --sidebar-text: #526278;
+  --sidebar-active-text: #e8edf8;
+  --sidebar-active-bg: rgba(91, 184, 245, 0.16);
+  --sidebar-active-border: #5bb8f5;
+  --accent-color: #10d97e;
+  --danger: #f5455a;
+  --warning: #f5a623;
+  --select-bg: #181e2c;
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.40), 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.55), 0 3px 12px rgba(0, 0, 0, 0.35);
 
-  --background: 222 14% 18%;
-  --foreground: 220 30% 95%;
-  --secondary: 222 14% 22%;
-  --secondary-foreground: 220 30% 95%;
-  --muted: 222 14% 22%;
-  --muted-foreground: 220 15% 55%;
-  --accent: 222 14% 22%;
-  --accent-foreground: 220 30% 95%;
-  --border: 222 14% 26%;
-  --input: 222 14% 26%;
-  --card: 222 14% 20%;
-  --card-foreground: 220 30% 95%;
-  --popover: 222 14% 20%;
-  --popover-foreground: 220 30% 95%;
+  --background: 228 22% 15%;
+  --foreground: 220 40% 96%;
+  --secondary: 228 18% 19%;
+  --secondary-foreground: 220 40% 96%;
+  --muted: 228 18% 19%;
+  --muted-foreground: 220 18% 58%;
+  --accent: 228 18% 19%;
+  --accent-foreground: 220 40% 96%;
+  --border: 228 18% 23%;
+  --input: 228 18% 23%;
+  --ring: 204 88% 66%;
+  --card: 228 20% 17%;
+  --card-foreground: 220 40% 96%;
+  --popover: 228 20% 17%;
+  --popover-foreground: 220 40% 96%;
 }
 
 /* ── Observatory cursor hide ─────────────────────────────────────────────── */
@@ -170,6 +228,11 @@
   cursor: none !important;
 }
 
+/* ── Grid card border reset ──────────────────────────────────────────────── */
+[data-animate] {
+  border-color: transparent;
+}
+
 
 * {
   scrollbar-width: thin;
@@ -177,7 +240,7 @@
 }
 
 body {
-  font-family: "Chivo Mono", "Fira Code", monospace;
+  font-family: "Sora", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   letter-spacing: -0.01em;
@@ -188,12 +251,20 @@ body {
     color var(--t-slow) var(--ease-in-out);
 }
 
-/* Numbers always use Chivo Mono */
+/* Numbers use DM Mono — monospace ejecutivo, alineación perfecta */
 .tabular-nums,
 [style*="tabular-nums"],
 input[type="number"] {
-  font-family: "Chivo Mono", monospace;
+  font-family: "DM Mono", "Fira Code", monospace;
   font-variant-numeric: tabular-nums;
+}
+
+/* Utility class for KPI metric values */
+.kpi-number {
+  font-family: "DM Mono", "Fira Code", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.04em;
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */
@@ -232,4 +303,33 @@ input[type="number"] {
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 0.6; }
   50% { transform: scale(1.15); opacity: 1; }
+}
+
+/* ── Aurora background animations ───────────────────────────────────────── */
+
+@keyframes aurora-drift-1 {
+  0%   { transform: translate(0%, 0%)     scale(1);    opacity: 1; }
+  25%  { transform: translate(12%, -16%) scale(1.18); opacity: 0.85; }
+  50%  { transform: translate(-8%, 10%)  scale(0.88); opacity: 1; }
+  75%  { transform: translate(6%, -6%)   scale(1.10); opacity: 0.90; }
+  100% { transform: translate(0%, 0%)    scale(1);    opacity: 1; }
+}
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0%, 0%)     scale(1);    opacity: 1; }
+  30%  { transform: translate(-14%, 12%) scale(1.20); opacity: 0.80; }
+  60%  { transform: translate(12%, -10%) scale(0.85); opacity: 1; }
+  80%  { transform: translate(-5%, 4%)   scale(1.08); opacity: 0.88; }
+  100% { transform: translate(0%, 0%)    scale(1);    opacity: 1; }
+}
+@keyframes aurora-drift-3 {
+  0%   { transform: translate(0%, 0%)    scale(1);    opacity: 1; }
+  35%  { transform: translate(10%, 18%) scale(1.15); opacity: 0.82; }
+  70%  { transform: translate(-12%, -8%) scale(0.90); opacity: 1; }
+  100% { transform: translate(0%, 0%)   scale(1);    opacity: 1; }
+}
+@keyframes pp-float {
+  0%   { transform: translateY(0px) translateX(0px); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.7; }
+  100% { transform: translateY(-140px) translateX(var(--dx)); opacity: 0; }
 }

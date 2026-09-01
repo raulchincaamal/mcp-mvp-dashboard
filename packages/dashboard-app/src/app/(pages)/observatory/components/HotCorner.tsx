@@ -6,9 +6,9 @@ import { gsap } from 'gsap';
 type Theme = 'dark' | 'slate' | 'light';
 
 const THEMES: { value: Theme; label: string; dot: string }[] = [
-  { value: 'light',  label: 'Light',    dot: '#d8dfe8' },
-  { value: 'slate',  label: 'Slate',    dot: '#282c34' },
-  { value: 'dark',   label: 'Midnight', dot: '#0b0e17' },
+  { value: 'dark',   label: 'Midnight', dot: '#080c14' },
+  { value: 'slate',  label: 'Slate',    dot: '#1e2230' },
+  { value: 'light',  label: 'Light',    dot: '#e8ecf4' },
 ];
 
 const TRIGGER_ZONE = 80; // px from corner to trigger
@@ -23,7 +23,10 @@ export default function HotCorner({ enabled = true }: { enabled?: boolean }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('mcp-theme') as Theme | null;
-    setTheme(saved ?? 'dark');
+    const initial = (saved ?? 'dark') as Theme;
+    setTheme(initial);
+    // Ensure DOM reflects the saved/default theme on mount
+    document.documentElement.setAttribute('data-theme', initial);
   }, []);
 
   useEffect(() => {
@@ -96,10 +99,10 @@ export default function HotCorner({ enabled = true }: { enabled?: boolean }) {
         style={{
           opacity: 0,
           transform: 'translate(-8px, 8px)',
-          background: '#1a1d27',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: '#0e1220',
+          border: '1px solid rgba(91,184,245,0.14),',
           borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(73,164,216,0.1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(91,184,245,0.12),',
           overflow: 'hidden',
           minWidth: 140,
         }}
@@ -123,12 +126,12 @@ export default function HotCorner({ enabled = true }: { enabled?: boolean }) {
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '8px 12px',
-              background: theme === t.value ? 'rgba(73,164,216,0.12)' : 'transparent',
+              background: theme === t.value ? 'rgba(91,184,245,0.14)' : 'transparent',
               border: 'none', cursor: 'pointer',
               fontFamily: 'inherit',
               transition: 'background 0.15s ease',
             }}
-            onMouseEnter={e => { if (theme !== t.value) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+            onMouseEnter={e => { if (theme !== t.value) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             onMouseLeave={e => { if (theme !== t.value) e.currentTarget.style.background = 'transparent'; }}
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -147,7 +150,7 @@ export default function HotCorner({ enabled = true }: { enabled?: boolean }) {
               </span>
             </span>
             {theme === t.value && (
-              <span style={{ fontSize: 10, color: '#49a4d8' }}>✓</span>
+              <span style={{ fontSize: 10, color: '#5bb8f5' }}>✓</span>
             )}
           </button>
         ))}

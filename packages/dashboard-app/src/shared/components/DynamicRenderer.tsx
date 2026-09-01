@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import AuroraChart from './AuroraChart';
+import MexicoMapChart from './MexicoMapChart';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -738,31 +739,19 @@ function renderTable(props: Record<string, unknown>) {
 
 function AuroraReveal({ children, index = 0 }: { children: React.ReactNode; index?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
-    gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+    gsap.set(el, { opacity: 0, y: 30 });
 
     const trigger = ScrollTrigger.create({
       trigger: el,
-      start: 'top 88%',
+      start: 'top 92%',
+      once: true,
       onEnter: () => {
-        if (hasAnimated.current) return;
-        hasAnimated.current = true;
-        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.7, delay: index * 0.08, ease: 'power3.out' });
-      },
-      onEnterBack: () => {
-        if (!hasAnimated.current) {
-          hasAnimated.current = true;
-          gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out' });
-        }
-      },
-      onLeaveBack: () => {
-        hasAnimated.current = false;
-        gsap.set(el, { opacity: 0, y: 40, scale: 0.96 });
+        gsap.to(el, { opacity: 1, y: 0, duration: 0.6, delay: index * 0.07, ease: 'power3.out' });
       },
     });
 
@@ -770,7 +759,7 @@ function AuroraReveal({ children, index = 0 }: { children: React.ReactNode; inde
   }, [index]);
 
   return (
-    <div ref={ref} style={{ willChange: 'transform, opacity' }}>
+    <div ref={ref} style={{ overflow: 'hidden' }}>
       {children}
     </div>
   );
@@ -1198,6 +1187,21 @@ function renderChart(props: Record<string, unknown>, index: number = 0) {
     );
   }
 
+  if (type === 'map') {
+    const mapData = (data?.labels ?? []).map((name: string, i: number) => ({
+      name,
+      value: ((data.datasets?.[0]?.data as unknown as number[])?.[i] as number) ?? 0,
+    }));
+    return (
+      <MexicoMapChart
+        data={mapData}
+        title={title}
+        height={420}
+        gradient="aurora"
+      />
+    );
+  }
+
   // Standard chart types (bar, line, area, pie, doughnut) — use AuroraChart with scroll-driven building
   if (!data || !data.labels || !data.datasets) {
     return (
@@ -1383,7 +1387,7 @@ export default function DynamicRenderer({
   const isGrid = config.layout === 'grid';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', overflow: 'hidden' }}>
       {config.description && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
           {config.description}
@@ -1396,6 +1400,7 @@ export default function DynamicRenderer({
                 display: 'grid',
                 gridTemplateColumns: `repeat(${config.columns || 2}, 1fr)`,
                 gap: '1rem',
+                overflow: 'hidden',
               }
             : { display: 'flex', flexDirection: 'column', gap: '1rem' }
         }

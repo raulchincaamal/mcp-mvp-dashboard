@@ -5,9 +5,11 @@ import React from 'react';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import { cursorRef } from '../hooks/useCursor';
+// AuroraBackground removed — nebulas now live in Three.js scene
 
 interface Props {
   onCategoryClick?: (label: string, rect: DOMRect) => void;
+  showCoconauta?: boolean;
 }
 
 const CATEGORY_SVGS: Record<string, string> = {
@@ -16,9 +18,9 @@ const CATEGORY_SVGS: Record<string, string> = {
   'Bicicletas Eléctricas': `<svg width="27" height="20" viewBox="0 0 27 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.0196 0.50447C14.2105 0.19197 14.5525 0 14.9211 0H19.5395C20.1301 0 20.6053 0.47768 20.6053 1.07143C20.6053 1.66518 20.1301 2.14286 19.5395 2.14286H16.6263L19.8326 8.76788C20.3077 8.63838 20.8051 8.57148 21.3158 8.57148C24.4554 8.57148 27 11.1295 27 14.2857C27 17.442 24.4554 20 21.3158 20C18.1762 20 15.6316 17.442 15.6316 14.2857C15.6316 12.4107 16.5286 10.75 17.9141 9.70538L17.0082 7.83478L13.7442 14.3973C13.6421 14.6116 13.4645 14.7902 13.238 14.8973C13.2113 14.9107 13.1847 14.9197 13.1581 14.9286C13.0293 14.9777 12.8961 15 12.7628 14.9956L11.324 15C10.9732 17.817 8.584 20 5.6842 20C2.54457 20 0 17.442 0 14.2857C0 11.1295 2.54457 8.57148 5.6842 8.57148C6.1638 8.57148 6.6257 8.62948 7.0697 8.74108L8.3354 6.20088L7.8247 4.99998H6.0395C5.4488 4.99998 4.9737 4.52228 4.9737 3.92858C4.9737 3.33483 5.4488 2.85715 6.0395 2.85715H8.5263C8.9526 2.85715 9.339 3.11161 9.5077 3.50447L10.1428 4.99998H15.636L13.9618 1.54018C13.802 1.20983 13.8197 0.81697 14.0151 0.50447H14.0196ZM9.4367 8.78128L7.4117 12.8572H11.1775L9.4411 8.78128H9.4367ZM12.865 11.384L14.9743 7.14288H11.0576L12.865 11.384ZM20.3566 14.7545L18.8734 11.692C18.1895 12.3438 17.7632 13.2634 17.7632 14.2857C17.7632 16.259 19.353 17.8572 21.3158 17.8572C23.2786 17.8572 24.8684 16.259 24.8684 14.2857C24.8684 12.3125 23.2786 10.7143 21.3158 10.7143C21.1382 10.7143 20.9605 10.7277 20.7918 10.7545L22.275 13.817C22.5326 14.3482 22.3105 14.9911 21.7821 15.25C21.2536 15.509 20.6141 15.2857 20.3566 14.7545ZM5.9151 15C5.0181 15 4.4319 14.0491 4.836 13.2411L6.0839 10.7366C5.9551 10.7232 5.8219 10.7143 5.6887 10.7143C3.72582 10.7143 2.13602 12.3125 2.13602 14.2857C2.13602 16.259 3.72582 17.8572 5.6887 17.8572C7.4072 17.8572 8.8416 16.6295 9.1702 15H5.9196H5.9151Z" fill="white"/></svg>`,
   'Pantallas/TV': `<svg width="24" height="20" viewBox="0 0 24 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.66667 2C2.3 2 2 2.3 2 2.66667V13.3333C2 13.7 2.3 14 2.66667 14H21.3333C21.7 14 22 13.7 22 13.3333V2.66667C22 2.3 21.7 2 21.3333 2H2.66667ZM0 2.66667C0 1.19583 1.19583 0 2.66667 0H21.3333C22.8042 0 24 1.19583 24 2.66667V13.3333C24 14.8042 22.8042 16 21.3333 16H2.66667C1.19583 16 0 14.8042 0 13.3333V2.66667ZM6.3333 18H17.6667C18.2208 18 18.6667 18.4458 18.6667 19C18.6667 19.5542 18.2208 20 17.6667 20H6.3333C5.7792 20 5.3333 19.5542 5.3333 19C5.3333 18.4458 5.7792 18 6.3333 18Z" fill="white"/></svg>`,
   Audio: `<svg width="19" height="20" viewBox="0 0 19 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.03571 9.33338C2.03571 5.28338 5.37768 2.00001 9.5 2.00001C13.6223 2.00001 16.9643 5.28338 16.9643 9.33338V11.2C16.3663 10.8584 15.6708 10.6667 14.9286 10.6667H14.25C13.1261 10.6667 12.2143 11.5625 12.2143 12.6667V18C12.2143 19.1042 13.1261 20 14.25 20H14.9286C17.1763 20 19 18.2084 19 16V9.33338C19 4.17917 14.7462 0 9.5 0C4.25379 0 0 4.17917 0 9.33338V16C0 18.2084 1.82366 20 4.07143 20H4.75C5.8739 20 6.7857 19.1042 6.7857 18V12.6667C6.7857 11.5625 5.8739 10.6667 4.75 10.6667H4.07143C3.32924 10.6667 2.63371 10.8625 2.03571 11.2V9.33338ZM2.03571 14.6667C2.03571 13.5625 2.94754 12.6667 4.07143 12.6667H4.75V18H4.07143C2.94754 18 2.03571 17.1042 2.03571 16V14.6667ZM16.9643 14.6667V16C16.9643 17.1042 16.0525 18 14.9286 18H14.25V12.6667H14.9286C16.0525 12.6667 16.9643 13.5625 16.9643 14.6667Z" fill="white"/></svg>`,
-  Tablets: `<svg width="26" height="20" viewBox="0 0 26 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.3889 2.14286C9.3889 3.71876 8.0934 4.99998 6.5 4.99998V10.7143C8.0934 10.7143 9.3889 11.9956 9.3889 13.5715H20.9444C20.9444 11.9956 22.2399 10.7143 23.8333 10.7143V4.99998C22.2399 4.99998 20.9444 3.71876 20.9444 2.14286H9.3889ZM4.33333 2.85715C4.33333 1.28126 5.6288 0 7.2222 0H23.1111C24.7045 0 26 1.28126 26 2.85715V12.8572C26 14.4331 24.7045 15.7143 23.1111 15.7143H7.2222C5.6288 15.7143 4.33333 14.4331 4.33333 12.8572V2.85715ZM15.1667 4.28572C16.1244 4.28572 17.0429 4.66198 17.7201 5.33178C18.3973 6.00158 18.7778 6.90998 18.7778 7.85718C18.7778 8.80438 18.3973 9.71278 17.7201 10.3825C17.0429 11.0523 16.1244 11.4286 15.1667 11.4286C14.2089 11.4286 13.2904 11.0523 12.6132 10.3825C11.936 9.71278 11.5556 8.80438 11.5556 7.85718C11.5556 6.90998 11.936 6.00158 12.6132 5.33178C13.2904 4.66198 14.2089 4.28572 15.1667 4.28572ZM1.08333 4.28572C1.68368 4.28572 2.16667 4.76338 2.16667 5.35718V17.1429C2.16667 17.5357 2.49167 17.8572 2.88889 17.8572H20.5833C21.1837 17.8572 21.6667 18.3348 21.6667 18.9286C21.6667 19.5223 21.1837 20 20.5833 20H2.88889C1.29549 20 0 18.7188 0 17.1429V5.35718C0 4.76338 0.48299 4.28572 1.08333 4.28572Z" fill="white"/></svg>`,
-  Consolas: `<svg width="24" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="16" width="36" height="20" rx="8" stroke="white" stroke-width="2.5" fill="none"/><circle cx="32" cy="24" r="2.5" fill="white" opacity="0.8"/><circle cx="38" cy="24" r="2.5" fill="white" opacity="0.8"/><line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
-  'Climatización': `<svg width="24" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="16" rx="4" stroke="white" stroke-width="2.5" fill="none"/><line x1="6" y1="20" x2="42" y2="20" stroke="white" stroke-width="1.5" opacity="0.4"/><path d="M12 28 L10 36 M18 28 L16 36 M24 28 L24 36 M30 28 L32 36 M36 28 L38 36" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/><circle cx="35" cy="16" r="2.5" fill="white" opacity="0.8"/></svg>`,
+  Tablets: `<svg width="14" height="20" viewBox="0 0 14 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 1.875C1.65 1.875 1.375 2.15 1.375 2.5V17.5C1.375 17.85 1.65 18.125 2 18.125H12C12.35 18.125 12.625 17.85 12.625 17.5V2.5C12.625 2.15 12.35 1.875 12 1.875H2ZM0 2.5C0 1.1211 1.1193 0 2.5 0H11.5C12.8807 0 14 1.1211 14 2.5V17.5C14 18.8789 12.8807 20 11.5 20H2.5C1.1193 20 0 18.8789 0 17.5V2.5ZM4.5 2.5H9.5C9.776 2.5 10 2.724 10 3C10 3.276 9.776 3.5 9.5 3.5H4.5C4.224 3.5 4 3.276 4 3C4 2.724 4.224 2.5 4.5 2.5ZM7 14.5C7.398 14.5 7.779 14.658 8.061 14.939C8.342 15.221 8.5 15.602 8.5 16C8.5 16.398 8.342 16.779 8.061 17.061C7.779 17.342 7.398 17.5 7 17.5C6.602 17.5 6.221 17.342 5.939 17.061C5.658 16.779 5.5 16.398 5.5 16C5.5 15.602 5.658 15.221 5.939 14.939C6.221 14.658 6.602 14.5 7 14.5Z" fill="white"/></svg>`,
+  Consolas: `<svg width="64" height="54" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="16" width="36" height="20" rx="8" stroke="white" stroke-width="2.5" fill="none"/><circle cx="32" cy="24" r="2.5" fill="white" opacity="0.8"/><circle cx="38" cy="24" r="2.5" fill="white" opacity="0.8"/><line x1="14" y1="22" x2="14" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="11" y1="25" x2="17" y2="25" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
+  'Climatización': `<svg width="64" height="54" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="36" height="16" rx="4" stroke="white" stroke-width="2.5" fill="none"/><line x1="6" y1="20" x2="42" y2="20" stroke="white" stroke-width="1.5" opacity="0.4"/><path d="M12 28 L10 36 M18 28 L16 36 M24 28 L24 36 M30 28 L32 36 M36 28 L38 36" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.7"/><circle cx="35" cy="16" r="2.5" fill="white" opacity="0.8"/></svg>`,
 };
 
 const N = 8;
@@ -103,6 +105,8 @@ function useTicker(label: string) {
   return { display, dir };
 }
 
+const ICON_SIZE: Record<string, number> = { Consolas: 72, 'Climatización': 72 };
+
 function WidgetCard({ label, accent }: { label: string; accent: string }) {
   const { display } = useTicker(label);
   const pct    = MOCK_CHANGE[label] ?? 0;
@@ -117,14 +121,14 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
       gridTemplateRows: '1fr auto',
       alignItems: 'center',
       justifyItems: 'center',
-      padding: '12px 8px 10px',
+      padding: '8px 8px 14px',
       boxSizing: 'border-box',
       zIndex: 2,
     }}>
       {/* Icon */}
       <div
         style={{
-          width: 44, height: 44,
+          width: ICON_SIZE[label] ?? 56, height: ICON_SIZE[label] ?? 56,
           opacity: 0.8,
           filter: `drop-shadow(0 0 8px ${accent})`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -144,19 +148,33 @@ function WidgetCard({ label, accent }: { label: string; accent: string }) {
         </span>
         <span style={{
           position: 'absolute',
-          right: `calc(50% - ${num.length * 7 + 8}px)`,
-          fontSize: 11, color: pctCol,
-          fontFamily: '"Chivo Mono", monospace', lineHeight: 1,
+          right: `calc(50% - ${num.length * 7 + 13}px)`,
+          display: 'flex', alignItems: 'center',
+          color: pctCol,
+          lineHeight: 1,
         }}>
-          {isUp ? '↑' : '↓'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            {isUp ? (
+              <>
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </>
+            ) : (
+              <>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <polyline points="5 12 12 19 19 12" />
+              </>
+            )}
+          </svg>
         </span>
       </div>
     </div>
   );
 }
 
-export default function AmbientBackground({ onCategoryClick }: Props) {
+export default function AmbientBackground({ onCategoryClick, showCoconauta = true }: Props) {
   const mountRef    = useRef<HTMLDivElement>(null);
+  const cocoOverlayRef = useRef<HTMLDivElement>(null);
   const rafRef      = useRef<number>(0);
   const widgetRefs  = useRef<(HTMLDivElement | null)[]>([]);
   const angleRef    = useRef(0);
@@ -179,30 +197,86 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     renderer.setClearColor(0x000000, 0);
     mount.appendChild(renderer.domElement);
 
-    // ── Particles ──────────────────────────────────────────────────────────
-    const PC = 700;
-    const pPos = new Float32Array(PC * 3);
-    const pVel: { x: number; y: number }[] = [];
-    for (let i = 0; i < PC; i++) {
-      pPos[i * 3]     = (Math.random() - 0.5) * 1400;
-      pPos[i * 3 + 1] = (Math.random() - 0.5) * 900;
-      pPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
-      pVel.push({ x: (Math.random() - 0.5) * 0.12, y: (Math.random() - 0.5) * 0.12 });
+    // ── Nebulas (3D sprites, parallax with camera) ─────────────────────────
+    function makeNebulaTex(color: string, opacity: number): THREE.Texture {
+      const size = 512;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d')!;
+      const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      g.addColorStop(0,    color.replace(')', `, ${opacity})`).replace('rgb', 'rgba'));
+      g.addColorStop(0.4,  color.replace(')', `, ${opacity * 0.5})`).replace('rgb', 'rgba'));
+      g.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(cv);
     }
-    const pGeo = new THREE.BufferGeometry();
-    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    scene.add(new THREE.Points(pGeo,
-      new THREE.PointsMaterial({ color: 0x8899ff, size: 1.6, transparent: true, opacity: 0.4 })
+
+    const NEBULA_DEFS = [
+      { x: -600, y:  280, z: -400, sx: 1100, sy: 750,  color: 'rgb(30,100,255)',  op: 0.30 },
+      { x:  550, y:  100, z: -300, sx:  900, sy: 700,  color: 'rgb(0,180,255)',   op: 0.24 },
+      { x: -200, y: -320, z: -500, sx: 1000, sy: 800,  color: 'rgb(10,60,200)',   op: 0.20 },
+      { x:  400, y: -250, z: -600, sx:  800, sy: 650,  color: 'rgb(0,120,220)',   op: 0.18 },
+      { x:   50, y:   80, z: -350, sx:  700, sy: 550,  color: 'rgb(0,160,240)',   op: 0.15 },
+    ];
+
+    // Nebula breath: each nebula has a phase offset so they pulse independently
+    const nebulaPhases = NEBULA_DEFS.map((_, i) => i * (Math.PI * 2 / NEBULA_DEFS.length));
+    const nebulaMats: THREE.SpriteMaterial[] = [];
+    NEBULA_DEFS.forEach(def => {
+      const tex = makeNebulaTex(def.color, 1.0); // bake at full, animate opacity on mat
+      const mat = new THREE.SpriteMaterial({
+        map: tex, transparent: true, opacity: def.op,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      nebulaMats.push(mat);
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(def.x, def.y, def.z);
+      sprite.scale.set(def.sx, def.sy, 1);
+      scene.add(sprite);
+    });
+
+    // ── Particles ──────────────────────────────────────────────────────────
+    // Layer 1: dense small stars
+    const PC1 = 600;
+    const pPos1 = new Float32Array(PC1 * 3);
+    const pVel1 = new Float32Array(PC1 * 2);
+    for (let i = 0; i < PC1; i++) {
+      pPos1[i * 3]     = (Math.random() - 0.5) * 1600;
+      pPos1[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+      pPos1[i * 3 + 2] = (Math.random() - 0.5) * 400;
+      pVel1[i * 2]     = (Math.random() - 0.5) * 0.08;
+      pVel1[i * 2 + 1] = (Math.random() - 0.5) * 0.08;
+    }
+    const pGeo1 = new THREE.BufferGeometry();
+    pGeo1.setAttribute('position', new THREE.BufferAttribute(pPos1, 3));
+    scene.add(new THREE.Points(pGeo1,
+      new THREE.PointsMaterial({ color: 0xaabbff, size: 1.8, transparent: true, opacity: 0.65, sizeAttenuation: true })
     ));
 
-    // ── Particle connections ───────────────────────────────────────────────
-    const MAX_CONN = 500;
-    const connPos = new Float32Array(MAX_CONN * 6);
-    const connGeo = new THREE.BufferGeometry();
-    connGeo.setAttribute('position', new THREE.BufferAttribute(connPos, 3));
-    scene.add(new THREE.LineSegments(connGeo,
-      new THREE.LineBasicMaterial({ color: 0x4455bb, transparent: true, opacity: 0.15 })
+    // Layer 2: bright accent stars (fewer, bigger)
+    const PC2 = 120;
+    const pPos2 = new Float32Array(PC2 * 3);
+    const pVel2 = new Float32Array(PC2 * 2);
+    for (let i = 0; i < PC2; i++) {
+      pPos2[i * 3]     = (Math.random() - 0.5) * 1600;
+      pPos2[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+      pPos2[i * 3 + 2] = (Math.random() - 0.5) * 400;
+      pVel2[i * 2]     = (Math.random() - 0.5) * 0.05;
+      pVel2[i * 2 + 1] = (Math.random() - 0.5) * 0.05;
+    }
+    const pGeo2 = new THREE.BufferGeometry();
+    pGeo2.setAttribute('position', new THREE.BufferAttribute(pPos2, 3));
+    scene.add(new THREE.Points(pGeo2,
+      new THREE.PointsMaterial({ color: 0x66ccff, size: 3.5, transparent: true, opacity: 0.85, sizeAttenuation: true })
     ));
+
+    // Alias pGeo to pGeo1 for the animation loop
+    const pGeo = pGeo1;
+    const PC   = PC1;
+    const pVel = pVel1;
+
+    // ── Particle connections — DISABLED for performance ───────────────────
 
     // ── Orbit ellipse guide ────────────────────────────────────────────────
     const epts: THREE.Vector3[] = [];
@@ -221,15 +295,164 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
 
     // ── Center→widget lines ────────────────────────────────────────────────
     const lineGeos: THREE.BufferGeometry[] = [];
+    // Cache line materials for direct access
+    const lineMaterials: THREE.LineBasicMaterial[] = [];
     for (let i = 0; i < N; i++) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-      scene.add(new THREE.Line(geo,
-        new THREE.LineBasicMaterial({ color: 0x5577ff, transparent: true, opacity: 0.22 }),
-      ));
+      const mat = new THREE.LineBasicMaterial({ color: 0x5577ff, transparent: true, opacity: 0.22 });
+      scene.add(new THREE.Line(geo, mat));
       lineGeos.push(geo);
+      lineMaterials.push(mat);
     }
     lineGeosRef.current = lineGeos;
+
+    // ── Light pulses traveling center → card (mini CoreLight style) ──────────────────────────────
+    type PulseGroup = THREE.Group & { _coreMat: THREE.SpriteMaterial };
+    interface Pulse { lineIdx: number; t: number; speed: number; group: PulseGroup; }
+    const pulses: Pulse[] = [];
+
+    function makeGlowTex(): THREE.Texture {
+      const size = 128;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d')!;
+      const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      g.addColorStop(0,    'rgba(255,255,255,1)');
+      g.addColorStop(0.12, 'rgba(180,210,255,0.9)');
+      g.addColorStop(0.35, 'rgba(100,150,255,0.5)');
+      g.addColorStop(0.7,  'rgba(60,100,255,0.15)');
+      g.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(cv);
+    }
+
+    const sharedGlowTex = makeGlowTex();
+
+    function makePulseGroup(): PulseGroup {
+      const group = new THREE.Group() as PulseGroup;
+      const coreMat = new THREE.SpriteMaterial({ map: sharedGlowTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+      const core = new THREE.Sprite(coreMat);
+      core.scale.set(18, 18, 1);
+      group.add(core);
+      group._coreMat = coreMat;
+      scene.add(group);
+      return group;
+    }
+
+    // Spawn a pulse on a random line every 1.2–2.8s
+    let nextSpawnTime = performance.now() + 800;
+    const spawnPulse = () => {
+      const idx = Math.floor(Math.random() * N);
+      pulses.push({ lineIdx: idx, t: 0, speed: 0.006 + Math.random() * 0.006, group: makePulseGroup() });
+    };
+
+    // ── Coconauta 3D sprite ──────────────────────────────────────────────────
+    let coconautaSprite: THREE.Sprite | null = null;
+    // Posición inicial: abajo a la derecha en coordenadas de mundo
+    // Proyectamos desde screen (85%, 85%) al plano Z=RY*0.6
+    const fovRad0 = (55 * Math.PI) / 180;
+    const dist0 = 650 - RY * 0.6;
+    const halfH0 = dist0 * Math.tan(fovRad0 / 2);
+    const halfW0 = halfH0 * (W / H);
+    const cocoPos = new THREE.Vector3(
+      halfW0 * 0.65,
+      -halfH0 * 0.65,
+      RY * 0.6,
+    );
+    const cocoVel = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.6,
+      (Math.random() - 0.5) * 0.4,
+      0,
+    );
+    let cocoFloat = 0;
+    let cocoFloatDir = 1;
+    let cocoDragging = false;
+    let cocoOpacity = 0;
+
+    if (showCoconauta) {
+      const img = new window.Image();
+      img.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = 256; cv.height = 256;
+        const ctx2 = cv.getContext('2d')!;
+        ctx2.drawImage(img, 0, 0, 256, 256);
+        const tex = new THREE.CanvasTexture(cv);
+        const mat = new THREE.SpriteMaterial({
+          map: tex, transparent: true, opacity: 0,
+          depthWrite: false,
+        });
+        coconautaSprite = new THREE.Sprite(mat);
+        coconautaSprite.scale.set(120, 120, 1);
+        coconautaSprite.position.copy(cocoPos);
+        scene.add(coconautaSprite);
+        // Fade in
+        gsap.to(mat, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.8,
+          onUpdate: () => { cocoOpacity = mat.opacity; },
+        });
+      };
+      img.src = '/coconauta.svg';
+    }
+
+    // Coconauta pointer interaction via overlay div
+    let cocoLastMouse = { x: 0, y: 0 };
+    let cocoMouseVel = { x: 0, y: 0 };
+
+    // Update overlay position every frame (called from animate loop)
+    const updateCocoOverlay = () => {
+      const overlay = cocoOverlayRef.current;
+      if (!overlay || !coconautaSprite) return;
+      const v = coconautaSprite.position.clone().project(camera);
+      const sx = (v.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
+      const size = 120;
+      overlay.style.left = `${sx - size / 2}px`;
+      overlay.style.top  = `${sy - size / 2}px`;
+      overlay.style.display = showCoconauta && coconautaSprite ? 'block' : 'none';
+    };
+
+    const onCocoPointerDown = (e: PointerEvent) => {
+      cocoDragging = true;
+      cocoLastMouse = { x: e.clientX, y: e.clientY };
+      cocoMouseVel = { x: 0, y: 0 };
+      cocoVel.set(0, 0, 0);
+      const overlay = cocoOverlayRef.current;
+      if (overlay) { overlay.style.cursor = 'grabbing'; overlay.setPointerCapture(e.pointerId); }
+    };
+
+    const onCocoPointerMove = (e: PointerEvent) => {
+      if (!cocoDragging) return;
+      // Compute world-space scale: how many world units per screen pixel at z=cocoPos.z
+      // Using the camera FOV and distance
+      const fovRad = (55 * Math.PI) / 180;
+      const dist = camera.position.z - cocoPos.z;
+      const worldPerPx = (2 * dist * Math.tan(fovRad / 2)) / window.innerHeight;
+      const dx = (e.clientX - cocoLastMouse.x) * worldPerPx;
+      const dy = -(e.clientY - cocoLastMouse.y) * worldPerPx;
+      cocoMouseVel.x = dx * 0.7 + cocoMouseVel.x * 0.3;
+      cocoMouseVel.y = dy * 0.7 + cocoMouseVel.y * 0.3;
+      cocoPos.x += dx;
+      cocoPos.y += dy;
+      cocoLastMouse = { x: e.clientX, y: e.clientY };
+    };
+
+    const onCocoPointerUp = () => {
+      if (!cocoDragging) return;
+      cocoDragging = false;
+      cocoVel.x = cocoMouseVel.x * 1.4;
+      cocoVel.y = cocoMouseVel.y * 1.4;
+      const overlay = cocoOverlayRef.current;
+      if (overlay) overlay.style.cursor = 'grab';
+    };
+
+    const overlay = cocoOverlayRef.current;
+    if (overlay) {
+      overlay.addEventListener('pointerdown', onCocoPointerDown);
+      overlay.addEventListener('pointermove', onCocoPointerMove);
+      overlay.addEventListener('pointerup', onCocoPointerUp);
+      overlay.addEventListener('pointercancel', onCocoPointerUp);
+    }
 
     // ── Resize ─────────────────────────────────────────────────────────────
     const onResize = () => {
@@ -238,6 +461,9 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', onResize);
+
+    // Reusable vector for projection
+    const projVec = new THREE.Vector3();
 
     // ── Loop ───────────────────────────────────────────────────────────────
     const animate = () => {
@@ -251,35 +477,61 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
       // Advance orbit angle — speed controlled by omegaSpeed.v
       angleRef.current += omegaSpeed.v;
 
-      // Particles
+      // Particles — typed array access
       const pp = pGeo.attributes.position as THREE.BufferAttribute;
+      const arr = pp.array as Float32Array;
       for (let i = 0; i < PC; i++) {
-        let x = pp.getX(i) + pVel[i].x;
-        let y = pp.getY(i) + pVel[i].y;
-        if (x >  700) x = -700; if (x < -700) x =  700;
-        if (y >  450) y = -450; if (y < -450) y =  450;
-        pp.setXYZ(i, x, y, pp.getZ(i));
+        let x = arr[i * 3]     + pVel[i * 2];
+        let y = arr[i * 3 + 1] + pVel[i * 2 + 1];
+        if (x >  800) x = -800; if (x < -800) x =  800;
+        if (y >  500) y = -500; if (y < -500) y =  500;
+        arr[i * 3]     = x;
+        arr[i * 3 + 1] = y;
       }
       pp.needsUpdate = true;
 
-      // Particle connections
-      let ci = 0;
-      const cp = connGeo.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < PC && ci < MAX_CONN; i++) {
-        for (let j = i + 1; j < PC && ci < MAX_CONN; j++) {
-          const dx = pp.getX(i) - pp.getX(j);
-          const dy = pp.getY(i) - pp.getY(j);
-          if (dx * dx + dy * dy < 85 * 85) {
-            cp.setXYZ(ci * 2,     pp.getX(i), pp.getY(i), pp.getZ(i));
-            cp.setXYZ(ci * 2 + 1, pp.getX(j), pp.getY(j), pp.getZ(j));
-            ci++;
-          }
+      // Layer 2 particles
+      const pp2 = pGeo2.attributes.position as THREE.BufferAttribute;
+      const arr2 = pp2.array as Float32Array;
+      for (let i = 0; i < PC2; i++) {
+        let x = arr2[i * 3]     + pVel2[i * 2];
+        let y = arr2[i * 3 + 1] + pVel2[i * 2 + 1];
+        if (x >  800) x = -800; if (x < -800) x =  800;
+        if (y >  500) y = -500; if (y < -500) y =  500;
+        arr2[i * 3]     = x;
+        arr2[i * 3 + 1] = y;
+      }
+      pp2.needsUpdate = true;
+
+      // Spawn pulses on timer
+      const now = performance.now();
+      if (now >= nextSpawnTime) {
+        spawnPulse();
+        nextSpawnTime = now + 1200 + Math.random() * 1600;
+      }
+
+      // Animate pulses
+      for (let p = pulses.length - 1; p >= 0; p--) {
+        const pulse = pulses[p];
+        pulse.t += pulse.speed;
+        const a = angleRef.current + pulse.lineIdx * DELTA_ANGLE;
+        const wx = RX * Math.cos(a);
+        const wy = RY * Math.sin(a) * Math.cos(TILT);
+        const wz = RY * Math.sin(a) * Math.sin(TILT);
+        const lp = lineProgresses[pulse.lineIdx];
+        const tt = Math.min(pulse.t, 1);
+        pulse.group.position.set(wx * lp * tt, wy * lp * tt, wz * lp * tt);
+
+        // Fade in/out
+        const fade = tt < 0.15 ? tt / 0.15 : tt > 0.8 ? (1 - tt) / 0.2 : 1;
+        pulse.group._coreMat.opacity = fade * 0.95;
+
+        if (pulse.t >= 1) {
+          scene.remove(pulse.group);
+          pulse.group._coreMat.dispose();
+          pulses.splice(p, 1);
         }
       }
-      for (let i = ci; i < MAX_CONN; i++) {
-        cp.setXYZ(i * 2, 0, 0, -9999); cp.setXYZ(i * 2 + 1, 0, 0, -9999);
-      }
-      cp.needsUpdate = true;
 
       // Widgets — GSAP 3D billboard (always flat, facing viewer)
       for (let i = 0; i < N; i++) {
@@ -288,11 +540,10 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
         const wy = RY * Math.sin(a) * Math.cos(TILT);
         const wz = RY * Math.sin(a) * Math.sin(TILT);
 
-        // Project to screen
-        const v = new THREE.Vector3(wx, wy, wz);
-        v.project(camera);
-        const sx = ( v.x * 0.5 + 0.5) * window.innerWidth;
-        const sy = (-v.y * 0.5 + 0.5) * window.innerHeight;
+        // Project to screen — reuse vector
+        projVec.set(wx, wy, wz).project(camera);
+        const sx = ( projVec.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
 
         // Depth: 0 = back, 1 = front
         const depth = (wz + RY) / (2 * RY);
@@ -305,15 +556,11 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           const totalH = CARD_H + LABEL_H;
           const depth = (wz + RY) / (2 * RY);
           const baseScale = (0.65 + depth * 0.35) * hoverScales[i];
-
-          gsap.set(el, {
-            x: sx - WIDGET_SIZE / 2,
-            y: sy - totalH / 2,
-            zIndex: Math.round(depth * 100) + 10,
-            opacity: 1,
-            scale: baseScale * splashScales[i],
-            visibility: cardVisible[i] ? 'visible' : 'hidden',
-          });
+          const finalScale = baseScale * splashScales[i];
+          // Direct style manipulation instead of gsap.set
+          el.style.transform = `translate(${sx - WIDGET_SIZE / 2}px, ${sy - totalH / 2}px) scale(${finalScale})`;
+          el.style.zIndex = String(Math.round(depth * 100) + 10);
+          if (cardVisible[i]) el.style.visibility = 'visible';
         }
 
         // Update line — interpolate from center to widget based on lineProgresses[i]
@@ -324,14 +571,37 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
           lp.setXYZ(0, 0, 0, 0);
           lp.setXYZ(1, wx * p, wy * p, wz * p);
           lp.needsUpdate = true;
-          // fade in opacity with progress
-          (lg as any)._mat = (lg as any)._mat;
-          const lineMesh = scene.children.find(c =>
-            c instanceof THREE.Line && (c as THREE.Line).geometry === lg
-          ) as THREE.Line | undefined;
-          if (lineMesh) (lineMesh.material as THREE.LineBasicMaterial).opacity = 0.22 * p;
+          lineMaterials[i].opacity = 0.22 * p;
         }
       }
+
+      // Coconauta 3D physics + overlay sync
+      updateCocoOverlay();
+      if (coconautaSprite && showCoconauta) {
+        if (!cocoDragging) {
+          cocoFloat += 0.018 * cocoFloatDir;
+          if (Math.abs(cocoFloat) > 18) cocoFloatDir *= -1;
+          cocoVel.x *= 0.97;
+          cocoVel.y *= 0.97;
+          cocoPos.x += cocoVel.x;
+          cocoPos.y += cocoVel.y;
+          // Bounce off 3D bounds
+          const BX = RX * 0.85;
+          const BY = RY * 1.8;
+          if (cocoPos.x >  BX) { cocoPos.x =  BX; cocoVel.x = -Math.abs(cocoVel.x) * 0.72; }
+          if (cocoPos.x < -BX) { cocoPos.x = -BX; cocoVel.x =  Math.abs(cocoVel.x) * 0.72; }
+          if (cocoPos.y >  BY) { cocoPos.y =  BY; cocoVel.y = -Math.abs(cocoVel.y) * 0.72; }
+          if (cocoPos.y < -BY) { cocoPos.y = -BY; cocoVel.y =  Math.abs(cocoVel.y) * 0.72; }
+        }
+        coconautaSprite.position.set(cocoPos.x, cocoPos.y + (cocoDragging ? 0 : cocoFloat), cocoPos.z);
+      }
+
+      // Nebula breath — slow sine pulse per nebula
+      const t = performance.now() * 0.0004;
+      nebulaMats.forEach((mat, i) => {
+        const base = NEBULA_DEFS[i].op;
+        mat.opacity = base * (0.75 + 0.25 * Math.sin(t + nebulaPhases[i]));
+      });
 
       renderer.render(scene, camera);
     };
@@ -367,6 +637,19 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', onResize);
+      const ov = cocoOverlayRef.current;
+      if (ov) {
+        ov.removeEventListener('pointerdown', onCocoPointerDown);
+        ov.removeEventListener('pointermove', onCocoPointerMove);
+        ov.removeEventListener('pointerup', onCocoPointerUp);
+        ov.removeEventListener('pointercancel', onCocoPointerUp);
+      }
+      pulses.forEach(p => {
+        scene.remove(p.group);
+        p.group._coreMat?.dispose();
+      });
+      nebulaMats.forEach(m => { m.map?.dispose(); m.dispose(); });
+      sharedGlowTex.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
@@ -376,6 +659,12 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'var(--bg)', overflow: 'hidden' }}>
       {/* Three.js canvas */}
       <div ref={mountRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
+      {/* Coconauta drag overlay — invisible hit area that tracks the sprite */}
+      <div ref={cocoOverlayRef} style={{
+        position: 'absolute', width: 120, height: 120,
+        cursor: 'grab', pointerEvents: 'auto',
+        display: 'none', zIndex: 2,
+      }} />
 
       {CATEGORIES.map((label, i) => {
         const accent = AURORA_COLORS[label];
@@ -401,7 +690,7 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 1, duration: 0.4, ease: 'power2.out' });
-              if (border) gsap.to(border, { opacity: 1, duration: 0.4, ease: 'power2.out' });
+              if (border) (border as HTMLElement).style.borderColor = `${accent}cc`;
             }}
             onMouseLeave={e => {
               const el = e.currentTarget;
@@ -410,46 +699,51 @@ export default function AmbientBackground({ onCategoryClick }: Props) {
               const glow   = el.querySelector('.aurora-glow')   as HTMLElement;
               const border = el.querySelector('.aurora-border') as HTMLElement;
               if (glow)   gsap.to(glow,   { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
-              if (border) gsap.to(border, { opacity: 0, duration: 0.6, ease: 'power2.inOut' });
+              if (border) (border as HTMLElement).style.borderColor = `${accent}70`;
             }}
           >
             {/* Card */}
             <div style={{
               width: WIDGET_SIZE, height: CARD_H,
               borderRadius: 18,
-              background: `${accent}18`,
-              border: `1px solid ${accent}50`,
-              boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)`,
               overflow: 'hidden', position: 'relative', flexShrink: 0,
+              boxShadow: `0 4px 24px ${accent}22, 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)`,
             }}>
-              {/* Solid bg — reads actual --bg value */}
+              {/* Base: dark translucent */}
               <div style={{
                 position: 'absolute', inset: 0,
-                backgroundColor: 'var(--bg)',
-                opacity: 0.92,
+                background: 'rgba(6,8,20,0.72)',
+                backdropFilter: 'blur(12px)',
               }} />
-              {/* Accent tint */}
+              {/* Diagonal color sweep */}
               <div style={{
                 position: 'absolute', inset: 0,
-                background: `linear-gradient(135deg, ${accent}30 0%, transparent 60%)`,
+                background: `linear-gradient(135deg, ${accent}55 0%, ${accent}18 40%, transparent 70%)`,
+                pointerEvents: 'none',
+              }} />
+              {/* Bottom glow pool */}
+              <div style={{
+                position: 'absolute', bottom: '-20%', left: '10%', right: '10%', height: '60%',
+                background: `radial-gradient(ellipse, ${accent}30 0%, transparent 70%)`,
                 pointerEvents: 'none',
               }} />
               {/* Hover glow */}
               <div className="aurora-glow" style={{
                 position: 'absolute', inset: 0,
-                background: `radial-gradient(ellipse at 30% 50%, ${accent}40 0%, transparent 70%)`,
+                background: `radial-gradient(ellipse at 30% 40%, ${accent}60 0%, transparent 65%)`,
                 opacity: 0, pointerEvents: 'none',
               }} />
-              {/* Border highlight on hover */}
+              {/* Border */}
               <div className="aurora-border" style={{
-                position: 'absolute', inset: -1, borderRadius: 19,
-                border: `1.5px solid ${accent}80`,
-                opacity: 0, pointerEvents: 'none',
+                position: 'absolute', inset: 0, borderRadius: 18,
+                border: `1px solid ${accent}70`,
+                pointerEvents: 'none',
+                transition: 'border-color 0.4s ease',
               }} />
               {/* Top shine */}
               <div style={{
-                position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                position: 'absolute', top: 0, left: '15%', right: '15%', height: 1,
+                background: `linear-gradient(90deg, transparent, ${accent}90, transparent)`,
                 pointerEvents: 'none',
               }} />
               <WidgetCard label={label} accent={accent} />

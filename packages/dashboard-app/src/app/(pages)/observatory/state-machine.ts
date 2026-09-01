@@ -2,6 +2,9 @@
 // Completely decoupled from UI and data fetching logic.
 // Connect real backend events by calling transition() from your data layer.
 
+import { selectLayout, reorderByNarrative, classifyNarrative } from './layout-engine';
+import type { LayoutHint } from './layout-engine';
+
 export type ObservatoryState =
   | 'IDLE'
   | 'QUERY_RECEIVED'
@@ -23,9 +26,10 @@ export interface InsightData {
   subtitle?: string;
   metric?: string;
   metricLabel?: string;
-  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge';
+  chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'gauge' | 'text';
   chartOptions: Record<string, unknown> | null;
   isPrimary?: boolean;
+  narrativeRole?: 'hook' | 'context' | 'detail' | 'cta';
   listItems?: { title: string; subtitle?: string; amount: string; status?: 'positive' | 'negative' | 'neutral' }[];
 }
 
@@ -34,7 +38,9 @@ export interface ObservatoryContext {
   query: QueryContext | null;
   statusMessage: string;
   insights: InsightData[];
+  layoutHint: LayoutHint | null;
   error: string | null;
+  description: string | null;
 }
 
 type Listener = (ctx: ObservatoryContext) => void;
@@ -65,7 +71,9 @@ class ObservatoryStateMachine {
     query: null,
     statusMessage: '',
     insights: [],
+    layoutHint: null,
     error: null,
+    description: null,
   };
 
   private listeners: Set<Listener> = new Set();
@@ -166,6 +174,17 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
   const AXIS_STYLE = getAxisStyle(isDark);
   const TOOLTIP_STYLE = getTooltipStyle(isDark);
 
+  let progressGroupCount = 0;
+  // Track chart types seen — max 1 per type (except area/line: max 2)
+  const chartTypeSeen: Record<string, number> = {};
+  const CHART_TYPE_MAX: Record<string, number> = {
+    bar: 1, treemap: 1, doughnut: 1, pie: 1, heatmap: 1, radar: 1,
+    scatter: 1, funnel: 1, gauge: 1, map: 1, candlestick: 1, bollinger: 1,
+    'stacked-area': 1, 'diverging-bar': 1, 'radial-stacked-bar': 1,
+    'hierarchical-bar': 1, 'bar-race': 1,
+    area: 2, line: 2, progress: 2,
+  };
+
   for (const comp of components) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = comp as any;
@@ -195,7 +214,88 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
       let chartOptions: Record<string, unknown> = {};
 
-      if (type === 'pie' || type === 'doughnut') {
+      // ── Tipos nativos de AuroraChart (no necesitan conversión a ECharts) ──
+      const AURORA_NATIVE = ['scatter','radar','funnel','gauge','heatmap','treemap'];
+      // ── Tipos especializados — pasar props completos a AuroraChart ──
+      const AURORA_SPECIALIZED = ['bollinger','stacked-area','diverging-bar','radial-stacked-bar','hierarchical-bar','bar-race','sankey','calendar-heatmap','sunburst','boxplot','theme-river'];
+      if (type === 'map') {
+        // Mexico choropleth map — pass labels+values directly, MexicoMapChart handles rendering
+        const datasets = rawData?.datasets ?? [{ data: values }];
+        chartOptions = {
+          _auroraType: 'map',
+          _auroraData: { labels, datasets },
+        };
+      } else if (AURORA_NATIVE.includes(type)) {
+        // Pasar datos tal cual — AuroraChart los consume directamente
+        const datasets = rawData?.datasets ?? (Array.isArray(rawData)
+          ? [{ data: rawData.map((d: Record<string,unknown>) => Number(d.value ?? d.count ?? 0)) }]
+          : [{ data: values }]);
+        chartOptions = {
+          // Usamos _auroraType para que ScrollPresentation lo lea sin depender de series[0].type
+          _auroraType: type,
+          _auroraData: { labels, datasets },
+        };
+      } else if (type === 'candlestick') {
+        // Bedrock genera datasets[0].data = [{date, open, high, low, close}]
+        const ohlcRaw = rawData?.datasets?.[0]?.data ?? (Array.isArray(rawData) ? rawData : []);
+        const ohlcLabels: string[] = [];
+        const ohlcData: number[][] = [];
+        for (const d of ohlcRaw) {
+          const item = d as Record<string, unknown>;
+          ohlcLabels.push(String(item.date ?? item.label ?? ''));
+          ohlcData.push([
+            Number(item.open ?? 0),
+            Number(item.close ?? 0),
+            Number(item.low ?? 0),
+            Number(item.high ?? 0),
+          ]);
+        }
+        const upColor = '#34d399';
+        const downColor = '#f87171';
+        chartOptions = {
+          _auroraType: 'candlestick',
+          _auroraData: { labels: ohlcLabels, datasets: [{ data: ohlcData.map(d => d[1]) }] }, // fallback
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'axis',
+            backgroundColor: TOOLTIP_STYLE.backgroundColor,
+            borderColor: TOOLTIP_STYLE.borderColor,
+            borderWidth: 1,
+            textStyle: TOOLTIP_STYLE.textStyle,
+            extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+            formatter: (params: unknown[]) => {
+              const p = (params as {name:string;data:number[]}[])[0];
+              if (!p) return '';
+              return `${p.name}<br/>O: ${p.data[1].toLocaleString('es-MX')}<br/>C: ${p.data[2].toLocaleString('es-MX')}<br/>L: ${p.data[3].toLocaleString('es-MX')}<br/>H: ${p.data[4].toLocaleString('es-MX')}`;
+            },
+          },
+          grid: { left: 16, right: 16, bottom: 40, top: 16, containLabel: true },
+          xAxis: {
+            type: 'category',
+            data: ohlcLabels,
+            axisLine: { lineStyle: { color: AXIS_STYLE.axisLine.lineStyle.color } },
+            axisTick: { show: false },
+            axisLabel: { color: AXIS_STYLE.axisLabel.color, fontSize: 10, rotate: ohlcLabels.length > 12 ? 35 : 0 },
+          },
+          yAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: AXIS_STYLE.axisLabel.color, fontSize: 10 },
+            splitLine: { lineStyle: { color: AXIS_STYLE.splitLine.lineStyle.color, type: 'dashed' } },
+          },
+          series: [{
+            type: 'candlestick',
+            data: ohlcData,
+            itemStyle: {
+              color: upColor,
+              color0: downColor,
+              borderColor: upColor,
+              borderColor0: downColor,
+            },
+          }],
+        };
+      } else if (type === 'pie' || type === 'doughnut') {
         const total = values.reduce((a, b) => a + b, 0);
         chartOptions = {
           backgroundColor: 'transparent',
@@ -250,8 +350,26 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
             },
           }],
         };
+      } else if (AURORA_SPECIALIZED.includes(type)) {
+        // Pasar todos los props del componente directamente — AuroraChart los consume nativamente
+        // keys, frames, maxBars, etc. se pasan junto con data para que getOption() los lea
+        const specialData = {
+          ...(Array.isArray(rawData) ? { _rows: rawData } : rawData ?? {}),
+          keys: props.keys,
+          frames: props.frames,
+          maxBars: props.maxBars,
+          n: props.n,
+          k: props.k,
+        };
+        chartOptions = {
+          _auroraType: type,
+          _auroraData: { labels, datasets: [{ data: values }] },
+          ...specialData,
+        };
       } else if (type === 'line' || type === 'area') {
         chartOptions = {
+          _auroraType: type,
+          _auroraData: { labels, datasets: rawData?.datasets ?? [{ label: '', data: values }] },
           grid: { top: 24, right: 20, bottom: 36, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
@@ -272,6 +390,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       } else {
         // bar - vertical
         chartOptions = {
+          _auroraType: 'bar',
+          _auroraData: { labels, datasets: rawData?.datasets ?? [{ label: '', data: values }] },
           grid: { top: 16, right: 16, bottom: 40, left: 16, containLabel: true },
           xAxis: { 
             type: 'category', 
@@ -298,7 +418,14 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
         };
       }
 
-      const eType = (type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar';
+      const eType = (chartOptions._auroraType as string) ||
+        ((type === 'pie' || type === 'doughnut') ? 'pie' : (type === 'line' || type === 'area') ? 'line' : 'bar');
+
+      // Deduplicate: skip if we've already seen this chart type too many times
+      const typeKey = eType;
+      chartTypeSeen[typeKey] = (chartTypeSeen[typeKey] ?? 0) + 1;
+      if (chartTypeSeen[typeKey] > (CHART_TYPE_MAX[typeKey] ?? 1)) continue;
+
       insights.push({
         id: `chart-${idx}`,
         title: props.title ?? uiConfig.title ?? 'Chart',
@@ -328,18 +455,40 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── ProgressGroup → barras horizontales con labels y porcentaje ────────
+    // ── ProgressGroup → primero = barras, segundo+ = doughnut ────────────
     if (component === 'ProgressGroup') {
       const items: { label?: string; value?: number }[] = props.items ?? [];
       const pgItems = items.slice(0, 8);
       const pgLabels = pgItems.map(it => it.label ?? '');
       const pgValues = pgItems.map(it => Math.min(100, Math.max(0, it.value ?? 0)));
+
+      progressGroupCount++;
+
+      // Skip if we've already seen too many progress groups
+      chartTypeSeen['progress'] = (chartTypeSeen['progress'] ?? 0) + 1;
+      if (chartTypeSeen['progress'] > (CHART_TYPE_MAX['progress'] ?? 2)) continue;
+
+      if (progressGroupCount >= 2) {
+        insights.push({
+          id: `progress-${idx}`,
+          title: props.title ?? 'Progress',
+          chartType: 'bar',
+          chartOptions: {
+            _auroraType: 'progress',
+            _auroraData: { labels: pgLabels, datasets: [{ data: pgValues }] },
+          },
+        });
+        continue;
+      }
+
       const barH = Math.max(18, Math.min(32, Math.floor(260 / pgItems.length)));
       insights.push({
         id: `progress-${idx}`,
         title: props.title ?? 'Progress',
         chartType: 'bar',
         chartOptions: {
+          _auroraType: 'progress',  // keep 'progress' so reorderByNarrative can identify it
+          _auroraData: { labels: pgLabels, datasets: [{ label: '', data: pgValues }] },
           backgroundColor: 'transparent',
           grid: { top: 4, right: 52, bottom: 4, left: 4, containLabel: true },
           xAxis: { type: 'value', max: 100, show: false },
@@ -400,21 +549,21 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
       continue;
     }
 
-    // ── TransactionList → insight con lista renderizada (no chart) ────────────
+    // ── TransactionList → SKIP (not relevant for executives)
     if (component === 'TransactionList') {
-      const items: { title?: string; label?: string; amount?: number | string; subtitle?: string; date?: string; status?: string }[] = (props.items ?? []).slice(0, 8);
-      if (items.length === 0) continue;
+      continue;
+    }
+
+    // ── MiniChart / StatCard with text content → InsightText card ──
+    if (component === 'MiniChart' || (component === 'StatCard' && !props.value)) {
+      const ci = insights.length;
       insights.push({
-        id: `txn-${idx}`,
-        title: props.title ?? 'Transactions',
-        chartType: 'bar',
-        chartOptions: null, // rendered as list, not chart
-        listItems: items.map(it => ({
-          title: String(it.title ?? it.label ?? ''),
-          subtitle: it.subtitle ?? it.date ?? undefined,
-          amount: String(it.amount ?? ''),
-          status: it.status as 'positive' | 'negative' | 'neutral' | undefined,
-        })),
+        id: `text-${ci}`,
+        title: props.title ?? 'Insight',
+        subtitle: props.description ?? props.insight ?? props.text ?? props.subtitle ?? undefined,
+        metric: props.value ? String(props.value) : undefined,
+        chartType: 'text' as InsightData['chartType'],
+        chartOptions: null,
       });
       continue;
     }
@@ -423,7 +572,23 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
   return insights;
 }
 
-export async function runMockFlow(rawQuery: string) {
+export const ALEXA_USER_ID = 'alexa-display';
+export const ENV_USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? null;
+
+// Active abort controller — cancel ongoing pipeline
+let activeAbortController: AbortController | null = null;
+
+export function cancelFlow() {
+  activeAbortController?.abort();
+  activeAbortController = null;
+  observatory.transition('IDLE');
+}
+
+export async function runMockFlow(rawQuery: string, userId = ALEXA_USER_ID, extraFilters?: Record<string, unknown>) {
+  const abortController = new AbortController();
+  activeAbortController = abortController;
+  const signal = abortController.signal;
+
   const keywords = rawQuery
     .toLowerCase()
     .replace(/[^a-záéíóúüñ\s]/gi, '')
@@ -432,17 +597,24 @@ export async function runMockFlow(rawQuery: string) {
     .slice(0, 4);
 
   observatory.transition('QUERY_RECEIVED', { query: { raw: rawQuery, keywords } });
-  await delay(600);
+  await delay(600, signal);
+  if (signal.aborted) return;
+
   observatory.transition('ANALYZING');
-  await delay(800);
+  await delay(800, signal);
+  if (signal.aborted) return;
+
   observatory.transition('FETCHING_DATA');
 
   let uiConfig: unknown;
   try {
+    const body: Record<string, unknown> = { dataset: 'ventas-credito', intent: rawQuery, userId, limit: 500 };
+    if (extraFilters) body.filters = extraFilters;
     const res = await fetch(`${API_URL}/api/generate-ui`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataset: 'ventas-credito', intent: rawQuery }),
+      body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -458,21 +630,33 @@ export async function runMockFlow(rawQuery: string) {
     const json = await res.json();
     uiConfig = json.data ?? json;
   } catch (err) {
+    if (signal.aborted) return;
     console.error('[runMockFlow] fetch error:', err);
     observatory.setError(String(err));
     observatory.transition('IDLE');
     return;
   }
 
+  if (signal.aborted) return;
   observatory.transition('GENERATING_VISUALIZATIONS');
-  await delay(600);
+  await delay(600, signal);
+  if (signal.aborted) return;
 
-  const insights = uiConfigToInsights(uiConfig);
-  observatory.transition('REVEAL', { insights });
-  await delay(900);
+  const arc      = classifyNarrative(rawQuery);
+  const insights = reorderByNarrative(uiConfigToInsights(uiConfig), arc);
+  const layoutHint = selectLayout(insights, rawQuery);
+  const description = (uiConfig as Record<string, unknown>)?.description as string | null ?? null;
+  observatory.transition('REVEAL', { insights, layoutHint, description });
+  await delay(900, signal);
+  if (signal.aborted) return;
   observatory.transition('PRESENTATION');
+
+  activeAbortController = null;
 }
 
-function delay(ms: number) {
-  return new Promise(r => setTimeout(r, ms));
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+  }).catch(() => {});
 }

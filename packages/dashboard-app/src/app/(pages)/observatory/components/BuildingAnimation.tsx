@@ -1,8 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import type { ObservatoryState } from '../state-machine';
+import { cancelFlow } from '../state-machine';
+import AuroraBackground from './AuroraBackground';
 
 interface Props {
   state: ObservatoryState;
@@ -249,21 +251,36 @@ function PhaseAnalyzing({ active }: { active: boolean }) {
   );
 }
 
-// ── Phase 3: OBTENIENDO — data stream rows ────────────────
+// ── Phase 3: OBTENIENDO — data stream rows con sub-fases ─
+const FETCH_SUB_PHASES = [
+  { label: 'Consultando dataset...' },
+  { label: 'Interpretando intent con IA...' },
+  { label: 'Filtrando registros...' },
+  { label: 'Calculando agregaciones...' },
+  { label: 'Generando visualizaciones...' },
+];
+
 function PhaseFetching({ active }: { active: boolean }) {
-  const rowsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const rowsRef    = useRef<(HTMLDivElement | null)[]>([]);
+  const [subPhase, setSubPhase] = useState(0);
+  const subPhaseRef = useRef(0);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!active) return;
-    const rows = rowsRef.current.filter(Boolean) as HTMLDivElement[];
-    if (rows.length === 0) return;
+    if (!active) { setSubPhase(0); subPhaseRef.current = 0; return; }
 
+    // Rotate sub-phases every ~2.5s
+    timerRef.current = setInterval(() => {
+      subPhaseRef.current = Math.min(subPhaseRef.current + 1, FETCH_SUB_PHASES.length - 1);
+      setSubPhase(subPhaseRef.current);
+    }, 2500);
+
+    const rows = rowsRef.current.filter(Boolean) as HTMLDivElement[];
     let currentTl: gsap.core.Timeline | null = null;
     let alive = true;
 
     const loop = () => {
       if (!alive) return;
-      // reset
       gsap.set(rows, { width: 0, opacity: 1 });
       currentTl = gsap.timeline({ onComplete: loop });
       rows.forEach((el, i) => {
@@ -274,13 +291,19 @@ function PhaseFetching({ active }: { active: boolean }) {
     };
     loop();
 
-    return () => { alive = false; currentTl?.kill(); };
+    return () => {
+      alive = false;
+      currentTl?.kill();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [active]);
 
   const rows = [
     { w: '85%' }, { w: '60%' }, { w: '75%' },
     { w: '45%' }, { w: '90%' }, { w: '55%' }, { w: '70%' },
   ];
+
+  const current = FETCH_SUB_PHASES[subPhase];
 
   return (
     <Phase active={active}>
@@ -298,7 +321,21 @@ function PhaseFetching({ active }: { active: boolean }) {
           />
         ))}
       </div>
-      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>Obteniendo datos...</p>
+      {/* Sub-phase label */}
+      <p style={{ fontSize: 15, color: 'var(--text-tertiary)', margin: 0, letterSpacing: '0.06em' }}>
+        {current.label}
+      </p>
+      {/* Sub-phase dots */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {FETCH_SUB_PHASES.map((_, i) => (
+          <div key={i} style={{
+            width: i === subPhase ? 20 : 6, height: 6, borderRadius: 3,
+            background: i <= subPhase ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+            transition: 'all 0.4s ease',
+            boxShadow: i === subPhase ? '0 0 8px var(--primary)' : 'none',
+          }} />
+        ))}
+      </div>
     </Phase>
   );
 }
@@ -313,8 +350,8 @@ function PhaseGenerating({ active }: { active: boolean }) {
 
   const heights = [42, 74, 36, 88, 54, 92, 46, 72];
   const colors  = [
-    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
-    'var(--primary)', '#2d88bf', 'var(--primary)', '#2d88bf',
+    'var(--primary)', 'var(--primary-dark)', 'var(--primary)', 'var(--primary-dark)',
+    'var(--primary)', 'var(--primary-dark)', 'var(--primary)', 'var(--primary-dark)',
   ];
   const pts     = heights.map((h, i) => [7 + i * 12.5, 94 - h * 0.86]);
   const d       = `M ${pts.map(p => p.join(' ')).join(' L ')}`;
@@ -348,7 +385,7 @@ function PhaseGenerating({ active }: { active: boolean }) {
       tl.fromTo(el, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(3)' }, 1.7 + i * 0.07);
     });
 
-    return () => tl.kill();
+    return () => { tl.kill(); };
   }, [active]);
 
   return (
@@ -374,19 +411,19 @@ function PhaseGenerating({ active }: { active: boolean }) {
         <svg style={{ position: 'absolute', left: 38, right: 12, bottom: 34, top: 10 }} viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="gl" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#49a4d8" />
-              <stop offset="50%" stopColor="#2d88bf" />
-              <stop offset="100%" stopColor="#49a4d8" />
+              <stop offset="0%" stopColor="#00c8f0" />
+              <stop offset="50%" stopColor="#00d97e" />
+              <stop offset="100%" stopColor="#00c8f0" />
             </linearGradient>
             <linearGradient id="ga" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#49a4d8" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#49a4d8" stopOpacity="0" />
+              <stop offset="0%" stopColor="#00c8f0" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#00c8f0" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path ref={areaRef} d={area} fill="url(#ga)" opacity="0" />
           <path ref={lineRef} d={d} fill="none" stroke="url(#gl)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity="0" />
           {pts.map((p, i) => (
-            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#49a4d8" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #49a4d8)' }} />
+            <circle key={i} ref={el => { dotsRef.current[i] = el; }} cx={p[0]} cy={p[1]} r="3" fill="white" stroke="#00c8f0" strokeWidth="1.5" opacity="0" style={{ filter: 'drop-shadow(0 0 4px #00c8f0)' }} />
           ))}
         </svg>
       </div>
@@ -414,7 +451,7 @@ function PhaseReady({ active }: { active: boolean }) {
     tl.to(circleRef.current, { strokeDashoffset: 0, duration: 0.6, ease: 'power2.out' });
     tl.to(checkRef.current,  { strokeDashoffset: 0, duration: 0.4, ease: 'power2.out' }, '-=0.1');
 
-    return () => tl.kill();
+    return () => { tl.kill(); };
   }, [active]);
 
   return (
@@ -431,15 +468,15 @@ function PhaseReady({ active }: { active: boolean }) {
 // ── Steps ─────────────────────────────────────────────────
 function Steps({ phase }: { phase: number }) {
   const steps = [
-    { label: 'Recibiendo', icon: '◈' },
-    { label: 'Analizando', icon: '◎' },
-    { label: 'Obteniendo', icon: '⬡' },
-    { label: 'Generando',  icon: '◇' },
-    { label: 'Listo',      icon: '✦' },
+    { label: 'Recibiendo' },
+    { label: 'Analizando' },
+    { label: 'Obteniendo' },
+    { label: 'Generando'  },
+    { label: 'Listo'      },
   ];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-      {steps.map(({ label, icon }, i) => {
+      {steps.map(({ label }, i) => {
         const active = phase === i + 1;
         const done   = phase > i + 1;
         return (
@@ -458,11 +495,11 @@ function Steps({ phase }: { phase: number }) {
                 boxShadow: active ? '0 0 20px var(--primary), 0 0 40px var(--primary-light)' : done ? '0 0 10px #34d39966' : 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                fontSize: active ? 14 : 11,
+                fontSize: active ? 13 : 10,
                 color: done || active ? '#fff' : 'var(--text-tertiary)',
                 animation: active ? 'stepPulse 2s ease-in-out infinite' : 'none',
               }}>
-                {done ? '✓' : icon}
+                {done ? '✓' : String(i + 1)}
               </div>
               <span style={{
                 fontSize: 10, fontWeight: active ? 700 : 400,
@@ -520,19 +557,26 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
     if (p >= prevPhase.current) { setPhase(p); prevPhase.current = p; }
   }, [state]);
 
+  // Esc key to cancel
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelFlow(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const isProcessing = phase >= 1 && phase <= 4;
+
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)', overflow: 'hidden' }}>
+      <AuroraBackground position="absolute" />
       <NodeCanvas />
 
       {/* Grid */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         backgroundImage: `linear-gradient(var(--border-color) 1px, transparent 1px), linear-gradient(90deg, var(--border-color) 1px, transparent 1px)`,
-        backgroundSize: '60px 60px', opacity: 0.5,
+        backgroundSize: '60px 60px', opacity: 0.3,
       }} />
-
-      {/* Center glow */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse 60% 60% at center, var(--primary-light), transparent)' }} />
 
       {/* Query — fixed top */}
       {query && (
@@ -568,6 +612,33 @@ export default function BuildingAnimation({ state, query, statusMessage }: Props
       <div style={{ position: 'absolute', bottom: 'clamp(32px, 6vh, 64px)', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1 }}>
         <Steps phase={phase} />
       </div>
+
+      {/* Cancel button — top left, back-style */}
+      {isProcessing && (
+        <button
+          onClick={cancelFlow}
+          style={{
+            position: 'absolute', top: 20, left: 24, zIndex: 10,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 10,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid var(--border-color)',
+            color: 'var(--text-tertiary)', fontSize: 13,
+            cursor: 'pointer', fontFamily: 'inherit',
+            letterSpacing: '0.04em',
+            transition: 'all 0.2s ease',
+            backdropFilter: 'blur(8px)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M9 2L4 7L9 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Volver
+          <span style={{ opacity: 0.35, fontSize: 10, marginLeft: 2 }}>ESC</span>
+        </button>
+      )}
 
       {statusMessage && (
         <p style={{

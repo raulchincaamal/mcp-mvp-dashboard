@@ -3,8 +3,8 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
-import { assembleECharts } from 'flint-chart';
 import gsap from 'gsap';
+
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -32,14 +32,26 @@ export interface LegacyChartData {
 
 export type AuroraChartData = FlatDataPoint[] | LegacyChartData;
 
+// Candlestick-MA specific data format
+export interface CandlestickMAData {
+  dates: string[];
+  // Each item: [open, close, low, high]
+  ohlc: [number, number, number, number][];
+}
+
+export interface SankeyNode { name: string; }
+export interface SankeyLink { source: string; target: string; value: number; }
+export interface SankeyData { nodes: SankeyNode[]; links: SankeyLink[]; }
+
 export interface AuroraChartProps {
-  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap';
-  data: AuroraChartData;
-  flint?: FlintSpec;          // When present, Flint compiles the ECharts option directly
-  flintData?: Record<string, unknown>[];  // Raw rows for Flint assembly
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma' | 'candlestick' | 'sankey' | 'calendar-heatmap' | 'sunburst' | 'boxplot' | 'theme-river' | 'bollinger' | 'stacked-area' | 'diverging-bar' | 'radial-stacked-bar' | 'hierarchical-bar' | 'bar-race';
+  data: AuroraChartData | CandlestickMAData | SankeyData;
+  flint?: FlintSpec;
+  flintData?: Record<string, unknown>[];
   title?: string;
-  height?: number;
+  height?: number | string;
   gradient?: 'aurora' | 'neon' | 'fire' | 'ocean';
+  bare?: boolean; // strips wrapper card styles — use when embedded in another card
 }
 
 // ─── Flat → Legacy normalizer ───────────────────────────────
@@ -78,19 +90,28 @@ function normalizeFlatData(data: AuroraChartData): LegacyChartData {
 function readTokens() {
   if (typeof window === 'undefined') {
     return {
-      bg: '#282c34', surface: 'rgba(255,255,255,0.06)',
-      text: '#e6ecf4', textTertiary: 'rgba(170,185,210,0.5)',
-      border: 'rgba(200,210,230,0.1)',
+      bg: '#060a10', surface: 'rgba(10,20,40,0.92)',
+      text: '#e4f0ff', textTertiary: 'rgba(120,165,220,0.50)',
+      border: 'rgba(0,200,240,0.10)',
+      axisLine:  'rgba(255,255,255,0.18)',
+      splitLine: 'rgba(255,255,255,0.07)',
+      axisLabel: 'rgba(200,220,255,0.65)',
+      tooltipBg: 'rgba(8,16,32,0.95)',
+      tooltipBorder: 'rgba(0,200,240,0.30)',
     };
   }
-  const s = getComputedStyle(document.documentElement);
-  const v = (k: string, fb: string) => s.getPropertyValue(k).trim() || fb;
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   return {
-    bg:           v('--bg',           '#282c34'),
-    surface:      v('--surface',      'rgba(255,255,255,0.06)'),
-    text:         v('--text',         '#e6ecf4'),
-    textTertiary: v('--text-tertiary','rgba(170,185,210,0.5)'),
-    border:       v('--border-color', 'rgba(200,210,230,0.1)'),
+    bg:           isDark ? '#060a10' : '#edf1f7',
+    surface:      isDark ? 'rgba(255,255,255,0.042)' : 'rgba(255,255,255,0.68)',
+    text:         isDark ? '#e4f0ff' : '#08142a',
+    textTertiary: isDark ? 'rgba(120,165,220,0.50)' : 'rgba(68,88,120,0.80)',
+    border:       isDark ? 'rgba(0,200,240,0.10)' : 'rgba(60,90,150,0.16)',
+    axisLine:     isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,20,60,0.28)',
+    splitLine:    isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,20,60,0.10)',
+    axisLabel:    isDark ? 'rgba(200,220,255,0.70)' : 'rgba(10,30,80,0.65)',
+    tooltipBg:    isDark ? 'rgba(6,12,24,0.97)'    : 'rgba(255,255,255,0.97)',
+    tooltipBorder:isDark ? 'rgba(0,200,240,0.40)'  : 'rgba(0,100,160,0.35)',
   };
 }
 
@@ -108,23 +129,49 @@ function useThemeTokens() {
 }
 
 // ─── Palettes ──────────────────────────────────────────────
+// Diseñadas para fondos oscuros (Midnight/Slate). Cada par: [color vivo, color degradado].
+// Criterio: contraste ≥3:1 sobre --bg #080c14, separación perceptual entre series.
 
 const PALETTES: Record<string, [string, string][]> = {
+  // Terminal Financiero — Bloomberg/Palantir style para dashboards ejecutivos.
+  // 3 colores base (cian, verde, ámbar) + variaciones frías.
+  // Contraste ≥3:1 sobre #060a10. Separación perceptual máxima entre series.
   aurora: [
-    ['#c084fc', '#818cf8'], ['#67e8f9', '#60a5fa'], ['#f9a8d4', '#c084fc'],
-    ['#6ee7b7', '#34d399'], ['#fcd34d', '#fb923c'], ['#fca5a5', '#f472b6'],
+    ['#00c8f0', '#0077a8'],   // 1. cian corporativo   — serie principal
+    ['#00d97e', '#00915a'],   // 2. verde crecimiento  — positivo
+    ['#f5a623', '#b87200'],   // 3. ámbar alerta       — KPI crítico
+    ['#818cf8', '#4338ca'],   // 4. índigo             — secundario
+    ['#38bdf8', '#0369a1'],   // 5. celeste            — variación cian
+    ['#34d399', '#059669'],   // 6. esmeralda          — variación verde
+    ['#fb923c', '#c2410c'],   // 7. naranja            — acento cálido
+    ['#a78bfa', '#6d28d9'],   // 8. violeta            — octavo elemento
   ],
+  // Neon — alta saturacion para presentaciones de impacto
   neon: [
-    ['#00f5ff', '#0066ff'], ['#ff00ff', '#8800ff'], ['#00ff99', '#00ccff'],
-    ['#ffff00', '#ff8800'], ['#ff0088', '#ff00ff'], ['#88ff00', '#00ffaa'],
+    ['#00e5ff', '#0066cc'],
+    ['#d946ef', '#7c3aed'],
+    ['#00ff94', '#00b36b'],
+    ['#ffea00', '#ff8800'],
+    ['#ff3d71', '#cc0044'],
+    ['#69ffb4', '#00cc77'],
   ],
+  // Fire — paleta calida para metricas de riesgo/alerta
   fire: [
-    ['#fde68a', '#f97316'], ['#fbbf24', '#ef4444'], ['#fef08a', '#fbbf24'],
-    ['#fca5a5', '#dc2626'], ['#fed7aa', '#f97316'], ['#fef9c3', '#fbbf24'],
+    ['#fde68a', '#f97316'],
+    ['#fbbf24', '#ef4444'],
+    ['#fef08a', '#fbbf24'],
+    ['#fca5a5', '#dc2626'],
+    ['#fed7aa', '#f97316'],
+    ['#fef9c3', '#fbbf24'],
   ],
+  // Ocean — paleta fria para metricas de volumen/liquidez
   ocean: [
-    ['#a5f3fc', '#38bdf8'], ['#7dd3fc', '#0ea5e9'], ['#bae6fd', '#06b6d4'],
-    ['#e0f2fe', '#38bdf8'], ['#67e8f9', '#0284c7'], ['#cffafe', '#0e7490'],
+    ['#7dd3fc', '#0284c7'],
+    ['#a5f3fc', '#0891b2'],
+    ['#bae6fd', '#0369a1'],
+    ['#67e8f9', '#0e7490'],
+    ['#e0f2fe', '#0284c7'],
+    ['#cffafe', '#155e75'],
   ],
 };
 
@@ -144,29 +191,19 @@ function rGrad(top: string, bot: string) {
   };
 }
 
-// ─── Flint compiler ────────────────────────────────────────
+// ─── Money formatter ───────────────────────────────────────
+function fmtMXN(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000)     return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${v.toLocaleString('es-MX')}`;
+}
 
-function buildFlintOption(
-  spec: FlintSpec,
-  rows: Record<string, unknown>[],
-): EChartsOption | null {
-  try {
-    const result = assembleECharts({
-      data: { values: rows },
-      semantic_types: spec.semantic_types ?? {},
-      chart_spec: {
-        chartType: spec.chartType,
-        title: spec.title,
-        encodings: spec.encodings,
-        baseSize: spec.baseSize ?? { width: 600, height: 320 },
-      },
-    });
-    // assembleECharts returns { option, warnings } or the option directly
-    return (result as { option: EChartsOption }).option ?? (result as EChartsOption);
-  } catch (e) {
-    console.warn('[AuroraChart] Flint compile failed, falling back to Aurora:', e);
-    return null;
-  }
+// Detect if a dataset looks like monetary values (avg > 500 suggests MXN amounts)
+function looksLikeMoney(data: LegacyChartData): boolean {
+  const allVals = data.datasets.flatMap(d => d.data).filter(v => v > 0);
+  if (allVals.length === 0) return false;
+  const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+  return avg > 500;
 }
 
 // ─── Option builders ────────────────────────────────────────
@@ -176,40 +213,43 @@ type Tokens = ReturnType<typeof readTokens>;
 function barOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
+  const money = looksLikeMoney(data);
   return {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis' as const,
-      axisPointer: { type: 'shadow' as const, shadowStyle: { color: tk.border } },
-      backgroundColor: tk.surface,
-      borderColor: tk.border,
+      axisPointer: { type: 'shadow' as const, shadowStyle: { color: tk.splitLine } },
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
       borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
-    legend: multi ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 }, icon: 'roundRect' } : undefined,
+    legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels,
-      axisLine: { lineStyle: { color: tk.border } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0 },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 7 ? 35 : 0,
+        formatter: (v: string) => v.length > 14 ? v.slice(0, 13) + '…' : v,
+      },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', formatter: money ? (v: number) => fmtMXN(v) : undefined },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => ({
       name: ds.label ?? '',
       type: 'bar' as const,
-      data: ds.data,
+      data: multi
+        ? ds.data.map(v => ({ value: v, itemStyle: { color: vGrad(palette[di % palette.length][0], palette[di % palette.length][1]), borderRadius: [4, 4, 0, 0] } }))
+        : ds.data.map((v, i) => ({ value: v, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [4, 4, 0, 0] } })),
       barMaxWidth: 48,
       barCategoryGap: '35%',
-      itemStyle: {
-        color: vGrad(palette[di % palette.length][0], palette[di % palette.length][1]),
-        borderRadius: [4, 4, 0, 0],
-      },
+      itemStyle: { borderRadius: [4, 4, 0, 0] },
       emphasis: { itemStyle: { opacity: 0.85 } },
     })),
     animationDuration: 900,
@@ -220,25 +260,27 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
 function lineOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, isArea: boolean): EChartsOption {
   const data = normalizeFlatData(rawData);
   const multi = data.datasets.length > 1;
+  const money = looksLikeMoney(data);
   return {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
-    legend: multi ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 } } : undefined,
+    legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
     grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
-      axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
+      axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', rotate: data.labels.length > 8 ? 35 : 0, interval: data.labels.length > 16 ? Math.floor(data.labels.length / 10) : 0 },
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11, fontFamily: 'inherit' },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, fontFamily: 'inherit', formatter: money ? (v: number) => fmtMXN(v) : undefined },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => {
       const [top, bot] = palette[di % palette.length];
@@ -271,25 +313,24 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item', formatter: '{b}: {c} ({d}%)',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     legend: {
       orient: 'horizontal', bottom: 4,
-      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
       icon: 'circle',
     },
     series: [{
       type: 'pie' as const,
       radius: isDoughnut ? ['42%', '70%'] : ['0%', '70%'],
       center: ['50%', '46%'],
-      itemStyle: { borderRadius: isDoughnut ? 6 : 3, borderColor: tk.bg, borderWidth: 2 },
+      itemStyle: { borderRadius: isDoughnut ? 4 : 2, borderColor: 'transparent', borderWidth: 0 },
       label: { show: false },
       labelLine: { show: false },
       emphasis: {
         scale: true, scaleSize: 8,
-        label: { show: true, color: tk.text, fontSize: 13, fontWeight: 600 },
       },
       data: data.labels.map((label, i) => ({
         name: label,
@@ -311,36 +352,53 @@ function pieOption(rawData: AuroraChartData, title: string | undefined, palette:
 
 function scatterOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
+  const allNumeric = data.labels.every(l => !isNaN(parseFloat(l)) && isFinite(Number(l)));
+  const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
+    legend: multi ? {
+      bottom: 4,
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
+      icon: 'circle',
+      itemGap: 16,
+    } : undefined,
     tooltip: {
-      trigger: 'item', formatter: ((p: unknown) => { const v = (p as {value: number[]}).value; return `${v[0]}, ${v[1]}`; }) as never,
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const v = (p as { value: number[]; name?: string }).value;
+        const label = allNumeric ? '' : data.labels[v[2] as number] ?? '';
+        return label ? `${label}<br/>X: ${v[0]}, Y: ${v[1]}` : `X: ${v[0]}, Y: ${v[1]}`;
+      }) as never,
       backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
       extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
     },
-    grid: { left: 16, right: 16, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
     xAxis: {
-      type: 'value', axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      type: 'value', axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+      name: allNumeric ? '' : 'X',
     },
     yAxis: {
       type: 'value', axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border, type: 'dashed' } },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
     },
     series: data.datasets.map((ds, di) => {
       const [top] = palette[di % palette.length];
-      // pair up labels (x) with data (y)
-      const points = data.labels.map((x, i) => [parseFloat(x) || i, ds.data[i]]);
+      const points = data.labels.map((x, i) => {
+        const xVal = parseFloat(x);
+        // Store index as 3rd element for tooltip label lookup
+        return [isNaN(xVal) ? i : xVal, ds.data[i] ?? 0, i];
+      });
       return {
         name: ds.label ?? '',
         type: 'scatter' as const,
         data: points,
-        symbolSize: 10,
-        itemStyle: { color: top },
-        emphasis: { itemStyle: { opacity: 0.85 } },
+        symbolSize: 8,
+        itemStyle: { color: top, opacity: 0.8 },
+        emphasis: { itemStyle: { opacity: 1, shadowBlur: 6, shadowColor: top } },
       };
     }),
     animationDuration: 800,
@@ -353,20 +411,30 @@ function scatterOption(rawData: AuroraChartData, title: string | undefined, pale
 function radarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const maxVal = Math.max(...data.datasets.flatMap(d => d.data)) * 1.2;
+  const multi = data.datasets.length > 1;
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
-    legend: data.datasets.length > 1 ? { bottom: 4, textStyle: { color: tk.textTertiary, fontSize: 11 } } : undefined,
+    legend: multi ? {
+      orient: 'vertical',
+      right: 8,
+      top: 'middle',
+      textStyle: { color: tk.textTertiary, fontSize: 11 },
+      icon: 'circle',
+      itemGap: 10,
+    } : undefined,
     radar: {
-      indicator: data.labels.map(l => ({ name: l, max: maxVal })),
-      axisName: { color: tk.textTertiary, fontSize: 11 },
-      splitLine: { lineStyle: { color: tk.border } },
+      center: multi ? ['36%', '50%'] : ['50%', '50%'],
+      radius: '60%',
+      indicator: data.labels.map(l => ({ name: l.length > 12 ? l.slice(0, 11) + '…' : l, max: maxVal })),
+      axisName: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine } },
       splitArea: { show: false },
-      axisLine: { lineStyle: { color: tk.border } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
       shape: 'polygon',
     },
     series: [{
@@ -399,9 +467,9 @@ function funnelOption(rawData: AuroraChartData, title: string | undefined, palet
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item', formatter: '{b}: {c}',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     series: [{
       type: 'funnel' as const,
@@ -410,7 +478,7 @@ function funnelOption(rawData: AuroraChartData, title: string | undefined, palet
       sort: 'descending',
       gap: 3,
       label: { show: true, position: 'inside', color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 0 },
+      itemStyle: { borderWidth: 0, borderColor: 'transparent' },
       emphasis: { label: { fontSize: 13 } },
       data: sorted.map((d, i) => ({
         ...d,
@@ -450,7 +518,7 @@ function gaugeOption(rawData: AuroraChartData, title: string | undefined, palett
       pointer: { itemStyle: { color: top }, length: '65%', width: 5 },
       axisTick: { show: false },
       splitLine: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, distance: 20 },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, distance: 20 },
       detail: {
         valueAnimation: true,
         formatter: '{value}%',
@@ -467,49 +535,227 @@ function gaugeOption(rawData: AuroraChartData, title: string | undefined, palett
   };
 }
 
-// ─── Heatmap ───────────────────────────────────────────────
-// data.labels = x axis, data.datasets[i].label = y axis label, data.datasets[i].data = values per x
+// ─── Heatmap (Punch Card style — legacy fallback) ─────────
+// data.labels = x axis (hours), data.datasets[i].label = y axis (days), data.datasets[i].data = values per x
 
-function heatmapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function heatmapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
-  const [top, bot] = palette[0];
   const yLabels = data.datasets.map(ds => ds.label ?? '');
   const heatData: [number, number, number][] = [];
   data.datasets.forEach((ds, yi) => {
-    ds.data.forEach((val, xi) => heatData.push([xi, yi, val]));
+    ds.data.forEach((val, xi) => heatData.push([xi, yi, val ?? 0]));
   });
-  const maxVal = Math.max(...heatData.map(d => d[2]), 1);
+  const allVals = heatData.map(d => d[2]);
+  const maxVal = Math.max(...allVals, 1);
 
   return {
     backgroundColor: 'transparent',
     tooltip: {
       position: 'top',
-      formatter: ((p: unknown) => { const v = (p as {value: [number,number,number]}).value; return `${data.labels[v[0]]} / ${yLabels[v[1]]}: <b>${v[2]}</b>`; }) as never,
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      formatter: ((p: unknown) => {
+        const v = (p as { value: [number, number, number] }).value;
+        const xLabel = data.labels[v[0]] ?? v[0];
+        const yLabel = yLabels[v[1]] ?? v[1];
+        return `<b>${xLabel} / ${yLabel}</b><br/>Valor: <b>${v[2]}</b>`;
+      }) as never,
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
+      borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;padding:10px 14px;',
     },
-    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 80, right: 20, top: 12, bottom: 56, containLabel: false },
     xAxis: {
-      type: 'category', data: data.labels, splitArea: { show: true, areaStyle: { color: ['transparent','transparent'] } },
-      axisLine: { lineStyle: { color: tk.border } }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 10, rotate: data.labels.length > 6 ? 35 : 0 },
+      type: 'category',
+      data: data.labels,
+      splitArea: { show: true, areaStyle: { color: ['rgba(0,200,240,0.03)', 'rgba(0,200,240,0.06)'] } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: tk.axisLabel, fontSize: 10,
+        rotate: data.labels.length > 12 ? 40 : 0,
+        interval: data.labels.length > 20 ? 1 : 0,
+      },
     },
     yAxis: {
-      type: 'category', data: yLabels, splitArea: { show: true, areaStyle: { color: ['transparent','transparent'] } },
-      axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { color: tk.textTertiary, fontSize: 11 },
+      type: 'category',
+      data: yLabels,
+      splitArea: { show: true, areaStyle: { color: ['rgba(0,200,240,0.03)', 'rgba(0,200,240,0.06)'] } },
+      axisLine: { lineStyle: { color: tk.axisLine } },
+      axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 10 },
     },
     visualMap: {
-      min: 0, max: maxVal, show: false,
-      inRange: { color: [tk.border, bot, top] },
+      min: 0,
+      max: maxVal,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 2,
+      itemHeight: 100,
+      itemWidth: 14,
+      inRange: { color: ['#060a10', '#001a4a', '#0047BA', '#1a7fff', '#7ee8fa'] },
+      textStyle: { color: tk.axisLabel, fontSize: 10 },
+      borderColor: tk.axisLine,
+      borderWidth: 1,
     },
     series: [{
+      name: title ?? 'Heatmap',
       type: 'heatmap' as const,
       data: heatData,
-      itemStyle: { borderRadius: 3, borderColor: tk.bg, borderWidth: 2 },
-      emphasis: { itemStyle: { opacity: 0.85 } },
+      label: {
+        show: yLabels.length <= 10,
+        fontSize: 11,
+        fontWeight: 700,
+        formatter: ((p: unknown) => {
+          const v = (p as { value: [number, number, number] }).value[2];
+          return v === 0 ? '' : String(v);
+        }) as never,
+        color: '#ffffff',
+      },
+      itemStyle: {
+        borderColor: 'rgba(15,23,42,0.6)',
+        borderWidth: 1,
+        borderRadius: 6,
+      },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 12,
+          shadowColor: 'rgba(59,130,246,0.7)',
+          borderColor: '#60a5fa',
+          borderWidth: 2,
+        },
+      },
     }],
+    animationDuration: 800,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Candlestick + MA ─────────────────────────────────────
+
+function calculateMA(dayCount: number, ohlc: [number, number, number, number][]): (number | '-')[] {
+  return ohlc.map((_, i) => {
+    if (i < dayCount) return '-';
+    const sum = ohlc.slice(i - dayCount, i).reduce((acc, d) => acc + d[1], 0);
+    return sum / dayCount;
+  });
+}
+
+function candlestickMAOption(rawData: CandlestickMAData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const { dates, ohlc } = rawData;
+  const [p0, p1, p2, p3] = palette;
+  const bullColor = '#0CF49B';
+  const bearColor = '#FD1050';
+
+  return {
+    backgroundColor: 'transparent',
+    legend: {
+      data: ['K', 'MA5', 'MA10', 'MA20', 'MA30'],
+      top: 8,
+      inactiveColor: tk.textTertiary,
+      textStyle: { color: tk.textTertiary, fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        animation: false,
+        type: 'cross',
+        lineStyle: { color: p0[0], width: 1.5, opacity: 0.8 },
+      },
+      backgroundColor: tk.tooltipBg,
+      borderColor: tk.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    grid: { left: 16, right: 16, bottom: 80, top: title ? 56 : 40, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: tk.axisLine } },
+      axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, fontFamily: 'inherit' },
+    },
+    yAxis: {
+      scale: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 10, fontFamily: 'inherit' },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+    },
+    dataZoom: [
+      {
+        type: 'slider',
+        bottom: 8,
+        height: 28,
+        textStyle: { color: tk.textTertiary, fontSize: 10 },
+        dataBackground: {
+          areaStyle: { color: tk.border },
+          lineStyle: { opacity: 0.6, color: tk.border },
+        },
+        selectedDataBackground: {
+          areaStyle: { color: p0[0] + '44' },
+          lineStyle: { color: p0[0] },
+        },
+        fillerColor: p0[0] + '18',
+        borderColor: tk.border,
+        handleStyle: { color: p0[0], borderColor: p0[0] },
+        brushSelect: true,
+        start: 60,
+        end: 100,
+      },
+      { type: 'inside' },
+    ],
+    series: [
+      {
+        name: 'K',
+        type: 'candlestick',
+        data: ohlc,
+        itemStyle: {
+          color: bullColor,
+          color0: bearColor,
+          borderColor: bullColor,
+          borderColor0: bearColor,
+        },
+      },
+      {
+        name: 'MA5',
+        type: 'line',
+        data: calculateMA(5, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p0[0] },
+        itemStyle: { color: p0[0] },
+      },
+      {
+        name: 'MA10',
+        type: 'line',
+        data: calculateMA(10, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p1[0] },
+        itemStyle: { color: p1[0] },
+      },
+      {
+        name: 'MA20',
+        type: 'line',
+        data: calculateMA(20, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p2[0] },
+        itemStyle: { color: p2[0] },
+      },
+      {
+        name: 'MA30',
+        type: 'line',
+        data: calculateMA(30, ohlc),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: p3[0] },
+        itemStyle: { color: p3[0] },
+      },
+    ],
     animationDuration: 800,
     animationEasing: 'cubicOut' as const,
   };
@@ -521,22 +767,30 @@ function heatmapOption(rawData: AuroraChartData, title: string | undefined, pale
 function treemapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
+  const money = looksLikeMoney(data);
+  const fmt = (v: number) => money ? fmtMXN(v) : v.toLocaleString('es-MX');
   return {
     backgroundColor: 'transparent',
     tooltip: {
-      formatter: '{b}: {c}',
-      backgroundColor: tk.surface, borderColor: tk.border, borderWidth: 1,
+      formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number };
+        return `${d.name}: <b>${fmt(d.value)}</b>`;
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(8px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 8, right: 8,
+      top: title ? 40 : 8, bottom: 8, left: 8, right: 16,
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
-      label: { show: true, formatter: '{b}\n{c}', color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 2, borderColor: tk.bg, gapWidth: 3 },
+      label: { show: true, formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number };
+        return `${d.name}\n${fmt(d.value)}`;
+      }) as never, color: '#fff', fontSize: 11, fontWeight: 600 },
+      itemStyle: { borderWidth: 1, borderColor: tk.border, gapWidth: 2 },
       emphasis: { itemStyle: { opacity: 0.85 } },
       data: data.labels.map((name, i) => ({
         name,
@@ -551,10 +805,528 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
   };
 }
 
+// ─── Sankey ───────────────────────────────────────────────
+// data: { nodes: [{name}], links: [{source, target, value}] }
+
+function sankeyOption(rawData: SankeyData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const d = p as { data: { source?: string; target?: string; value?: number; name?: string } };
+        if (d.data.source) return `${d.data.source} → ${d.data.target}: <b>${d.data.value?.toLocaleString('es-MX')}</b>`;
+        return d.data.name ?? '';
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    series: [{
+      type: 'sankey' as const,
+      top: title ? 40 : 16, bottom: 16, left: 16, right: 16,
+      nodeWidth: 18,
+      nodeGap: 12,
+      orient: 'horizontal',
+      draggable: false,
+      label: { color: tk.text, fontSize: 11, fontFamily: 'inherit' },
+      lineStyle: { color: 'gradient', opacity: 0.4, curveness: 0.5 },
+      itemStyle: { borderWidth: 0 },
+      emphasis: { focus: 'adjacency', lineStyle: { opacity: 0.7 } },
+      data: rawData.nodes.map((n, i) => ({
+        name: n.name,
+        itemStyle: { color: palette[i % palette.length][0] },
+      })),
+      links: rawData.links,
+    }],
+    animationDuration: 1000,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Calendar Heatmap ──────────────────────────────────────
+// data.labels = ['YYYY-MM-DD', ...], data.datasets[0].data = [value, ...]
+
+function calendarHeatmapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  const pairs = data.labels.map((d, i) => [d, data.datasets[0]?.data[i] ?? 0]);
+  const allVals = data.datasets[0]?.data ?? [];
+  const maxVal = Math.max(...allVals, 1);
+  const years = [...new Set(data.labels.map(d => d.slice(0, 4)))];
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: ((p: unknown) => {
+        const v = (p as { value: [string, number] }).value;
+        return `${v[0]}: <b>${Number(v[1]).toLocaleString('es-MX')}</b>`;
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    visualMap: {
+      min: 0, max: maxVal,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 4,
+      inRange: { color: ['#001a4a', '#0047BA', '#1a7fff', '#00c8f0', '#00d97e'] },
+      textStyle: { color: tk.axisLabel, fontSize: 10 },
+    },
+    calendar: years.map((year, i) => ({
+      top: title ? 56 + i * 140 : 32 + i * 140,
+      left: 48,
+      right: 16,
+      cellSize: ['auto', 16],
+      range: year,
+      itemStyle: { borderWidth: 2, borderColor: tk.bg },
+      yearLabel: { color: tk.axisLabel, fontSize: 11 },
+      monthLabel: { color: tk.axisLabel, fontSize: 10 },
+      dayLabel: { color: tk.textTertiary, fontSize: 9, firstDay: 1 },
+      splitLine: { lineStyle: { color: tk.splitLine } },
+    })),
+    series: years.map((year, i) => ({
+      type: 'heatmap' as const,
+      coordinateSystem: 'calendar',
+      calendarIndex: i,
+      data: pairs.filter(([d]) => String(d).startsWith(year)),
+    })),
+    animationDuration: 800,
+  };
+}
+
+// ─── Sunburst ──────────────────────────────────────────────
+// data: { labels: ['root/child/grandchild', ...], datasets[0].data: [value, ...] }
+// OR hierarchical: data.datasets[0] has nested structure via labels as paths
+// Simplified: labels = ['Cat/Prod', ...], values = counts
+
+function sunburstOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // Build tree from path-style labels (e.g. 'Motos/BAJAJ PULSAR')
+  const root: Record<string, { value: number; children: Record<string, number> }> = {};
+  data.labels.forEach((label, i) => {
+    const parts = String(label).split('/');
+    const parent = parts[0];
+    const child = parts[1] ?? parts[0];
+    if (!root[parent]) root[parent] = { value: 0, children: {} };
+    root[parent].value += data.datasets[0]?.data[i] ?? 0;
+    if (parts.length > 1) {
+      root[parent].children[child] = (root[parent].children[child] ?? 0) + (data.datasets[0]?.data[i] ?? 0);
+    }
+  });
+  const treeData = Object.entries(root).map(([name, node], i) => ({
+    name,
+    value: node.value,
+    itemStyle: { color: palette[i % palette.length][0] },
+    children: Object.entries(node.children).map(([cname, cval], j) => ({
+      name: cname,
+      value: cval,
+      itemStyle: { color: palette[i % palette.length][0] + (j % 2 === 0 ? 'cc' : '88') },
+    })),
+  }));
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: '{b}: {c}',
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    series: [{
+      type: 'sunburst' as const,
+      center: ['50%', '50%'],
+      radius: [0, '88%'],
+      sort: 'desc',
+      nodeClick: false,
+      label: { rotate: 'radial', color: '#fff', fontSize: 10, minAngle: 8 },
+      itemStyle: { borderWidth: 1, borderColor: tk.bg },
+      emphasis: { focus: 'ancestor', itemStyle: { opacity: 0.85 } },
+      data: treeData,
+    }],
+    animationDuration: 900,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Boxplot ───────────────────────────────────────────────
+// data.labels = categories, data.datasets[0].data = raw values per category
+// OR data.datasets[i] = one box per category with [min, Q1, median, Q3, max]
+
+function boxplotOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // If each dataset is a category with 5 values [min,Q1,median,Q3,max]
+  const isPrecomputed = data.datasets.length > 1 && data.datasets[0].data.length === 5;
+  let boxData: number[][];
+  let categories: string[];
+  if (isPrecomputed) {
+    categories = data.datasets.map(ds => ds.label ?? '');
+    boxData = data.datasets.map(ds => ds.data);
+  } else {
+    // Single dataset: each label is a category, each value is a raw data point
+    // Group by label and compute box stats
+    const groups: Record<string, number[]> = {};
+    data.labels.forEach((l, i) => {
+      if (!groups[l]) groups[l] = [];
+      groups[l].push(data.datasets[0]?.data[i] ?? 0);
+    });
+    categories = Object.keys(groups);
+    boxData = categories.map(cat => {
+      const vals = groups[cat].sort((a, b) => a - b);
+      const q = (p: number) => vals[Math.floor(vals.length * p)] ?? 0;
+      return [vals[0], q(0.25), q(0.5), q(0.75), vals[vals.length - 1]];
+    });
+  }
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: ((p: unknown) => {
+        const d = p as { name: string; value: number[] };
+        return `<b>${d.name}</b><br/>Mín: ${d.value[1]?.toLocaleString('es-MX')}<br/>Q1: ${d.value[2]?.toLocaleString('es-MX')}<br/>Mediana: ${d.value[3]?.toLocaleString('es-MX')}<br/>Q3: ${d.value[4]?.toLocaleString('es-MX')}<br/>Máx: ${d.value[5]?.toLocaleString('es-MX')}`;
+      }) as never,
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    grid: { left: 16, right: 16, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: {
+      type: 'category', data: categories,
+      axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11, rotate: categories.length > 6 ? 30 : 0 },
+    },
+    yAxis: {
+      type: 'value', axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: tk.axisLabel, fontSize: 11 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+    },
+    series: [{
+      type: 'boxplot' as const,
+      data: boxData.map((d, i) => ({
+        value: d,
+        itemStyle: { color: palette[i % palette.length][0] + '44', borderColor: palette[i % palette.length][0], borderWidth: 2 },
+      })),
+      boxWidth: ['20%', '40%'],
+    }],
+    animationDuration: 800,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Bollinger Bands ──────────────────────────────────────
+// data: LegacyChartData with labels=dates, datasets[0].data=values
+// OR raw array: [{ date, value }]
+
+function bollingerOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  const dates = data.labels;
+  const values = data.datasets[0]?.data ?? [];
+  const N = 20;
+  const K = 2;
+
+  const mid: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / N;
+  });
+  const upper: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    const avg = slice.reduce((a, b) => a + b, 0) / N;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - avg) ** 2, 0) / N);
+    return avg + K * std;
+  });
+  const lower: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    const avg = slice.reduce((a, b) => a + b, 0) / N;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - avg) ** 2, 0) / N);
+    return avg - K * std;
+  });
+
+  const [p0, p1, p2] = palette;
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, rotate: dates.length > 12 ? 35 : 0, interval: Math.floor(dates.length / 10) } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: [
+      { name: 'Valor', type: 'line', data: values, smooth: true, showSymbol: false, lineStyle: { width: 2, color: p0[0] }, itemStyle: { color: p0[0] } },
+      { name: `MA${N}`, type: 'line', data: mid, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: p1[0], type: 'dashed' }, itemStyle: { color: p1[0] } },
+      { name: 'Banda Superior', type: 'line', data: upper, smooth: true, showSymbol: false, lineStyle: { width: 1, color: p2[0], opacity: 0.6 }, areaStyle: { color: p2[0] + '18' }, itemStyle: { color: p2[0] } },
+      { name: 'Banda Inferior', type: 'line', data: lower, smooth: true, showSymbol: false, lineStyle: { width: 1, color: p2[0], opacity: 0.6 }, areaStyle: { color: p2[0] + '18' }, itemStyle: { color: p2[0] } },
+    ],
+    animationDuration: 1000,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Stacked Area ──────────────────────────────────────────
+// data: LegacyChartData — multiple datasets, each is a series
+// OR orchestrator format: props.data = [{ label, serie1, serie2 }], props.keys = [...]
+
+function stackedAreaOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  // Handle orchestrator flat-object format: [{ label, key1, key2 }]
+  const keys = extraProps?.keys as string[] | undefined;
+  if (keys && Array.isArray(rawData)) {
+    const rows = rawData as unknown as Record<string, unknown>[];
+    const labels = rows.map(r => String(r.label ?? ''));
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+      legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+      grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+      xAxis: { type: 'category', data: labels, boundaryGap: false, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, rotate: labels.length > 10 ? 35 : 0 } },
+      yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+      series: keys.map((key, di) => {
+        const [top, bot] = palette[di % palette.length];
+        return {
+          name: key, type: 'line' as const, stack: 'total', smooth: true, showSymbol: false,
+          lineStyle: { width: 1.5, color: top },
+          itemStyle: { color: top },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: top + '88' }, { offset: 1, color: bot + '11' }] } },
+          data: rows.map(r => Number(r[key] ?? 0)),
+        };
+      }),
+      animationDuration: 1000, animationEasing: 'cubicOut' as const,
+    };
+  }
+  // Fallback: legacy format
+  const data = normalizeFlatData(rawData);
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: data.labels, boundaryGap: false, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: data.datasets.map((ds, di) => {
+      const [top, bot] = palette[di % palette.length];
+      return {
+        name: ds.label ?? '', type: 'line' as const, stack: 'total', smooth: true, showSymbol: false,
+        lineStyle: { width: 1.5, color: top }, itemStyle: { color: top },
+        areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: top + '88' }, { offset: 1, color: bot + '11' }] } },
+        data: ds.data,
+      };
+    }),
+    animationDuration: 1000, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Diverging Bar ─────────────────────────────────────────
+// props.data = [{ label, values: [{ key, value }] }], props.keys = [...ordered neg→pos]
+
+function divergingBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  const keys = (extraProps?.keys as string[]) ?? [];
+  const rows = (Array.isArray(rawData) ? rawData : []) as unknown as { label: string; values: { key: string; value: number }[] }[];
+  const labels = rows.map(r => r.label);
+
+  // Normalize each row to percentages
+  const normalized = rows.map(r => {
+    const total = r.values.reduce((s, v) => s + Math.abs(v.value), 0) || 1;
+    const map: Record<string, number> = {};
+    r.values.forEach(v => { map[v.key] = (v.value / total) * 100; });
+    return map;
+  });
+
+  const mid = Math.floor(keys.length / 2);
+  const negKeys = keys.slice(0, mid);
+  const posKeys = keys.slice(mid);
+  const DIVERG_COLORS = ['#f5455a', '#fbbf24', '#34d399', '#5bb8f5', '#a78bfa', '#22d3ee'];
+
+  const series = keys.map((key, ki) => {
+    const isNeg = negKeys.includes(key);
+    const color = DIVERG_COLORS[ki % DIVERG_COLORS.length];
+    return {
+      name: key, type: 'bar' as const, stack: isNeg ? 'neg' : 'pos',
+      data: normalized.map(row => isNeg ? -(row[key] ?? 0) : (row[key] ?? 0)),
+      itemStyle: { color, borderRadius: 2 },
+      label: { show: false },
+      emphasis: { itemStyle: { opacity: 0.85 } },
+    };
+  });
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' as const },
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      formatter: ((params: unknown) => {
+        const ps = params as { seriesName: string; value: number }[];
+        return ps.map(p => `${p.seriesName}: ${Math.abs(p.value).toFixed(1)}%`).join('<br/>');
+      }) as never,
+    },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, formatter: (v: number) => `${Math.abs(v).toFixed(0)}%` }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    yAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+    series,
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Radial Stacked Bar ────────────────────────────────────
+// props.data = [{ label, serie1, serie2 }], props.keys = [...]
+
+function radialStackedBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  const keys = (extraProps?.keys as string[]) ?? [];
+  const rows = (Array.isArray(rawData) ? rawData : []) as unknown as Record<string, unknown>[];
+  const labels = rows.map(r => String(r.label ?? ''));
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    polar: { radius: ['15%', '80%'] },
+    angleAxis: { type: 'category', data: labels, axisLabel: { color: tk.axisLabel, fontSize: 10 }, axisLine: { lineStyle: { color: tk.axisLine } } },
+    radiusAxis: { axisLabel: { color: tk.axisLabel, fontSize: 9 }, axisLine: { show: false }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: keys.map((key, ki) => {
+      const [top] = palette[ki % palette.length];
+      return {
+        name: key, type: 'bar' as const, coordinateSystem: 'polar', stack: 'total',
+        data: rows.map(r => Number(r[key] ?? 0)),
+        itemStyle: { color: top },
+        emphasis: { itemStyle: { opacity: 0.85 } },
+      };
+    }),
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Hierarchical Bar ──────────────────────────────────────
+// props.data = { name: 'Root', children: [{ name, value?, children?: [...] }] }
+
+function hierarchicalBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  type TreeNode = { name: string; value?: number; children?: TreeNode[] };
+  const tree = rawData as unknown as TreeNode;
+  const children = tree?.children ?? [];
+
+  // Flatten to 2 levels: parent bars + child bars grouped
+  const parentLabels = children.map(c => c.name);
+  const parentValues = children.map(c => c.value ?? (c.children?.reduce((s, cc) => s + (cc.value ?? 0), 0) ?? 0));
+
+  // Collect all unique child names
+  const childNames = [...new Set(children.flatMap(c => (c.children ?? []).map(cc => cc.name)))];
+
+  const series = [
+    {
+      name: 'Total', type: 'bar' as const,
+      data: parentValues.map((v, i) => ({ value: v, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [4, 4, 0, 0] } })),
+      barMaxWidth: 40, barCategoryGap: '30%',
+      label: { show: true, position: 'top' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v); }) as never },
+    },
+    ...childNames.slice(0, 4).map((cname, ci) => ({
+      name: cname, type: 'bar' as const,
+      data: children.map(parent => {
+        const child = parent.children?.find(cc => cc.name === cname);
+        return child?.value ?? 0;
+      }),
+      barMaxWidth: 20,
+      itemStyle: { color: palette[(ci + 2) % palette.length][0] + 'cc', borderRadius: [2, 2, 0, 0] },
+    })),
+  ];
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: childNames.length > 0 ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
+    grid: { left: 16, right: 16, bottom: childNames.length > 0 ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: parentLabels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11, rotate: parentLabels.length > 6 ? 30 : 0 } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series,
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Bar Race ──────────────────────────────────────────────
+// props.frames = [{ label, items: [{ name, value }] }], props.maxBars = 10
+
+function barRaceOption(extraProps: Record<string, unknown> | undefined, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  type Frame = { label: string; items: { name: string; value: number }[] };
+  const frames = (extraProps?.frames as Frame[]) ?? [];
+  const maxBars = (extraProps?.maxBars as number) ?? 10;
+
+  if (frames.length === 0) return barOption({ labels: [], datasets: [{ data: [] }] }, title, palette, tk);
+
+  // Show last frame as static bar (ECharts timeline for animation would need more setup)
+  // For now render the last frame as a sorted bar chart with a note
+  const lastFrame = frames[frames.length - 1];
+  const items = [...(lastFrame?.items ?? [])].sort((a, b) => b.value - a.value).slice(0, maxBars);
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    grid: { left: 16, right: 80, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    yAxis: { type: 'category', data: items.map(i => i.name).reverse(), axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+    series: [{
+      type: 'bar' as const,
+      data: items.map((item, i) => ({ value: item.value, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [0, 4, 4, 0] } })).reverse(),
+      barMaxWidth: 32,
+      label: { show: true, position: 'right' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : String(v); }) as never },
+    }],
+    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px Sora, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── ThemeRiver ────────────────────────────────────────────
+// data: { labels: ['YYYY-MM', ...], datasets: [{ label: 'serie', data: [v,...] }] }
+
+function themeRiverOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  // ThemeRiver expects: [[date, value, name], ...]
+  const riverData: [string, number, string][] = [];
+  data.datasets.forEach(ds => {
+    data.labels.forEach((label, i) => {
+      riverData.push([label, ds.data[i] ?? 0, ds.label ?? '']);
+    });
+  });
+  const seriesNames = data.datasets.map(ds => ds.label ?? '');
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: tk.axisLine } },
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 },
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+    },
+    legend: {
+      data: seriesNames,
+      bottom: 4,
+      textStyle: { color: tk.axisLabel, fontSize: 11 },
+      icon: 'roundRect',
+    },
+    singleAxis: {
+      top: title ? 56 : 32,
+      bottom: 40,
+      left: 16,
+      right: 16,
+      type: 'time',
+      axisLine: { lineStyle: { color: tk.axisLine } },
+      axisTick: { lineStyle: { color: tk.axisLine } },
+      axisLabel: { color: tk.axisLabel, fontSize: 10 },
+      splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } },
+    },
+    series: [{
+      type: 'themeRiver' as const,
+      emphasis: { focus: 'series' },
+      label: { show: false },
+      data: riverData,
+      color: palette.map(p => p[0]),
+    }],
+    animationDuration: 1000,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
 // ─── Main Component ─────────────────────────────────────────
 
 export default function AuroraChart({
-  type, data, flint, flintData, title, height = 300, gradient = 'aurora',
+  type, data, flint, flintData, title, height = 300, gradient = 'aurora', bare = false,
 }: AuroraChartProps) {
   const palette    = (PALETTES[gradient] ?? PALETTES.aurora) as [string, string][];
   const tk         = useThemeTokens();
@@ -599,25 +1371,39 @@ export default function AuroraChart({
   }, []);
 
   const getOption = (): EChartsOption => {
-    // Flint path: highest quality — semantic compiler
-    if (flint && flintData?.length) {
-      const flintOption = buildFlintOption(flint, flintData);
-      if (flintOption) return flintOption;
-    }
-    // Flat array / legacy path
+    // extraProps: for types that need keys/frames passed alongside data
+    const ep = data as unknown as Record<string, unknown>;
+    const extraProps: Record<string, unknown> = {
+      keys: ep?.keys,
+      frames: ep?.frames,
+      maxBars: ep?.maxBars,
+    };
     switch (type) {
-      case 'bar':      return barOption(data, title, palette, tk!);
-      case 'line':     return lineOption(data, title, palette, tk!, false);
-      case 'area':     return lineOption(data, title, palette, tk!, true);
-      case 'pie':      return pieOption(data, title, palette, tk!, false);
-      case 'doughnut': return pieOption(data, title, palette, tk!, true);
-      case 'scatter':  return scatterOption(data, title, palette, tk!);
-      case 'radar':    return radarOption(data, title, palette, tk!);
-      case 'funnel':   return funnelOption(data, title, palette, tk!);
-      case 'gauge':    return gaugeOption(data, title, palette, tk!);
-      case 'heatmap':  return heatmapOption(data, title, palette, tk!);
-      case 'treemap':  return treemapOption(data, title, palette, tk!);
-      default:         return barOption(data, title, palette, tk!);
+      case 'bar':               return barOption(data as AuroraChartData, title, palette, tk!);
+      case 'line':              return lineOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'area':              return lineOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'pie':               return pieOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'doughnut':          return pieOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'scatter':           return scatterOption(data as AuroraChartData, title, palette, tk!);
+      case 'radar':             return radarOption(data as AuroraChartData, title, palette, tk!);
+      case 'funnel':            return funnelOption(data as AuroraChartData, title, palette, tk!);
+      case 'gauge':             return gaugeOption(data as AuroraChartData, title, palette, tk!);
+      case 'heatmap':           return heatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'treemap':           return treemapOption(data as AuroraChartData, title, palette, tk!);
+      case 'candlestick':
+      case 'candlestick-ma':    return candlestickMAOption(data as CandlestickMAData, title, palette, tk!);
+      case 'bollinger':         return bollingerOption(data as AuroraChartData, title, palette, tk!);
+      case 'stacked-area':      return stackedAreaOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'diverging-bar':     return divergingBarOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'radial-stacked-bar':return radialStackedBarOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'hierarchical-bar':  return hierarchicalBarOption(data as AuroraChartData, title, palette, tk!);
+      case 'bar-race':          return barRaceOption(extraProps, title, palette, tk!);
+      case 'sankey':            return sankeyOption(data as SankeyData, title, palette, tk!);
+      case 'calendar-heatmap':  return calendarHeatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'sunburst':          return sunburstOption(data as AuroraChartData, title, palette, tk!);
+      case 'boxplot':           return boxplotOption(data as AuroraChartData, title, palette, tk!);
+      case 'theme-river':       return themeRiverOption(data as AuroraChartData, title, palette, tk!);
+      default:                  return barOption(data as AuroraChartData, title, palette, tk!);
     }
   };
 
@@ -626,7 +1412,7 @@ export default function AuroraChart({
       ref={wrapperRef}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
-      style={{
+      style={bare ? { width: '100%', height: '100%' } : {
         background: `var(--surface)`,
         backdropFilter: 'var(--surface-blur)',
         WebkitBackdropFilter: 'var(--surface-blur)',
@@ -638,7 +1424,18 @@ export default function AuroraChart({
         willChange: 'transform',
       }}
     >
-      {title && (
+      {!bare && title && (
+        <div ref={titleRef} style={{
+          padding: '0.9rem 1.1rem 0',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          color: 'var(--text)',
+          letterSpacing: '-0.01em',
+        }}>
+          {title}
+        </div>
+      )}
+      {bare && title && (
         <div ref={titleRef} style={{
           padding: '0.9rem 1.1rem 0',
           fontSize: '0.82rem',
@@ -653,7 +1450,7 @@ export default function AuroraChart({
         <ReactECharts
           key={`${type}-${gradient}-${tk.bg}`}
           option={getOption()}
-          style={{ height, width: '100%' }}
+          style={{ height: bare ? '100%' : height, width: '100%' }}
           opts={{ renderer: 'canvas' }}
           notMerge
         />

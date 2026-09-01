@@ -69,13 +69,13 @@ export default function GlassPanel({
         background: 'var(--surface)',
         backdropFilter: 'var(--surface-blur)',
         WebkitBackdropFilter: 'var(--surface-blur)',
-        border: `1px solid var(--border-color)`,
+        outline: '1px solid var(--border-color)',
+        outlineOffset: '-1px',
         borderRadius: 'var(--radius)',
         boxShadow: glowIntensity > 0
           ? `var(--shadow), 0 0 ${12 + glowIntensity * 20}px rgba(73, 164, 216, ${glowIntensity * 0.15})`
           : 'var(--shadow)',
-        transition: 'box-shadow 0.4s ease, border-color 0.3s ease',
-        borderColor: glowIntensity > 0.2 ? 'var(--primary)' : undefined,
+        transition: 'box-shadow 0.4s ease',
         willChange: 'transform',
         ...style,
       }}

@@ -295,7 +295,7 @@ function StatCard({ props }: { props: Record<string, unknown> }) {
       </div>
       {/* Label below card */}
       <div style={{ textAlign: 'center', width: '100%' }}>
-        <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#ffffff', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}
         </p>
         <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px', marginTop: '0.1rem' }}>

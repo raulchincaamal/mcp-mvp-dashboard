@@ -106,31 +106,14 @@ export class McpClient {
 }
 
 /**
- * Creates and connects all MCP clients (gcp-mock, ui, library-context).
- * Server paths are relative to this file's location in dist/.
+ * Creates and connects the MCP GCP client.
+ * Server path is relative to this file's location in dist/.
  */
 export async function createMcpClients() {
   const gcpClient = new McpClient('mcp-gcp-mock');
-  const uiClient = new McpClient('mcp-ui');
-  const libraryContextClient = new McpClient('library-context');
 
-  // Paths relative from dist/ to sibling package dist/index.js
   const gcpServerPath = resolve(__dirname, '../../mcp-gcp-mock/dist/index.js');
-  const uiServerPath = resolve(__dirname, '../../mcp-ui/dist/index.js');
-
   await gcpClient.connect(gcpServerPath);
-  await uiClient.connect(uiServerPath);
 
-  // library-context runs from its installed dist/index.js in node_modules
-  const projectRoot = resolve(__dirname, '../../../');
-  const libraryContextPath = resolve(
-    projectRoot,
-    'node_modules/@macropaytd/lib-front-mcp-library-context/dist/index.js',
-  );
-  await libraryContextClient.connectCommand('node', [libraryContextPath], {
-    MCP_PROJECT_ROOT: projectRoot,
-  });
-
-  return { gcpClient, uiClient, libraryContextClient };
+  return { gcpClient };
 }
-

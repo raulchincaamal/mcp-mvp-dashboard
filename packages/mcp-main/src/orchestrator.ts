@@ -263,12 +263,49 @@ export async function orchestrate(
     let finalDateRange = filters.fecha_venta as { gte?: string; lte?: string } | undefined;
 
     // If no explicit date range was applied, compute it from the actual records
+    // For temporal groupBy (weekly/monthly), compute range from the LAST N periods shown
     if (!finalDateRange && finalRecords.length > 0) {
       const dates = finalRecords
         .map(r => String(r.fecha_venta ?? '')).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
       if (dates.length > 0) {
-        finalDateRange = { gte: dates[0].slice(0, 10), lte: dates[dates.length - 1].slice(0, 10) };
-        console.log(`[orchestrator] computed date range from records: ${JSON.stringify(finalDateRange)}`);
+        if (parsedIntent.groupBy === 'fecha_venta') {
+          // Show range of the last N periods, not the full dataset range
+          const gran = (parsedIntent as Record<string, unknown>).granularity as string | null;
+          const maxPeriods = gran === 'week' ? 12 : gran === 'year' ? 10 : 36;
+          // Compute period keys and find the cutoff date
+          const periodKeys = new Set<string>();
+          for (const d of [...dates].reverse()) {
+            const dt = new Date(d);
+            let key: string;
+            if (gran === 'year') key = `${dt.getFullYear()}`;
+            else if (gran === 'week') {
+              const jan4 = new Date(dt.getFullYear(), 0, 4);
+              const wn = Math.ceil(((dt.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7);
+              key = `${dt.getFullYear()}-S${String(wn).padStart(2, '0')}`;
+            } else key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            periodKeys.add(key);
+            if (periodKeys.size >= maxPeriods) break;
+          }
+          // Find the earliest date that belongs to the last N periods
+          const cutoffDates = dates.filter(d => {
+            const dt = new Date(d);
+            let key: string;
+            if (gran === 'year') key = `${dt.getFullYear()}`;
+            else if (gran === 'week') {
+              const jan4 = new Date(dt.getFullYear(), 0, 4);
+              const wn = Math.ceil(((dt.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7);
+              key = `${dt.getFullYear()}-S${String(wn).padStart(2, '0')}`;
+            } else key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            return periodKeys.has(key);
+          });
+          if (cutoffDates.length > 0) {
+            finalDateRange = { gte: cutoffDates[0].slice(0, 10), lte: dates[dates.length - 1].slice(0, 10) };
+            console.log(`[orchestrator] temporal groupBy date range (last ${maxPeriods} periods): ${JSON.stringify(finalDateRange)}`);
+          }
+        } else {
+          finalDateRange = { gte: dates[0].slice(0, 10), lte: dates[dates.length - 1].slice(0, 10) };
+          console.log(`[orchestrator] computed date range from records: ${JSON.stringify(finalDateRange)}`);
+        }
       }
     }
     if (finalRecords.length === 0 && isLastDayIntent) {
@@ -1541,13 +1578,17 @@ function computeAggregations(
     );
     const maxSlice = granularity === 'week' ? 12 : granularity === 'year' ? 10 : 36;
     const effectiveMetricField = parsedIntent.metricField ?? (numericFields.includes('monto_total_credito') ? 'monto_total_credito' : null);
+    // For temporal groupBy: take the LAST N periods (most recent), not the first
+    const slicedGroups = isDateField
+      ? sortedGroups.slice(-maxSlice)
+      : sortedGroups.slice(0, maxSlice);
     agg.groupBy = {
       field,
       granularity: granularity ?? (isDateField ? 'month' : 'value'),
       metric: parsedIntent.metric,
       metricField: effectiveMetricField,
       uniqueGroups: sortedGroups.length,
-      data: sortedGroups.slice(0, maxSlice).map(([label, value]) => ({ label, value: Math.round(value) })),
+      data: slicedGroups.map(([label, value]) => ({ label, value: Math.round(value) })),
     };
   }
 

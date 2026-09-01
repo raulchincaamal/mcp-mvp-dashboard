@@ -772,21 +772,38 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, _pal
   const money = looksLikeMoney(data);
   const fmt = (v: number) => money ? fmtMXN(v) : v.toLocaleString('es-MX');
 
-  // Paleta tricromática fija: 3 colores base del sistema aurora
-  const TRI: [string, string][] = [
-    ['#00c8f0', '#005a70'],  // cian
-    ['#00d97e', '#005a35'],  // verde
-    ['#f5a623', '#7a4e00'],  // ámbar
-  ];
+  // Espectro azul: cian → azul eléctrico → azul → índigo → violeta
+  // 5 anclas de color para interpolación continua por rank
+  const BLUE_SPECTRUM = ['#00c8f0', '#1a8fff', '#3d5eff', '#0ea88a', '#00d97e'];
 
-  // Ordenar por valor desc para asignar color por rango (top → cian, mid → verde, low → ámbar)
-  const sorted = [...data.labels.map((name, i) => ({ name, value: ds.data[i] ?? 0, origIdx: i }))]
+  function lerpHex(a: string, b: string, t: number): string {
+    const p = (s: string, o: number) => parseInt(s.slice(o, o + 2), 16);
+    const [ar, ag, ab] = [p(a,1), p(a,3), p(a,5)];
+    const [br, bg, bb] = [p(b,1), p(b,3), p(b,5)];
+    const ch = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, '0');
+    return `#${ch(ar,br)}${ch(ag,bg)}${ch(ab,bb)}`;
+  }
+
+  // Interpola a lo largo del espectro de 5 anclas según t ∈ [0,1]
+  function spectrumColor(t: number): string {
+    const segments = BLUE_SPECTRUM.length - 1;
+    const scaled = t * segments;
+    const i = Math.min(Math.floor(scaled), segments - 1);
+    return lerpHex(BLUE_SPECTRUM[i], BLUE_SPECTRUM[i + 1], scaled - i);
+  }
+
+  // Ordenar por valor desc → t=0 (cian brillante) para el mayor, t=1 (violeta) para el menor
+  const sorted = [...data.labels.map((name, i) => ({ name, value: ds.data[i] ?? 0 }))]
     .sort((a, b) => b.value - a.value);
   const n = sorted.length;
+
   const colorMap: Record<string, [string, string]> = {};
   sorted.forEach((item, rank) => {
-    const tier = rank < Math.ceil(n / 3) ? 0 : rank < Math.ceil((2 * n) / 3) ? 1 : 2;
-    colorMap[item.name] = TRI[tier];
+    const t = n > 1 ? rank / (n - 1) : 0;
+    const top = spectrumColor(t);
+    // bot: mismo color pero desplazado +0.15 en el espectro (más oscuro/profundo)
+    const bot = spectrumColor(Math.min(1, t + 0.18));
+    colorMap[item.name] = [top, bot];
   });
 
   return {
@@ -830,11 +847,11 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, _pal
         itemStyle: { opacity: 0.88, borderColor: 'rgba(255,255,255,0.25)', borderWidth: 2 },
         label: { show: true },
       },
-      data: data.labels.map((name) => {
-        const [top, bot] = colorMap[name] ?? TRI[2];
+      data: data.labels.map((name, i) => {
+        const [top, bot] = colorMap[name] ?? ['#00e5ff', '#0047ff'];
         return {
           name,
-          value: ds.data[data.labels.indexOf(name)],
+          value: ds.data[i],
           itemStyle: { color: vGrad(top, bot) },
         };
       }),

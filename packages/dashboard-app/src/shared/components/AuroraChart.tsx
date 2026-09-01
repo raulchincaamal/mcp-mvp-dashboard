@@ -802,7 +802,9 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, _pal
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 8, right: 8,
+      top: title ? 40 : 8, bottom: 8, left: 0, right: 0,
+      width: '100%',
+      height: title ? 'calc(100% - 48px)' : '100%',
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
@@ -1369,10 +1371,22 @@ export default function AuroraChart({
   const tk         = useThemeTokens();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const titleRef   = useRef<HTMLDivElement>(null);
+  const echartsRef = useRef<ReactECharts>(null);
 
   // quickTo refs for smooth tilt with inertia
   const rotY = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
   const rotX = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
+
+  // ResizeObserver: force ECharts resize when container dimensions change
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      echartsRef.current?.getEchartsInstance()?.resize();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -1485,6 +1499,7 @@ export default function AuroraChart({
       )}
       {tk && (
         <ReactECharts
+          ref={echartsRef}
           key={`${type}-${gradient}-${tk.bg}`}
           option={getOption()}
           style={{ height: bare ? '100%' : height, width: '100%' }}

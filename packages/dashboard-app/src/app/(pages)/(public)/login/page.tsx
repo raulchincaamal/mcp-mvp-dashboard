@@ -15,8 +15,8 @@ export default function LoginPage() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden">
-      {/* Fondo degradado azul oscuro */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_70%,#0a2a5e_0%,#05152e_45%,#020a18_100%)]" />
+      {/* Loading intro — fondo sólido */}
+      <div className="absolute inset-0 bg-[#060A13]" />
 
       {/* Textura de puntos sutil */}
       <div
@@ -37,9 +37,11 @@ export default function LoginPage() {
             alt="Macropay"
             width={315}
             height={473}
-            dotSpacing={7}
+            dotSpacing={5.5}
             dotColor="#ffffff"
             animate
+            mask="circle"
+            maskScale={1.3}
             className="drop-shadow-[0_0_40px_rgba(60,110,220,0.25)]"
           />
 

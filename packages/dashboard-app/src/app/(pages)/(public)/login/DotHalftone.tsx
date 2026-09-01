@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
+type MaskShape = 'none' | 'circle' | 'ellipse' | 'rounded';
+
 interface DotHalftoneProps {
   src: string;
   alt?: string;
@@ -14,6 +16,24 @@ interface DotHalftoneProps {
   dotColor?: string;
   /** Si es true, los puntos "respiran" (oscilan de tamaño). */
   animate?: boolean;
+  /**
+   * Máscara de recorte que limita dónde se ven los puntos:
+   * - 'none': sin recorte (solo la silueta de la imagen)
+   * - 'circle' | 'ellipse': recorta a un círculo/elipse centrado
+   * - 'rounded': recorta a un rectángulo con esquinas redondeadas
+   */
+  mask?: MaskShape;
+  /** Radio de las esquinas para mask='rounded' (en px). */
+  maskRadius?: number;
+  /**
+   * Escala del círculo para mask='circle'. 1 = radio por defecto (mitad del lado menor).
+   * Valores > 1 lo hacen más grande, < 1 más pequeño.
+   */
+  maskScale?: number;
+  /** Centro horizontal del círculo como fracción del ancho (0-1). Default 0.5 (centro). */
+  maskCenterX?: number;
+  /** Centro vertical del círculo como fracción del alto (0-1). Default 0.5 (centro). */
+  maskCenterY?: number;
 }
 
 interface Dot {
@@ -27,8 +47,10 @@ interface Dot {
  * Efecto "Dot halftone": convierte una imagen en una malla de puntos circulares
  * cuyo tamaño depende del brillo del píxel. Pensado para imágenes con fondo
  * removido (PNG transparente) sobre un fondo oscuro.
+ *
+ * Admite una máscara de recorte opcional para limitar el área visible.
  */
-export default function DotHalftone({
+const DotHalftone = ({
   src,
   alt = 'Dot halftone',
   width = 390,
@@ -37,7 +59,12 @@ export default function DotHalftone({
   dotSpacing = 7,
   dotColor = '#ffffff',
   animate = true,
-}: DotHalftoneProps) {
+  mask = 'none',
+  maskRadius = 24,
+  maskScale = 1,
+  maskCenterX = 0.5,
+  maskCenterY = 0.5,
+}: DotHalftoneProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -61,11 +88,37 @@ export default function DotHalftone({
     let rafId = 0;
     let startTime = 0;
 
+    // Define la ruta de recorte según la máscara elegida.
+    const applyMask = () => {
+      if (mask === 'none') return;
+
+      ctx.beginPath();
+      if (mask === 'circle') {
+        const radius = (Math.min(w, h) / 2) * maskScale;
+        ctx.arc(w * maskCenterX, h * maskCenterY, radius, 0, Math.PI * 2);
+      } else if (mask === 'ellipse') {
+        ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      } else if (mask === 'rounded') {
+        const r = maskRadius * dpr;
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.arcTo(w, 0, w, r, r);
+        ctx.lineTo(w, h - r);
+        ctx.arcTo(w, h, w - r, h, r);
+        ctx.lineTo(r, h);
+        ctx.arcTo(0, h, 0, h - r, r);
+        ctx.lineTo(0, r);
+        ctx.arcTo(0, 0, r, 0, r);
+      }
+      ctx.closePath();
+      ctx.clip();
+    };
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = src;
 
-    img.onerror = () => {
+    const handleError = () => {
       console.error(
         `[DotHalftone] No se pudo cargar la imagen: "${src}". ` +
           `Verifica que exista en public${src}`,
@@ -80,7 +133,7 @@ export default function DotHalftone({
       ctx.fillText('Falta public' + src, w / 2, h / 2);
     };
 
-    img.onload = () => {
+    const handleLoad = () => {
       // Dibujar la imagen escalada (contain) y leer píxeles
       const scale = Math.min(w / img.width, h / img.height);
       const drawW = img.width * scale;
@@ -127,8 +180,12 @@ export default function DotHalftone({
 
     const render = () => {
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = dotColor;
 
+      // Guardar estado, aplicar máscara y dibujar dentro de ella
+      ctx.save();
+      applyMask();
+
+      ctx.fillStyle = dotColor;
       const t = (performance.now() - startTime) / 1000;
       const omega = (Math.PI * 2) / 2.6; // periodo de respiración ~2.6s
 
@@ -146,18 +203,39 @@ export default function DotHalftone({
         ctx.fill();
       }
 
+      ctx.restore();
+
       if (animate) {
         rafId = requestAnimationFrame(render);
       }
     };
 
+    img.addEventListener('error', handleError);
+    img.addEventListener('load', handleLoad);
+
     return () => {
       cancelAnimationFrame(rafId);
+      img.removeEventListener('error', handleError);
+      img.removeEventListener('load', handleLoad);
     };
-  }, [src, width, height, dotSpacing, dotColor, animate]);
+  }, [
+    src,
+    width,
+    height,
+    dotSpacing,
+    dotColor,
+    animate,
+    mask,
+    maskRadius,
+    maskScale,
+    maskCenterX,
+    maskCenterY,
+  ]);
 
   return (
     <canvas ref={canvasRef} aria-label={alt} role="img" className={className} />
   );
-}
+};
+
+export default DotHalftone;
 

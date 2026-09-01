@@ -760,7 +760,7 @@ function InsightContent({
 								</p>
 							)}
 						</div>
-						{insight.metric && (
+						{insight.metric && !isStatCard && (
 							<div style={{ textAlign: "right", flexShrink: 0 }}>
 								<p
 									style={{
@@ -1101,11 +1101,19 @@ function renderChart(
 					: auroraData
 			: auroraData;
 
+	// For specialized chart types, use raw data (_rows) if available
+	const SPECIALIZED_TYPES = ['diverging-bar','stacked-area','radial-stacked-bar','hierarchical-bar','bar-race','bollinger','sankey','calendar-heatmap','sunburst','boxplot','theme-river'];
+	const isSpecialized = SPECIALIZED_TYPES.includes(chartType);
+	const rawRows = opts._rows as unknown[] | undefined;
+
 	if (displayData)
 		return (
 			<AuroraChart
 				type={chartType as never}
-				data={displayData}
+				data={(isSpecialized && rawRows
+					? Object.assign([...rawRows], { keys: opts.keys, frames: opts.frames, maxBars: opts.maxBars })
+					: { ...displayData, keys: opts.keys, frames: opts.frames, maxBars: opts.maxBars }
+				) as never}
 				gradient="aurora"
 				height={bare ? "100%" : height}
 				bare={bare}
@@ -1208,7 +1216,7 @@ function AutoHeightChart({
 }) {
 	const h = height ?? getChartMinH(insight);
 	return (
-		<div style={{ width: "100%", height: h }}>
+		<div style={{ width: "100%", height: h, overflow: "hidden" }}>
 			{renderChart(insight, h, true, preview)}
 		</div>
 	);
@@ -1426,7 +1434,8 @@ function ChartCard({
 	preview?: boolean;
 }) {
 	const canonicalH = getChartMinH(ins);
-	const outerH = (style?.height as number | undefined) ?? canonicalH + 36;
+	const rawH = (style?.height as number | undefined) ?? canonicalH + 36;
+	const outerH = Math.max(rawH, canonicalH + 36);
 	const chartType =
 		((ins.chartOptions as Record<string, unknown>)?._auroraType as string) ??
 		"bar";
@@ -1851,22 +1860,29 @@ function ProceduralLayout({
 	// We simulate row placement using a column cursor (same logic as requiredH above)
 	const rowHeights = React.useMemo(() => {
 		const colCursor = new Array(COLS).fill(0);
-		const rowMap = new Map<number, number>(); // rowStart → maxMinH
+		const rowMap = new Map<number, number>(); // rowStart → maxMinH (charts/lists only)
 		gridSpec.cells.forEach((cell) => {
 			if (cell.insightId === "__header__") return;
+			const ins = byId[cell.insightId];
+			const isKpi = ins && !ins.chartOptions && !ins.listItems && ins.chartType !== "text";
+			const canonicalH = ins && !isKpi ? getChartMinH(ins) + 36 : 0;
+			const effectiveH = Math.max(cell.minH, canonicalH);
 			const startCol = colCursor.indexOf(
 				Math.min(...colCursor.slice(0, COLS - cell.colSpan + 1)),
 			);
 			const rowStart = Math.max(
 				...colCursor.slice(startCol, startCol + cell.colSpan),
 			);
-			rowMap.set(rowStart, Math.max(rowMap.get(rowStart) ?? 0, cell.minH));
-			const rowEnd = rowStart + cell.minH + GAP;
+			// KPIs don't inflate chart row heights — only charts/lists set the row height
+			if (!isKpi) {
+				rowMap.set(rowStart, Math.max(rowMap.get(rowStart) ?? 0, effectiveH));
+			}
+			const rowEnd = rowStart + effectiveH + GAP;
 			for (let c = startCol; c < startCol + cell.colSpan; c++)
 				colCursor[c] = rowEnd;
 		});
 		return rowMap;
-	}, [gridSpec, COLS]);
+	}, [gridSpec, COLS, byId]);
 
 	// Map each cell to its rowStart so we can look up the row's max height
 	const cellRowStart = React.useMemo(() => {
@@ -2633,6 +2649,61 @@ function MinimalLayout({
 	);
 }
 
+// ─── KPI visual chart builder ───────────────────────────────────────────────
+function buildKpiGaugeOption(
+	metric: string,
+	title: string,
+	accent: string,
+): Record<string, unknown> | null {
+	if (!metric.includes('%')) return null;
+	const num = parseFloat(metric.replace(/[^0-9.]/g, ''));
+	if (isNaN(num)) return null;
+	const pct = Math.min(100, Math.max(0, num));
+	return {
+		backgroundColor: 'transparent',
+		series: [{
+			type: 'gauge',
+			startAngle: 220,
+			endAngle: -40,
+			min: 0,
+			max: 100,
+			animation: true,
+			animationDuration: 1200,
+			animationEasing: 'cubicOut',
+			axisLine: {
+				lineStyle: {
+					width: 22,
+					color: [
+						[pct / 100, { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{ offset: 0, color: accent + 'aa' }, { offset: 1, color: accent }] }],
+						[1, 'rgba(255,255,255,0.05)'],
+					],
+				},
+			},
+			progress: { show: false },
+			pointer: { show: false },
+			axisTick: { show: false },
+			splitLine: { show: false },
+			axisLabel: { show: false },
+			detail: {
+				valueAnimation: true,
+				formatter: '{value}%',
+				color: accent,
+				fontSize: 44,
+				fontWeight: 700,
+				offsetCenter: [0, '5%'],
+				fontFamily: '"DM Mono", monospace',
+			},
+			title: {
+				offsetCenter: [0, '38%'],
+				color: 'rgba(180,210,255,0.45)',
+				fontSize: 12,
+				fontWeight: 400,
+			},
+			data: [{ value: pct, name: title }],
+		}],
+	};
+}
+
 function ExpandedModal({
 	insight,
 	cursor,
@@ -2741,7 +2812,7 @@ function ExpandedModal({
 			? 860
 			: 900;
 	const modalH = isStatCard
-		? "auto"
+		? "min(60vh, 520px)"
 		: WIDE_TYPES.has(chartType)
 			? "min(78vh, calc(100vh - 48px))"
 			: "min(80vh, calc(100vh - 48px))";
@@ -2872,7 +2943,7 @@ function ExpandedModal({
 							<div style={{ textAlign: "right", flexShrink: 0 }}>
 								<p
 									style={{
-										fontSize: isStatCard ? 56 : 36,
+										fontSize: 36,
 										fontWeight: 800,
 										color: "var(--primary)",
 										margin: 0,
@@ -2911,61 +2982,11 @@ function ExpandedModal({
 						display: "flex",
 						flexDirection: "column",
 					}}>
-					{auroraData && !isList && (chartType as string) === "map" && (
-						<div style={{ flex: 1, minHeight: 0 }}>
-							<MexicoMapChart
-								data={auroraData.labels.map((name, i) => ({
-									name,
-									value: (auroraData.datasets?.[0]?.data?.[i] as number) ?? 0,
-								}))}
-								height="100%"
-								gradient="aurora"
-								bare
-							/>
-						</div>
-					)}
-					{auroraData && !isList && (chartType as string) === "progress" && (
-						<div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+					{!isList && insight.chartOptions && (
+						<div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
 							{renderChart(insight, 400, true)}
 						</div>
 					)}
-					{auroraData &&
-						!isList &&
-						(chartType as string) !== "map" &&
-						(chartType as string) !== "progress" && (
-							<div
-								style={{
-									flex: 1,
-									minHeight: 0,
-									display: "flex",
-									flexDirection: "column",
-								}}>
-								<AuroraChart
-									type={chartType as never}
-									data={auroraData}
-									gradient="aurora"
-									height="100%"
-									bare
-								/>
-							</div>
-						)}
-					{!auroraData &&
-						!isList &&
-						insight.chartOptions &&
-						!!(insight.chartOptions as Record<string, unknown>).series && (
-							<div
-								style={{
-									flex: 1,
-									minHeight: 0,
-									display: "flex",
-									flexDirection: "column",
-								}}>
-								<EChartsRaw
-									opts={insight.chartOptions as Record<string, unknown>}
-									height={400}
-								/>
-							</div>
-						)}
 					{isList && insight.listItems && (
 						<div style={{ flex: 1, overflowY: "auto" }}>
 							{insight.listItems.map((item, i) => (
@@ -3025,16 +3046,37 @@ function ExpandedModal({
 							))}
 						</div>
 					)}
-					{isStatCard && (
-						<p
-							style={{
-								fontSize: 14,
-								color: "var(--text-tertiary)",
-								margin: 0,
-							}}>
-							{insight.subtitle ?? ""}
-						</p>
-					)}
+					{isStatCard && (() => {
+						const kpiAccent = "#00c8f0";
+						const isPercent = !!insight.metric?.includes('%');
+						const gaugeOpts = isPercent && insight.metric
+							? buildKpiGaugeOption(insight.metric, insight.title, kpiAccent)
+							: null;
+						return (
+							<div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, flex: 1, minHeight: 0 }}>
+								{gaugeOpts ? (
+									<ReactECharts
+										option={gaugeOpts as never}
+										style={{ height: 280, width: "100%", maxWidth: 340 }}
+										opts={{ renderer: "canvas" }}
+										notMerge
+									/>
+								) : (
+									<div style={{ textAlign: "center" }}>
+										<p style={{ fontSize: 64, fontWeight: 700, color: kpiAccent, margin: 0, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: '"DM Mono", monospace', textShadow: `0 0 40px ${kpiAccent}66` }}>
+											{insight.metric}
+										</p>
+										<div style={{ marginTop: 16, height: 1, width: 120, background: `linear-gradient(90deg, transparent, ${kpiAccent}66, transparent)`, margin: "16px auto 0" }} />
+									</div>
+								)}
+								{insight.subtitle && (
+									<p style={{ fontSize: 13, color: "rgba(180,210,255,0.45)", margin: 0, textAlign: "center", maxWidth: 340 }}>
+										{insight.subtitle}
+									</p>
+								)}
+							</div>
+						);
+					})()}
 				</div>
 			</div>
 		</div>

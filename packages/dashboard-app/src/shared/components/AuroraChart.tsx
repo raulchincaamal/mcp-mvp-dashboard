@@ -44,7 +44,7 @@ export interface SankeyLink { source: string; target: string; value: number; }
 export interface SankeyData { nodes: SankeyNode[]; links: SankeyLink[]; }
 
 export interface AuroraChartProps {
-  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma' | 'sankey' | 'calendar-heatmap' | 'sunburst' | 'boxplot' | 'theme-river';
+  type: 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter' | 'radar' | 'funnel' | 'gauge' | 'heatmap' | 'treemap' | 'candlestick-ma' | 'candlestick' | 'sankey' | 'calendar-heatmap' | 'sunburst' | 'boxplot' | 'theme-river' | 'bollinger' | 'stacked-area' | 'diverging-bar' | 'radial-stacked-bar' | 'hierarchical-bar' | 'bar-race';
   data: AuroraChartData | CandlestickMAData | SankeyData;
   flint?: FlintSpec;
   flintData?: Record<string, unknown>[];
@@ -782,7 +782,7 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, pale
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 8, right: 8,
+      top: title ? 40 : 8, bottom: 8, left: 8, right: 16,
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
@@ -1012,6 +1012,266 @@ function boxplotOption(rawData: AuroraChartData, title: string | undefined, pale
   };
 }
 
+// ─── Bollinger Bands ──────────────────────────────────────
+// data: LegacyChartData with labels=dates, datasets[0].data=values
+// OR raw array: [{ date, value }]
+
+function bollingerOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  const data = normalizeFlatData(rawData);
+  const dates = data.labels;
+  const values = data.datasets[0]?.data ?? [];
+  const N = 20;
+  const K = 2;
+
+  const mid: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / N;
+  });
+  const upper: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    const avg = slice.reduce((a, b) => a + b, 0) / N;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - avg) ** 2, 0) / N);
+    return avg + K * std;
+  });
+  const lower: (number | null)[] = values.map((_, i) => {
+    if (i < N - 1) return null;
+    const slice = values.slice(i - N + 1, i + 1);
+    const avg = slice.reduce((a, b) => a + b, 0) / N;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - avg) ** 2, 0) / N);
+    return avg - K * std;
+  });
+
+  const [p0, p1, p2] = palette;
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, rotate: dates.length > 12 ? 35 : 0, interval: Math.floor(dates.length / 10) } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: [
+      { name: 'Valor', type: 'line', data: values, smooth: true, showSymbol: false, lineStyle: { width: 2, color: p0[0] }, itemStyle: { color: p0[0] } },
+      { name: `MA${N}`, type: 'line', data: mid, smooth: true, showSymbol: false, lineStyle: { width: 1.5, color: p1[0], type: 'dashed' }, itemStyle: { color: p1[0] } },
+      { name: 'Banda Superior', type: 'line', data: upper, smooth: true, showSymbol: false, lineStyle: { width: 1, color: p2[0], opacity: 0.6 }, areaStyle: { color: p2[0] + '18' }, itemStyle: { color: p2[0] } },
+      { name: 'Banda Inferior', type: 'line', data: lower, smooth: true, showSymbol: false, lineStyle: { width: 1, color: p2[0], opacity: 0.6 }, areaStyle: { color: p2[0] + '18' }, itemStyle: { color: p2[0] } },
+    ],
+    animationDuration: 1000,
+    animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Stacked Area ──────────────────────────────────────────
+// data: LegacyChartData — multiple datasets, each is a series
+// OR orchestrator format: props.data = [{ label, serie1, serie2 }], props.keys = [...]
+
+function stackedAreaOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  // Handle orchestrator flat-object format: [{ label, key1, key2 }]
+  const keys = extraProps?.keys as string[] | undefined;
+  if (keys && Array.isArray(rawData)) {
+    const rows = rawData as unknown as Record<string, unknown>[];
+    const labels = rows.map(r => String(r.label ?? ''));
+    return {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+      legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+      grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+      xAxis: { type: 'category', data: labels, boundaryGap: false, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, rotate: labels.length > 10 ? 35 : 0 } },
+      yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+      series: keys.map((key, di) => {
+        const [top, bot] = palette[di % palette.length];
+        return {
+          name: key, type: 'line' as const, stack: 'total', smooth: true, showSymbol: false,
+          lineStyle: { width: 1.5, color: top },
+          itemStyle: { color: top },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: top + '88' }, { offset: 1, color: bot + '11' }] } },
+          data: rows.map(r => Number(r[key] ?? 0)),
+        };
+      }),
+      animationDuration: 1000, animationEasing: 'cubicOut' as const,
+    };
+  }
+  // Fallback: legacy format
+  const data = normalizeFlatData(rawData);
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: data.labels, boundaryGap: false, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: data.datasets.map((ds, di) => {
+      const [top, bot] = palette[di % palette.length];
+      return {
+        name: ds.label ?? '', type: 'line' as const, stack: 'total', smooth: true, showSymbol: false,
+        lineStyle: { width: 1.5, color: top }, itemStyle: { color: top },
+        areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: top + '88' }, { offset: 1, color: bot + '11' }] } },
+        data: ds.data,
+      };
+    }),
+    animationDuration: 1000, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Diverging Bar ─────────────────────────────────────────
+// props.data = [{ label, values: [{ key, value }] }], props.keys = [...ordered neg→pos]
+
+function divergingBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  const keys = (extraProps?.keys as string[]) ?? [];
+  const rows = (Array.isArray(rawData) ? rawData : []) as unknown as { label: string; values: { key: string; value: number }[] }[];
+  const labels = rows.map(r => r.label);
+
+  // Normalize each row to percentages
+  const normalized = rows.map(r => {
+    const total = r.values.reduce((s, v) => s + Math.abs(v.value), 0) || 1;
+    const map: Record<string, number> = {};
+    r.values.forEach(v => { map[v.key] = (v.value / total) * 100; });
+    return map;
+  });
+
+  const mid = Math.floor(keys.length / 2);
+  const negKeys = keys.slice(0, mid);
+  const posKeys = keys.slice(mid);
+  const DIVERG_COLORS = ['#f5455a', '#fbbf24', '#34d399', '#5bb8f5', '#a78bfa', '#22d3ee'];
+
+  const series = keys.map((key, ki) => {
+    const isNeg = negKeys.includes(key);
+    const color = DIVERG_COLORS[ki % DIVERG_COLORS.length];
+    return {
+      name: key, type: 'bar' as const, stack: isNeg ? 'neg' : 'pos',
+      data: normalized.map(row => isNeg ? -(row[key] ?? 0) : (row[key] ?? 0)),
+      itemStyle: { color, borderRadius: 2 },
+      label: { show: false },
+      emphasis: { itemStyle: { opacity: 0.85 } },
+    };
+  });
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' as const },
+      backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+      textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      formatter: ((params: unknown) => {
+        const ps = params as { seriesName: string; value: number }[];
+        return ps.map(p => `${p.seriesName}: ${Math.abs(p.value).toFixed(1)}%`).join('<br/>');
+      }) as never,
+    },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, formatter: (v: number) => `${Math.abs(v).toFixed(0)}%` }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    yAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+    series,
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Radial Stacked Bar ────────────────────────────────────
+// props.data = [{ label, serie1, serie2 }], props.keys = [...]
+
+function radialStackedBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
+  const keys = (extraProps?.keys as string[]) ?? [];
+  const rows = (Array.isArray(rawData) ? rawData : []) as unknown as Record<string, unknown>[];
+  const labels = rows.map(r => String(r.label ?? ''));
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+    polar: { radius: ['15%', '80%'] },
+    angleAxis: { type: 'category', data: labels, axisLabel: { color: tk.axisLabel, fontSize: 10 }, axisLine: { lineStyle: { color: tk.axisLine } } },
+    radiusAxis: { axisLabel: { color: tk.axisLabel, fontSize: 9 }, axisLine: { show: false }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series: keys.map((key, ki) => {
+      const [top] = palette[ki % palette.length];
+      return {
+        name: key, type: 'bar' as const, coordinateSystem: 'polar', stack: 'total',
+        data: rows.map(r => Number(r[key] ?? 0)),
+        itemStyle: { color: top },
+        emphasis: { itemStyle: { opacity: 0.85 } },
+      };
+    }),
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Hierarchical Bar ──────────────────────────────────────
+// props.data = { name: 'Root', children: [{ name, value?, children?: [...] }] }
+
+function hierarchicalBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  type TreeNode = { name: string; value?: number; children?: TreeNode[] };
+  const tree = rawData as unknown as TreeNode;
+  const children = tree?.children ?? [];
+
+  // Flatten to 2 levels: parent bars + child bars grouped
+  const parentLabels = children.map(c => c.name);
+  const parentValues = children.map(c => c.value ?? (c.children?.reduce((s, cc) => s + (cc.value ?? 0), 0) ?? 0));
+
+  // Collect all unique child names
+  const childNames = [...new Set(children.flatMap(c => (c.children ?? []).map(cc => cc.name)))];
+
+  const series = [
+    {
+      name: 'Total', type: 'bar' as const,
+      data: parentValues.map((v, i) => ({ value: v, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [4, 4, 0, 0] } })),
+      barMaxWidth: 40, barCategoryGap: '30%',
+      label: { show: true, position: 'top' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v); }) as never },
+    },
+    ...childNames.slice(0, 4).map((cname, ci) => ({
+      name: cname, type: 'bar' as const,
+      data: children.map(parent => {
+        const child = parent.children?.find(cc => cc.name === cname);
+        return child?.value ?? 0;
+      }),
+      barMaxWidth: 20,
+      itemStyle: { color: palette[(ci + 2) % palette.length][0] + 'cc', borderRadius: [2, 2, 0, 0] },
+    })),
+  ];
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    legend: childNames.length > 0 ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
+    grid: { left: 16, right: 16, bottom: childNames.length > 0 ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'category', data: parentLabels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11, rotate: parentLabels.length > 6 ? 30 : 0 } },
+    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    series,
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
+// ─── Bar Race ──────────────────────────────────────────────
+// props.frames = [{ label, items: [{ name, value }] }], props.maxBars = 10
+
+function barRaceOption(extraProps: Record<string, unknown> | undefined, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+  type Frame = { label: string; items: { name: string; value: number }[] };
+  const frames = (extraProps?.frames as Frame[]) ?? [];
+  const maxBars = (extraProps?.maxBars as number) ?? 10;
+
+  if (frames.length === 0) return barOption({ labels: [], datasets: [{ data: [] }] }, title, palette, tk);
+
+  // Show last frame as static bar (ECharts timeline for animation would need more setup)
+  // For now render the last frame as a sorted bar chart with a note
+  const lastFrame = frames[frames.length - 1];
+  const items = [...(lastFrame?.items ?? [])].sort((a, b) => b.value - a.value).slice(0, maxBars);
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' as const }, backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1, textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;' },
+    grid: { left: 16, right: 80, bottom: 24, top: title ? 40 : 16, containLabel: true },
+    xAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10 }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+    yAxis: { type: 'category', data: items.map(i => i.name).reverse(), axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+    series: [{
+      type: 'bar' as const,
+      data: items.map((item, i) => ({ value: item.value, itemStyle: { color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]), borderRadius: [0, 4, 4, 0] } })).reverse(),
+      barMaxWidth: 32,
+      label: { show: true, position: 'right' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : String(v); }) as never },
+    }],
+    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px Sora, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
+    animationDuration: 900, animationEasing: 'cubicOut' as const,
+  };
+}
+
 // ─── ThemeRiver ────────────────────────────────────────────
 // data: { labels: ['YYYY-MM', ...], datasets: [{ label: 'serie', data: [v,...] }] }
 
@@ -1111,25 +1371,39 @@ export default function AuroraChart({
   }, []);
 
   const getOption = (): EChartsOption => {
+    // extraProps: for types that need keys/frames passed alongside data
+    const ep = data as unknown as Record<string, unknown>;
+    const extraProps: Record<string, unknown> = {
+      keys: ep?.keys,
+      frames: ep?.frames,
+      maxBars: ep?.maxBars,
+    };
     switch (type) {
-      case 'bar':             return barOption(data as AuroraChartData, title, palette, tk!);
-      case 'line':            return lineOption(data as AuroraChartData, title, palette, tk!, false);
-      case 'area':            return lineOption(data as AuroraChartData, title, palette, tk!, true);
-      case 'pie':             return pieOption(data as AuroraChartData, title, palette, tk!, false);
-      case 'doughnut':        return pieOption(data as AuroraChartData, title, palette, tk!, true);
-      case 'scatter':         return scatterOption(data as AuroraChartData, title, palette, tk!);
-      case 'radar':           return radarOption(data as AuroraChartData, title, palette, tk!);
-      case 'funnel':          return funnelOption(data as AuroraChartData, title, palette, tk!);
-      case 'gauge':           return gaugeOption(data as AuroraChartData, title, palette, tk!);
-      case 'heatmap':         return heatmapOption(data as AuroraChartData, title, palette, tk!);
-      case 'treemap':         return treemapOption(data as AuroraChartData, title, palette, tk!);
-      case 'candlestick-ma':  return candlestickMAOption(data as CandlestickMAData, title, palette, tk!);
-      case 'sankey':           return sankeyOption(data as SankeyData, title, palette, tk!);
-      case 'calendar-heatmap': return calendarHeatmapOption(data as AuroraChartData, title, palette, tk!);
-      case 'sunburst':         return sunburstOption(data as AuroraChartData, title, palette, tk!);
-      case 'boxplot':          return boxplotOption(data as AuroraChartData, title, palette, tk!);
-      case 'theme-river':      return themeRiverOption(data as AuroraChartData, title, palette, tk!);
-      default:                return barOption(data as AuroraChartData, title, palette, tk!);
+      case 'bar':               return barOption(data as AuroraChartData, title, palette, tk!);
+      case 'line':              return lineOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'area':              return lineOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'pie':               return pieOption(data as AuroraChartData, title, palette, tk!, false);
+      case 'doughnut':          return pieOption(data as AuroraChartData, title, palette, tk!, true);
+      case 'scatter':           return scatterOption(data as AuroraChartData, title, palette, tk!);
+      case 'radar':             return radarOption(data as AuroraChartData, title, palette, tk!);
+      case 'funnel':            return funnelOption(data as AuroraChartData, title, palette, tk!);
+      case 'gauge':             return gaugeOption(data as AuroraChartData, title, palette, tk!);
+      case 'heatmap':           return heatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'treemap':           return treemapOption(data as AuroraChartData, title, palette, tk!);
+      case 'candlestick':
+      case 'candlestick-ma':    return candlestickMAOption(data as CandlestickMAData, title, palette, tk!);
+      case 'bollinger':         return bollingerOption(data as AuroraChartData, title, palette, tk!);
+      case 'stacked-area':      return stackedAreaOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'diverging-bar':     return divergingBarOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'radial-stacked-bar':return radialStackedBarOption(data as AuroraChartData, title, palette, tk!, extraProps);
+      case 'hierarchical-bar':  return hierarchicalBarOption(data as AuroraChartData, title, palette, tk!);
+      case 'bar-race':          return barRaceOption(extraProps, title, palette, tk!);
+      case 'sankey':            return sankeyOption(data as SankeyData, title, palette, tk!);
+      case 'calendar-heatmap':  return calendarHeatmapOption(data as AuroraChartData, title, palette, tk!);
+      case 'sunburst':          return sunburstOption(data as AuroraChartData, title, palette, tk!);
+      case 'boxplot':           return boxplotOption(data as AuroraChartData, title, palette, tk!);
+      case 'theme-river':       return themeRiverOption(data as AuroraChartData, title, palette, tk!);
+      default:                  return barOption(data as AuroraChartData, title, palette, tk!);
     }
   };
 

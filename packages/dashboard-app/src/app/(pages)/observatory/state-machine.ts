@@ -216,6 +216,8 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
 
       // ── Tipos nativos de AuroraChart (no necesitan conversión a ECharts) ──
       const AURORA_NATIVE = ['scatter','radar','funnel','gauge','heatmap','treemap'];
+      // ── Tipos especializados — pasar props completos a AuroraChart ──
+      const AURORA_SPECIALIZED = ['bollinger','stacked-area','diverging-bar','radial-stacked-bar','hierarchical-bar','bar-race','sankey','calendar-heatmap','sunburst','boxplot','theme-river'];
       if (type === 'map') {
         // Mexico choropleth map — pass labels+values directly, MexicoMapChart handles rendering
         const datasets = rawData?.datasets ?? [{ data: values }];
@@ -347,6 +349,22 @@ function uiConfigToInsights(uiConfig: any): InsightData[] {
               },
             },
           }],
+        };
+      } else if (AURORA_SPECIALIZED.includes(type)) {
+        // Pasar todos los props del componente directamente — AuroraChart los consume nativamente
+        // keys, frames, maxBars, etc. se pasan junto con data para que getOption() los lea
+        const specialData = {
+          ...(Array.isArray(rawData) ? { _rows: rawData } : rawData ?? {}),
+          keys: props.keys,
+          frames: props.frames,
+          maxBars: props.maxBars,
+          n: props.n,
+          k: props.k,
+        };
+        chartOptions = {
+          _auroraType: type,
+          _auroraData: { labels, datasets: [{ data: values }] },
+          ...specialData,
         };
       } else if (type === 'line' || type === 'area') {
         chartOptions = {

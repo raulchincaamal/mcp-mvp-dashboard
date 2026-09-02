@@ -38,6 +38,11 @@
         "TIMEOUT_SESSION_MINUTES": "${env:TIMEOUT_SESSION_MINUTES}"
       },
       "disabled": false
+    },
+    "library-context": {
+      "command": "npx",
+      "args": ["-y", "@macropaytd/lib-front-mcp-library-context"],
+      "autoApprove": ["list_libraries", "get_library_context"]
     }
   }
 }

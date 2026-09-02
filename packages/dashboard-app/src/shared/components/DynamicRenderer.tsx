@@ -288,7 +288,7 @@ function StatCard({ props }: { props: Record<string, unknown> }) {
       <p style={{
         fontSize: '0.72rem',
         fontWeight: 600,
-        color: 'rgba(255,255,255,0.55)',
+        color: '#ffffff',
         letterSpacing: '0.04em',
         textTransform: 'uppercase',
         lineHeight: 1,
@@ -1018,6 +1018,16 @@ function renderChart(props: Record<string, unknown>, index: number = 0) {
           colors={colors}
           xAxisLabel={xAxisLabel}
         />
+      </div>
+    );
+  }
+
+  if (type === 'sankey') {
+    const sankeyData = props.data as { nodes: { name: string }[]; links: { source: string; target: string; value: number }[] };
+    return (
+      <div style={D3_WRAPPER}>
+        {title && <p style={D3_TITLE}>{title}</p>}
+        <AuroraChart type="sankey" data={sankeyData} title={undefined} height={400} gradient="aurora" bare />
       </div>
     );
   }

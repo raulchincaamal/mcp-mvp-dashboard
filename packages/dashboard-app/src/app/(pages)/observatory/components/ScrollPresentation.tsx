@@ -1282,7 +1282,7 @@ function KpiCard({
 					fontWeight: 600,
 					letterSpacing: "0.1em",
 					textTransform: "uppercase",
-					color: accent,
+					color: "#ffffff",
 					margin: "0 0 10px",
 					opacity: 0.9,
 					paddingRight: 16,
@@ -1298,7 +1298,7 @@ function KpiCard({
 					lineHeight: 1,
 					letterSpacing: "0.02em",
 					fontVariantNumeric: "tabular-nums",
-					fontFamily: '"DM Mono", monospace',
+					fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 				}}>
 				{ins.metric}
 			</p>
@@ -1557,8 +1557,8 @@ function HeaderBar({
 			<h1
 				style={{
 					flex: 1,
-					fontSize: 14,
-					fontWeight: 400,
+					fontSize: 18,
+					fontWeight: 500,
 					color: "var(--text)",
 					margin: 0,
 					overflow: "hidden",
@@ -1604,7 +1604,7 @@ function HeaderBar({
 							fontWeight: 400,
 							letterSpacing: "0.06em",
 							whiteSpace: "nowrap",
-							fontFamily: '"DM Mono", monospace',
+							fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 							textTransform: "uppercase",
 						}}>
 						{description}
@@ -2688,7 +2688,7 @@ function buildKpiGaugeOption(
 				fontSize: 44,
 				fontWeight: 700,
 				offsetCenter: [0, '5%'],
-				fontFamily: '"DM Mono", monospace',
+				fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 			},
 			title: {
 				offsetCenter: [0, '38%'],
@@ -3060,7 +3060,7 @@ function ExpandedModal({
 									/>
 								) : (
 									<div style={{ textAlign: "center" }}>
-										<p style={{ fontSize: 64, fontWeight: 700, color: kpiAccent, margin: 0, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: '"DM Mono", monospace', textShadow: `0 0 40px ${kpiAccent}66` }}>
+										<p style={{ fontSize: 64, fontWeight: 700, color: kpiAccent, margin: 0, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace', textShadow: `0 0 40px ${kpiAccent}66` }}>
 											{insight.metric}
 										</p>
 										<div style={{ marginTop: 16, height: 1, width: 120, background: `linear-gradient(90deg, transparent, ${kpiAccent}66, transparent)`, margin: "16px auto 0" }} />

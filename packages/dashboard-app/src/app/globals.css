@@ -255,17 +255,17 @@ body {
     color var(--t-slow) var(--ease-in-out);
 }
 
-/* Numbers use SF Mono on Apple, fallback to DM Mono */
+/* Numbers use SF Mono on Apple, fallback to system monospace */
 .tabular-nums,
 [style*="tabular-nums"],
 input[type="number"] {
-  font-family: "SF Mono", "SFMono-Regular", ui-monospace, "DM Mono", monospace;
+  font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
 /* Utility class for KPI metric values */
 .kpi-number {
-  font-family: "SF Mono", "SFMono-Regular", ui-monospace, "DM Mono", monospace;
+  font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   letter-spacing: -0.04em;

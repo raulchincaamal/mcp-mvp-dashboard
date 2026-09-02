@@ -227,7 +227,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
-    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels,
       axisLine: { lineStyle: { color: tk.axisLine } },
@@ -271,7 +271,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
-    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
       axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
@@ -970,7 +970,15 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
       root[parent].children[child] = (root[parent].children[child] ?? 0) + (data.datasets[0]?.data[i] ?? 0);
     }
   });
-  const treeData = Object.entries(root).map(([name, node], i) => ({
+
+  // Degrade to doughnut when there's only 1 root node with no children (useless sunburst)
+  const rootEntries = Object.entries(root);
+  const hasHierarchy = rootEntries.length > 1 || rootEntries.some(([, node]) => Object.keys(node.children).length > 0);
+  if (!hasHierarchy) {
+    return pieOption(rawData, title, palette, tk, true);
+  }
+
+  const treeData = rootEntries.map(([name, node], i) => ({
     name,
     value: node.value,
     itemStyle: { color: palette[i % palette.length][0] },
@@ -980,6 +988,10 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
       itemStyle: { color: palette[i % palette.length][0] + (j % 2 === 0 ? 'cc' : '88') },
     })),
   }));
+
+  // Use tangential labels for shallow trees (few root nodes), radial for deep ones
+  const labelRotate = rootEntries.length <= 4 ? 'tangential' : 'radial';
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -991,10 +1003,10 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
     series: [{
       type: 'sunburst' as const,
       center: ['50%', '50%'],
-      radius: [0, '88%'],
+      radius: ['10%', '88%'],
       sort: 'desc',
       nodeClick: false,
-      label: { rotate: 'radial', color: '#fff', fontSize: 10, minAngle: 8 },
+      label: { rotate: labelRotate as 'radial' | 'tangential', color: '#fff', fontSize: 10, minAngle: 10, overflow: 'truncate', width: 80 },
       itemStyle: { borderWidth: 1, borderColor: tk.bg },
       emphasis: { focus: 'ancestor', itemStyle: { opacity: 0.85 } },
       data: treeData,
@@ -1172,9 +1184,19 @@ function stackedAreaOption(rawData: AuroraChartData, title: string | undefined, 
 
 // ─── Diverging Bar ─────────────────────────────────────────
 // props.data = [{ label, values: [{ key, value }] }], props.keys = [...ordered neg→pos]
+// props.negativeKeys = [...] — explicit negative keys; if absent → stacked 100% mode
+
+// Semantic colors for known credit/status keys
+const CREDIT_STATUS_COLORS: Record<string, string> = {
+  al_corriente: '#10d97e',
+  liquidado:    '#5bb8f5',
+  atrasado:     '#fbbf24',
+  cancelado:    '#f5455a',
+};
 
 function divergingBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
   const keys = (extraProps?.keys as string[]) ?? [];
+  const negativeKeys = (extraProps?.negativeKeys as string[]) ?? null;
   const rows = (Array.isArray(rawData) ? rawData : []) as unknown as { label: string; values: { key: string; value: number }[] }[];
   const labels = rows.map(r => r.label);
 
@@ -1186,13 +1208,44 @@ function divergingBarOption(rawData: AuroraChartData, title: string | undefined,
     return map;
   });
 
-  const mid = Math.floor(keys.length / 2);
-  const negKeys = keys.slice(0, mid);
-  const posKeys = keys.slice(mid);
   const DIVERG_COLORS = ['#f5455a', '#fbbf24', '#34d399', '#5bb8f5', '#a78bfa', '#22d3ee'];
 
+  // ── Stacked 100% mode (no explicit negativeKeys) ──
+  // Used for credit health, status breakdowns, etc.
+  if (!negativeKeys) {
+    const series = keys.map((key, ki) => {
+      const color = CREDIT_STATUS_COLORS[key.toLowerCase()] ?? palette[ki % palette.length][0];
+      return {
+        name: key, type: 'bar' as const, stack: 'total',
+        data: normalized.map(row => row[key] ?? 0),
+        itemStyle: { color },
+        label: { show: false },
+        emphasis: { itemStyle: { opacity: 0.85 } },
+      };
+    });
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis', axisPointer: { type: 'shadow' as const },
+        backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+        textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+        formatter: ((params: unknown) => {
+          const ps = params as { seriesName: string; value: number }[];
+          return ps.filter(p => p.value > 0).map(p => `${p.seriesName}: ${p.value.toFixed(1)}%`).join('<br/>');
+        }) as never,
+      },
+      legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+      grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+      xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, formatter: (v: number) => `${v}%` }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+      yAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+      series,
+      animationDuration: 900, animationEasing: 'cubicOut' as const,
+    };
+  }
+
+  // ── True diverging mode (explicit negativeKeys provided) ──
   const series = keys.map((key, ki) => {
-    const isNeg = negKeys.includes(key);
+    const isNeg = negativeKeys.includes(key);
     const color = DIVERG_COLORS[ki % DIVERG_COLORS.length];
     return {
       name: key, type: 'bar' as const, stack: isNeg ? 'neg' : 'pos',
@@ -1451,6 +1504,7 @@ export default function AuroraChart({
     const ep = data as unknown as Record<string, unknown>;
     const extraProps: Record<string, unknown> = {
       keys: ep?.keys,
+      negativeKeys: ep?.negativeKeys,
       frames: ep?.frames,
       maxBars: ep?.maxBars,
     };

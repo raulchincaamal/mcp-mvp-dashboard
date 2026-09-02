@@ -838,13 +838,13 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, _pal
       },
       upperLabel: { show: false },
       itemStyle: {
-        borderWidth: 2,
-        borderColor: 'rgba(6,10,16,0.55)',
-        gapWidth: 3,
+        borderWidth: 0,
+        borderColor: 'transparent',
+        gapWidth: 2,
         borderRadius: 4,
       },
       emphasis: {
-        itemStyle: { opacity: 0.88, borderColor: 'rgba(255,255,255,0.25)', borderWidth: 2 },
+        itemStyle: { opacity: 0.88, borderColor: 'transparent', borderWidth: 0 },
         label: { show: true },
       },
       data: data.labels.map((name, i) => {

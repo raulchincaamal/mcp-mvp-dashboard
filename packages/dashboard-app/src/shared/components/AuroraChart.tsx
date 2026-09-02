@@ -819,9 +819,9 @@ function treemapOption(rawData: AuroraChartData, title: string | undefined, _pal
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 0, right: 0,
+      top: title ? 40 : 8, bottom: 24, left: 0, right: 0,
       width: '100%',
-      height: title ? 'calc(100% - 48px)' : '100%',
+      height: title ? 'calc(100% - 64px)' : 'calc(100% - 32px)',
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },

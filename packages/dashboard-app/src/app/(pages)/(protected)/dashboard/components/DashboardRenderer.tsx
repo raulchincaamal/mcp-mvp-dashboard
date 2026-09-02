@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Text } from "@macropaytd/lib-front-ui-components";
+import { Card } from "@macropaytd/lib-front-ui-components";
 import ChartRenderer from "./ChartRenderer";
 import type { DashboardConfig } from "../types";
 
@@ -17,9 +17,9 @@ export default function DashboardRenderer({ config }: DashboardRendererProps) {
   return (
     <div className="space-y-4">
       <div>
-        <Text size="xl" weight="bold">
+        <h1 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.03em', lineHeight: 1.15 }}>
           {config.title}
-        </Text>
+        </h1>
         {config.description && (
           <Text size="sm" className="text-muted-foreground">
             {config.description}

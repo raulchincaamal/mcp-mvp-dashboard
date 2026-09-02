@@ -7,18 +7,8 @@ type Theme = 'dark' | 'slate' | 'light';
 
 const NAV_ITEMS = [
   {
-    href: '/dynamic',
-    label: 'Dashboard IA',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-      </svg>
-    ),
-  },
-  {
     href: '/dashboard',
-    label: 'Dashboards',
+    label: 'Dashboard IA',
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 3h7v9H3z" /><path d="M14 3h7v5h-7z" /><path d="M14 12h7v9h-7z" /><path d="M3 16h7v5H3z" />
@@ -70,7 +60,7 @@ export default function Navbar() {
     }}>
       {/* Logo */}
       <button
-        onClick={() => router.push('/dynamic')}
+        onClick={() => router.push('/dashboard')}
         style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
       >
         <div style={{
@@ -84,7 +74,7 @@ export default function Navbar() {
           ✦
         </div>
         <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '-0.2px' }}>
-          MCP Dashboard
+          Space Insight AI
         </span>
       </button>
 

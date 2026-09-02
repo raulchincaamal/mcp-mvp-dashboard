@@ -5,9 +5,16 @@ import SmoothScroll from '@/shared/components/SmoothScroll';
 import BarbaWrapper from '@/shared/components/BarbaWrapper';
 
 export const metadata = {
-  title: 'MCP Dashboard',
+  title: 'Space Insight AI',
   description:
-    'Dashboard generado por MCP pipeline — datos transformados en visualizaciones D3.js',
+    'Space Insight AI — dashboards generados por MCP pipeline con AWS Bedrock',
+  icons: {
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({
@@ -16,28 +23,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" data-theme="light" suppressHydrationWarning>
+    <html lang="es" data-theme="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
           (function() {
-            var t = localStorage.getItem('mcp-theme');
-            if (t) document.documentElement.setAttribute('data-theme', t);
+            var t = localStorage.getItem('mcp-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
           })()
         `,
           }}
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
+        <link rel="manifest" href="/site.webmanifest" />
+
       </head>
       <body className="antialiased">
         <Providers>

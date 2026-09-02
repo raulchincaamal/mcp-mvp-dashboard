@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { useCursor } from './hooks/useCursor';
-import { observatory, runMockFlow } from './state-machine';
+import { observatory, runMockFlow, ALEXA_USER_ID, ENV_USER_ID } from './state-machine';
 import type { ObservatoryContext, InsightData } from './state-machine';
 import AmbientBackground from './components/AmbientBackground';
 import CursorLight from './components/CursorLight';
@@ -36,6 +36,9 @@ export default function ObservatoryPage() {
   const [showPresentation, setShowPresentation] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
   const [zoomKey, setZoomKey] = useState(0);
+  const [coreLightTriggered, setCoreLightTriggered] = useState(false);
+  const pendingIntentRef = useRef<{ intent: string; userId: string } | null>(null);
+  const activeUserIdRef = useRef<string>(ALEXA_USER_ID);
 
   const zoomOverlayRef = useRef<HTMLDivElement>(null);
   const buildingRef    = useRef<HTMLDivElement>(null);
@@ -134,7 +137,7 @@ export default function ObservatoryPage() {
     const tl = gsap.timeline();
     tl.to(el, { left: 0, top: 0, width: '100vw', height: '100vh', borderRadius: 0, duration: 0.55, ease: 'power3.inOut' });
     tl.fromTo(buildingRef.current, { opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power2.out' }, '-=0.1');
-    tl.call(() => runMockFlow(zoomQuery), [], 0.2);
+    tl.call(() => runMockFlow(zoomQuery, activeUserIdRef.current, pendingFiltersRef.current ?? undefined), [], 0.2);
   }, [zoomQuery]);
 
   // State transitions
@@ -147,7 +150,7 @@ export default function ObservatoryPage() {
     if (next === 'IDLE') {
       setVisibleInsights([]);
       setInputOpen(false);
-      setShowPresentation(false);
+      // setShowPresentation(false) is handled by handleReset with GSAP fade — don't duplicate
       const el = zoomOverlayRef.current;
       if (el && el.style.display !== 'none') {
         if (ctx.error) return;
@@ -181,15 +184,63 @@ export default function ObservatoryPage() {
     gsap.to(buildingRef.current, { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' });
   }, [ctx.error]);
 
-  const triggerZoom = useCallback((query: string, rect: DOMRect) => {
+  const pendingFiltersRef = useRef<Record<string, unknown> | null>(null);
+
+  const triggerZoom = useCallback((query: string, rect: DOMRect, userId?: string, filters?: Record<string, unknown>) => {
+    if (userId) activeUserIdRef.current = userId;
+    pendingFiltersRef.current = filters ?? null;
     setShowPresentation(false);
     setZoomQuery(null);
     pendingRect.current = rect;
     setTimeout(() => setZoomQuery(query), 16);
   }, []);
 
+  // SSE: detectar intent externo (Alexa) via /api/stream
+  useEffect(() => {
+    const API_URL = process.env.NEXT_PUBLIC_MCP_API_URL ?? 'http://localhost:4000';
+
+    function connectSSE(userId: string) {
+      const es = new EventSource(`${API_URL}/api/stream?userId=${userId}`);
+      es.onmessage = (e) => {
+        try {
+          const { intent, status } = JSON.parse(e.data);
+          if (status === 'processing' && intent && observatory.getContext().state === 'IDLE') {
+            pendingIntentRef.current = { intent, userId };
+            setCoreLightTriggered(true);
+          }
+        } catch { /* silencioso */ }
+      };
+      return es;
+    }
+
+    const connections = [connectSSE(ALEXA_USER_ID)];
+    if (ENV_USER_ID && ENV_USER_ID !== ALEXA_USER_ID) connections.push(connectSSE(ENV_USER_ID));
+
+    return () => connections.forEach(es => es.close());
+  }, [triggerZoom]);
+
+  // Mapa de categorías a intents enriquecidos con contexto específico
+  const CATEGORY_INTENTS: Record<string, string> = {
+    'Motos': 'Dashboard completo de ventas de Motos: productos más vendidos, distribución por estado, evolución mensual, estatus de créditos y análisis de cartera',
+    'Celulares': 'Dashboard completo de ventas de Celulares: modelos más vendidos, distribución por estado, tendencia mensual, estatus de créditos y canales de venta',
+    'Bicicletas Eléctricas': 'Dashboard completo de ventas de Bicicletas Eléctricas: productos top, distribución geográfica, evolución mensual y salud crediticia',
+    'Pantallas/TV': 'Dashboard completo de ventas de Pantallas y TV: modelos más vendidos, distribución por estado, tendencia mensual y estatus de créditos',
+    'Audio': 'Dashboard completo de ventas de Audio: productos más vendidos, distribución por estado, evolución mensual y análisis de créditos',
+    'Tablets': 'Dashboard completo de ventas de Tablets: modelos top, distribución geográfica, tendencia mensual y estatus de cartera',
+    'Consolas': 'Dashboard completo de ventas de Consolas: productos más vendidos, distribución por estado, evolución mensual y análisis crediticio',
+    'Climatización': 'Dashboard completo de ventas de Climatización: productos top, distribución por estado, tendencia mensual y salud de créditos',
+  };
+
   const handleCategoryClick = useCallback((label: string, rect: DOMRect) => {
-    triggerZoom(`Resumen de ${label}`, rect);
+    const intent = CATEGORY_INTENTS[label] ?? `Dashboard completo de ventas de ${label}: productos más vendidos, distribución por estado, evolución mensual y estatus de créditos`;
+    // Pasar filtro de categoría pre-construido para garantizar que llegue aunque Bedrock falle
+    const categoryMap: Record<string, string> = {
+      'Bicicletas Eléctricas': 'Bicicletas Eléctricas',
+      'Pantallas/TV': 'Pantallas/TV',
+      'Climatización': 'Climatización',
+    };
+    const categoriaValue = categoryMap[label] ?? label;
+    triggerZoom(intent, rect, undefined, { categoria: categoriaValue });
   }, [triggerZoom]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
@@ -208,15 +259,33 @@ export default function ObservatoryPage() {
     if (rect) triggerZoom(q, rect);
   }, [triggerZoom]);
 
+  const presentationWrapperRef = useRef<HTMLDivElement>(null);
+
   const handleReset = useCallback(() => {
-    const el = zoomOverlayRef.current;
-    if (el) {
-      gsap.killTweensOf(el);
-      gsap.to(el, { opacity: 0, duration: 0.4, ease: 'power2.in', onComplete: () => gsap.set(el, { display: 'none', clearProps: 'left,top,width,height,borderRadius' }) });
+    // Pre-posicionar CoreLight invisible
+    if (coreLightRef.current) {
+      gsap.killTweensOf(coreLightRef.current);
+      gsap.set(coreLightRef.current, { opacity: 0, scale: 0.4 });
     }
-    setZoomQuery(null);
-    setShowPresentation(false);
-    observatory.transition('IDLE');
+    // Fade out el wrapper de presentación, luego desmontar React
+    const wrapper = presentationWrapperRef.current;
+    if (wrapper) {
+      gsap.to(wrapper, { opacity: 0, duration: 0.35, ease: 'power2.in', onComplete: () => {
+        setShowPresentation(false);
+        setZoomQuery(null);
+        observatory.transition('IDLE');
+        if (coreLightRef.current) {
+          gsap.fromTo(coreLightRef.current,
+            { opacity: 0, scale: 0.4 },
+            { opacity: 1, scale: 1, duration: 1.1, ease: 'back.out(1.4)', delay: 0.1 }
+          );
+        }
+      }});
+    } else {
+      setShowPresentation(false);
+      setZoomQuery(null);
+      observatory.transition('IDLE');
+    }
   }, []);
 
   // Splash: animate CoreLight in on mount
@@ -234,16 +303,30 @@ export default function ObservatoryPage() {
     <div style={{
       width: '100vw', height: '100vh',
       background: 'var(--bg)', color: 'var(--text)',
-      fontFamily: '"Space Grotesk", system-ui, sans-serif',
+      fontFamily: '"Chivo Mono", monospace',
       position: 'relative', overflow: 'hidden', cursor: 'default',
     }}>
       {/* Inicializa cursorRef sin causar re-renders */}
       <CursorBootstrap />
 
-      {/* Layer 0 — Three.js + widgets */}
-      <AmbientBackground onCategoryClick={handleCategoryClick} />
+      {/* Logo — top left */}
+      <div style={{
+        position: 'fixed', top: 20, left: 24, zIndex: 10,
+        display: 'flex', alignItems: 'center', gap: 8,
+        pointerEvents: 'none',
+      }}>
+        <img src="/macropay-happy.svg" alt="Macropay" style={{ width: 22, height: 18 }} />
+        <span style={{
+          fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.01em',
+          color: 'rgba(255,255,255,0.55)',
+          fontFamily: '"Chivo Mono", monospace',
+        }}>Space Insight AI</span>
+      </div>
 
-      {/* Layer 1 — Cursor light */}
+      {/* Layer 0 — Three.js + widgets + Coconauta 3D */}
+      <AmbientBackground onCategoryClick={handleCategoryClick} showCoconauta={isIdle && !zoomQuery && !showPresentation} />
+
+{/* Layer 1 — Cursor light */}
       <CursorLight />
 
       {/* Hot corner — bottom left theme switcher (solo en landing) */}
@@ -259,10 +342,21 @@ export default function ObservatoryPage() {
           zIndex: 6, opacity: 0,
           cursor: isIdle ? 'pointer' : 'default',
           pointerEvents: (!showPresentation && !zoomQuery) ? 'auto' : 'none',
-          visibility: (showPresentation || zoomQuery) ? 'hidden' : 'visible',
         }}
       >
-        <CoreLight state={ctx.state} />
+        <CoreLight
+          state={ctx.state}
+          triggered={coreLightTriggered}
+          onTriggerComplete={() => {
+            setCoreLightTriggered(false);
+            const pending = pendingIntentRef.current;
+            pendingIntentRef.current = null;
+            if (pending) {
+              const rect = coreLightRef.current?.getBoundingClientRect();
+              if (rect) triggerZoom(pending.intent, rect, pending.userId);
+            }
+          }}
+        />
       </div>
 
       {/* Layer 3 — Command bar */}
@@ -299,7 +393,7 @@ export default function ObservatoryPage() {
             }}>
               <input
                 autoFocus={inputOpen} value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
+                onChange={e => { const v = e.target.value; setInputValue(v.length === 1 ? v.toUpperCase() : v); }}
                 placeholder="Ask Alexa..."
                 style={{ flex: 1, padding: '16px 20px', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
               />
@@ -337,11 +431,13 @@ export default function ObservatoryPage() {
       {/* Layer 5 — Presentation */}
       {showPresentation && (
         <FadeIn>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 30 }}>
+          <div ref={presentationWrapperRef} style={{ position: 'fixed', inset: 0, zIndex: 30 }}>
             <ScrollPresentation
               insights={visibleInsights}
               cursor={{ x: 0, y: 0, normalizedX: 0, normalizedY: 0, velocityX: 0, velocityY: 0, speed: 0, isMoving: false }}
               query={ctx.query?.raw ?? null}
+              description={ctx.description ?? null}
+              layoutHint={ctx.layoutHint}
               onReset={handleReset}
             />
           </div>

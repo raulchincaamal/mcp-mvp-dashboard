@@ -1323,7 +1323,7 @@ function barRaceOption(extraProps: Record<string, unknown> | undefined, title: s
       barMaxWidth: 32,
       label: { show: true, position: 'right' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : String(v); }) as never },
     }],
-    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px Sora, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
+    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
     animationDuration: 900, animationEasing: 'cubicOut' as const,
   };
 }

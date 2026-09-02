@@ -934,14 +934,11 @@ const GAP = 14;
 function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
 	return {
 		borderRadius: 16,
-		background: "rgba(255,255,255,0.13)",
-		backdropFilter: "blur(20px) saturate(1.4)",
-		WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+		background: "#1c1f26",
 		borderWidth: 1,
 		borderStyle: "solid",
-		borderColor: "rgba(255,255,255,0.20)",
-		boxShadow:
-			"0 4px 24px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.12)",
+		borderColor: "rgba(255,255,255,0.08)",
+		boxShadow: "0 2px 12px rgba(0,0,0,0.45)",
 		transition: "border-color 0.2s ease, box-shadow 0.2s ease",
 		...extra,
 	};
@@ -977,8 +974,7 @@ function hoverOut(el: HTMLElement) {
 		overwrite: "auto",
 	});
 	el.style.borderColor = "";
-	el.style.boxShadow =
-		"0 4px 24px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.12)";
+	el.style.boxShadow = "0 2px 12px rgba(0,0,0,0.45)";
 }
 
 function renderChart(
@@ -1499,8 +1495,8 @@ function HeaderBar({
 				alignItems: "center",
 				gap: 16,
 				position: "relative",
-				background: "rgba(0,200,240,0.12)",
-				borderColor: "rgba(0,200,240,0.30)",
+				background: "#111318",
+				borderColor: "rgba(255,255,255,0.09)",
 			})}>
 			<div
 				style={{
@@ -1510,7 +1506,7 @@ function HeaderBar({
 					right: 0,
 					height: 2,
 					background:
-						"linear-gradient(90deg, transparent 0%, rgba(0,200,240,0.7) 40%, rgba(100,120,255,0.5) 70%, transparent 100%)",
+						"linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 50%, transparent 100%)",
 					borderRadius: "16px 16px 0 0",
 				}}
 			/>
@@ -1521,9 +1517,9 @@ function HeaderBar({
 					width: 34,
 					height: 34,
 					borderRadius: 10,
-					background: "rgba(0,200,240,0.08)",
-					border: "1px solid rgba(0,200,240,0.2)",
-					color: "rgba(0,200,240,0.7)",
+					background: "rgba(255,255,255,0.05)",
+					border: "1px solid rgba(255,255,255,0.10)",
+					color: "rgba(255,255,255,0.40)",
 					cursor: "pointer",
 					display: "flex",
 					alignItems: "center",
@@ -1532,7 +1528,7 @@ function HeaderBar({
 				}}
 				onMouseEnter={(e) => {
 					(e.currentTarget as HTMLElement).style.background =
-						"rgba(0,200,240,0.16)";
+						"rgba(255,255,255,0.10)";
 				}}
 				onMouseLeave={(e) => {
 					(e.currentTarget as HTMLElement).style.background =
@@ -1554,21 +1550,21 @@ function HeaderBar({
 				style={{
 					width: 1,
 					height: 32,
-					background: "rgba(0,200,240,0.15)",
+					background: "rgba(255,255,255,0.10)",
 					flexShrink: 0,
 				}}
 			/>
 			<h1
 				style={{
 					flex: 1,
-					fontSize: 23,
+					fontSize: 14,
 					fontWeight: 400,
 					color: "var(--text)",
 					margin: 0,
 					overflow: "hidden",
 					textOverflow: "ellipsis",
 					whiteSpace: "nowrap",
-					letterSpacing: "-0.01em",
+					letterSpacing: "0.01em",
 					lineHeight: 1.4,
 					opacity: 0.9,
 					fontFamily: '"Sora", sans-serif',

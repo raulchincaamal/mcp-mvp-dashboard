@@ -66,9 +66,7 @@ export default function GlassPanel({
       ref={ref}
       className={className}
       style={{
-        background: 'var(--surface)',
-        backdropFilter: 'var(--surface-blur)',
-        WebkitBackdropFilter: 'var(--surface-blur)',
+        background: '#1c1f26',
         outline: '1px solid var(--border-color)',
         outlineOffset: '-1px',
         borderRadius: 'var(--radius)',

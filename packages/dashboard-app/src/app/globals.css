@@ -109,7 +109,7 @@
   /* Fondo — negro con tinte azul marino muy profundo */
   --bg: #060a10;
   /* Superficie — vidrio oscuro, casi negro, con tinte frío */
-  --surface: rgba(255, 255, 255, 0.042);
+  --surface: rgba(255, 255, 255, 0.10);
   --surface-2: #0b1018;
   --surface-3: #080d14;
   --surface-blur: blur(24px);
@@ -176,7 +176,7 @@
   --accent-red:    #f5455a;
   --accent-violet: #818cf8;
   --bg: #111824;
-  --surface: rgba(255, 255, 255, 0.058);
+  --surface: rgba(255, 255, 255, 0.10);
   --surface-2: #181e2c;
   --surface-3: #141824;
   --surface-blur: blur(20px);

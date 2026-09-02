@@ -934,14 +934,14 @@ const GAP = 14;
 function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
 	return {
 		borderRadius: 16,
-		background: "rgba(255,255,255,0.055)",
+		background: "rgba(255,255,255,0.13)",
 		backdropFilter: "blur(20px) saturate(1.4)",
 		WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 		borderWidth: 1,
 		borderStyle: "solid",
-		borderColor: "rgba(255,255,255,0.10)",
+		borderColor: "rgba(255,255,255,0.20)",
 		boxShadow:
-			"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.2)",
+			"0 4px 24px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.12)",
 		transition: "border-color 0.2s ease, box-shadow 0.2s ease",
 		...extra,
 	};
@@ -966,7 +966,7 @@ function hoverIn(el: HTMLElement, accent: string) {
 		overwrite: "auto",
 	});
 	el.style.borderColor = `${accent}44`;
-	el.style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}18`;
+	el.style.boxShadow = `0 6px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18), 0 0 0 1px ${accent}18`;
 }
 
 function hoverOut(el: HTMLElement) {
@@ -978,7 +978,7 @@ function hoverOut(el: HTMLElement) {
 	});
 	el.style.borderColor = "";
 	el.style.boxShadow =
-		"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)";
+		"0 4px 24px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.12)";
 }
 
 function renderChart(
@@ -1251,9 +1251,9 @@ function KpiCard({
 				padding: "18px 20px 16px",
 				cursor: "pointer",
 				position: "relative",
-				background: `linear-gradient(135deg, ${accent}22 0%, ${accent}0a 100%)`,
-				borderColor: `${accent}55`,
-				boxShadow: `0 4px 24px ${accent}20, inset 0 1px 0 ${accent}30`,
+				background: `linear-gradient(135deg, ${accent}44 0%, ${accent}22 100%)`,
+				borderColor: `${accent}88`,
+				boxShadow: `0 4px 24px ${accent}30, inset 0 1px 0 ${accent}55`,
 			})}>
 			{/* top accent line */}
 			<div
@@ -1499,8 +1499,8 @@ function HeaderBar({
 				alignItems: "center",
 				gap: 16,
 				position: "relative",
-				background: "rgba(0,200,240,0.04)",
-				borderColor: "rgba(0,200,240,0.12)",
+				background: "rgba(0,200,240,0.12)",
+				borderColor: "rgba(0,200,240,0.30)",
 			})}>
 			<div
 				style={{

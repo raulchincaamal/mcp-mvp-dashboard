@@ -259,12 +259,12 @@ function StockTicker({ value }: { value: string }) {
 }
 
 const GLASS = {
-  background: 'rgba(255,255,255,0.07)',
+  background: 'rgba(255,255,255,0.13)',
   backdropFilter: 'blur(20px)',
   WebkitBackdropFilter: 'blur(20px)',
-  border: '1px solid rgba(255,255,255,0.12)',
+  border: '1px solid rgba(255,255,255,0.22)',
   borderRadius: 14,
-  boxShadow: '0 4px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.20)',
+  boxShadow: '0 4px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.12)',
 } as const;
 
 // ─── Composite: StatCard ───────────────────────────────────

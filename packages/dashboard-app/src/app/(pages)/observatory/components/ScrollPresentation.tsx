@@ -188,7 +188,7 @@ export default function ScrollPresentation({
 				position: "absolute",
 				inset: 0,
 				background: "var(--bg)",
-				overflow: "hidden",
+
 				display: "flex",
 				flexDirection: "column",
 			}}>
@@ -222,7 +222,7 @@ export default function ScrollPresentation({
 					display: "flex",
 					flexDirection: "column",
 					zIndex: 1,
-					overflow: "hidden",
+
 				}}>
 				<LayoutRenderer
 					insights={insights}
@@ -934,13 +934,14 @@ const GAP = 14;
 function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
 	return {
 		borderRadius: 16,
-		background: "rgba(255,255,255,0.038)",
+		background: "rgba(255,255,255,0.055)",
+		backdropFilter: "blur(20px) saturate(1.4)",
+		WebkitBackdropFilter: "blur(20px) saturate(1.4)",
 		borderWidth: 1,
 		borderStyle: "solid",
-		borderColor: "transparent",
+		borderColor: "rgba(255,255,255,0.10)",
 		boxShadow:
-			"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -1px 0 rgba(0,0,0,0.2)",
-		overflow: "hidden",
+			"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.2)",
 		transition: "border-color 0.2s ease, box-shadow 0.2s ease",
 		...extra,
 	};
@@ -1912,7 +1913,7 @@ function ProceduralLayout({
 				minHeight: 0,
 				height: "100%",
 				padding: "16px 20px",
-				overflow: "hidden",
+
 				zoom,
 				display: "grid",
 				gridTemplateColumns: `repeat(${COLS}, 1fr)`,
@@ -2051,7 +2052,7 @@ function HeroLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<div
 				style={{
@@ -2154,7 +2155,7 @@ function BentoAsymLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			{primary && (
 				<div
@@ -2277,7 +2278,7 @@ function BentoSymLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<div
 				style={{
@@ -2384,7 +2385,7 @@ function ComparisonLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<HeaderBar
 				query={query}

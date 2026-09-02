@@ -188,7 +188,7 @@ export default function ScrollPresentation({
 				position: "absolute",
 				inset: 0,
 				background: "var(--bg)",
-				overflow: "hidden",
+
 				display: "flex",
 				flexDirection: "column",
 			}}>
@@ -222,7 +222,7 @@ export default function ScrollPresentation({
 					display: "flex",
 					flexDirection: "column",
 					zIndex: 1,
-					overflow: "hidden",
+
 				}}>
 				<LayoutRenderer
 					insights={insights}
@@ -934,13 +934,11 @@ const GAP = 14;
 function cardStyle(extra?: React.CSSProperties): React.CSSProperties {
 	return {
 		borderRadius: 16,
-		background: "rgba(255,255,255,0.038)",
+		background: "#1c1f26",
 		borderWidth: 1,
 		borderStyle: "solid",
-		borderColor: "transparent",
-		boxShadow:
-			"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -1px 0 rgba(0,0,0,0.2)",
-		overflow: "hidden",
+		borderColor: "rgba(255,255,255,0.08)",
+		boxShadow: "0 2px 12px rgba(0,0,0,0.45)",
 		transition: "border-color 0.2s ease, box-shadow 0.2s ease",
 		...extra,
 	};
@@ -965,7 +963,7 @@ function hoverIn(el: HTMLElement, accent: string) {
 		overwrite: "auto",
 	});
 	el.style.borderColor = `${accent}44`;
-	el.style.boxShadow = `0 6px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.09), 0 0 0 1px ${accent}18`;
+	el.style.boxShadow = `0 6px 28px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18), 0 0 0 1px ${accent}18`;
 }
 
 function hoverOut(el: HTMLElement) {
@@ -976,8 +974,7 @@ function hoverOut(el: HTMLElement) {
 		overwrite: "auto",
 	});
 	el.style.borderColor = "";
-	el.style.boxShadow =
-		"0 4px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.2)";
+	el.style.boxShadow = "0 2px 12px rgba(0,0,0,0.45)";
 }
 
 function renderChart(
@@ -1250,9 +1247,9 @@ function KpiCard({
 				padding: "18px 20px 16px",
 				cursor: "pointer",
 				position: "relative",
-				background: `linear-gradient(135deg, ${accent}22 0%, ${accent}0a 100%)`,
-				borderColor: `${accent}55`,
-				boxShadow: `0 4px 24px ${accent}20, inset 0 1px 0 ${accent}30`,
+				background: `linear-gradient(135deg, ${accent}44 0%, ${accent}22 100%)`,
+				borderColor: `${accent}88`,
+				boxShadow: `0 4px 24px ${accent}30, inset 0 1px 0 ${accent}55`,
 			})}>
 			{/* top accent line */}
 			<div
@@ -1285,7 +1282,7 @@ function KpiCard({
 					fontWeight: 600,
 					letterSpacing: "0.1em",
 					textTransform: "uppercase",
-					color: accent,
+					color: "#ffffff",
 					margin: "0 0 10px",
 					opacity: 0.9,
 					paddingRight: 16,
@@ -1301,7 +1298,7 @@ function KpiCard({
 					lineHeight: 1,
 					letterSpacing: "0.02em",
 					fontVariantNumeric: "tabular-nums",
-					fontFamily: '"DM Mono", monospace',
+					fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 				}}>
 				{ins.metric}
 			</p>
@@ -1498,8 +1495,8 @@ function HeaderBar({
 				alignItems: "center",
 				gap: 16,
 				position: "relative",
-				background: "rgba(0,200,240,0.04)",
-				borderColor: "rgba(0,200,240,0.12)",
+				background: "#111318",
+				borderColor: "rgba(255,255,255,0.09)",
 			})}>
 			<div
 				style={{
@@ -1509,7 +1506,7 @@ function HeaderBar({
 					right: 0,
 					height: 2,
 					background:
-						"linear-gradient(90deg, transparent 0%, rgba(0,200,240,0.7) 40%, rgba(100,120,255,0.5) 70%, transparent 100%)",
+						"linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 50%, transparent 100%)",
 					borderRadius: "16px 16px 0 0",
 				}}
 			/>
@@ -1520,9 +1517,9 @@ function HeaderBar({
 					width: 34,
 					height: 34,
 					borderRadius: 10,
-					background: "rgba(0,200,240,0.08)",
-					border: "1px solid rgba(0,200,240,0.2)",
-					color: "rgba(0,200,240,0.7)",
+					background: "rgba(255,255,255,0.05)",
+					border: "1px solid rgba(255,255,255,0.10)",
+					color: "rgba(255,255,255,0.40)",
 					cursor: "pointer",
 					display: "flex",
 					alignItems: "center",
@@ -1531,7 +1528,7 @@ function HeaderBar({
 				}}
 				onMouseEnter={(e) => {
 					(e.currentTarget as HTMLElement).style.background =
-						"rgba(0,200,240,0.16)";
+						"rgba(255,255,255,0.10)";
 				}}
 				onMouseLeave={(e) => {
 					(e.currentTarget as HTMLElement).style.background =
@@ -1553,21 +1550,21 @@ function HeaderBar({
 				style={{
 					width: 1,
 					height: 32,
-					background: "rgba(0,200,240,0.15)",
+					background: "rgba(255,255,255,0.10)",
 					flexShrink: 0,
 				}}
 			/>
 			<h1
 				style={{
 					flex: 1,
-					fontSize: 23,
-					fontWeight: 400,
+					fontSize: 18,
+					fontWeight: 500,
 					color: "var(--text)",
 					margin: 0,
 					overflow: "hidden",
 					textOverflow: "ellipsis",
 					whiteSpace: "nowrap",
-					letterSpacing: "-0.01em",
+					letterSpacing: "0.01em",
 					lineHeight: 1.4,
 					opacity: 0.9,
 					fontFamily: '"Sora", sans-serif',
@@ -1607,7 +1604,7 @@ function HeaderBar({
 							fontWeight: 400,
 							letterSpacing: "0.06em",
 							whiteSpace: "nowrap",
-							fontFamily: '"DM Mono", monospace',
+							fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 							textTransform: "uppercase",
 						}}>
 						{description}
@@ -1912,7 +1909,7 @@ function ProceduralLayout({
 				minHeight: 0,
 				height: "100%",
 				padding: "16px 20px",
-				overflow: "hidden",
+
 				zoom,
 				display: "grid",
 				gridTemplateColumns: `repeat(${COLS}, 1fr)`,
@@ -2051,7 +2048,7 @@ function HeroLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<div
 				style={{
@@ -2154,7 +2151,7 @@ function BentoAsymLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			{primary && (
 				<div
@@ -2277,7 +2274,7 @@ function BentoSymLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<div
 				style={{
@@ -2384,7 +2381,7 @@ function ComparisonLayout({
 				padding: "16px 20px",
 				gap: GAP,
 				zoom,
-				overflow: "hidden",
+
 			}}>
 			<HeaderBar
 				query={query}
@@ -2691,7 +2688,7 @@ function buildKpiGaugeOption(
 				fontSize: 44,
 				fontWeight: 700,
 				offsetCenter: [0, '5%'],
-				fontFamily: '"DM Mono", monospace',
+				fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace',
 			},
 			title: {
 				offsetCenter: [0, '38%'],
@@ -3063,7 +3060,7 @@ function ExpandedModal({
 									/>
 								) : (
 									<div style={{ textAlign: "center" }}>
-										<p style={{ fontSize: 64, fontWeight: 700, color: kpiAccent, margin: 0, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: '"DM Mono", monospace', textShadow: `0 0 40px ${kpiAccent}66` }}>
+										<p style={{ fontSize: 64, fontWeight: 700, color: kpiAccent, margin: 0, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace', textShadow: `0 0 40px ${kpiAccent}66` }}>
 											{insight.metric}
 										</p>
 										<div style={{ marginTop: 16, height: 1, width: 120, background: `linear-gradient(90deg, transparent, ${kpiAccent}66, transparent)`, margin: "16px auto 0" }} />

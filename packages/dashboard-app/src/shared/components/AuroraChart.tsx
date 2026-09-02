@@ -227,7 +227,7 @@ function barOption(rawData: AuroraChartData, title: string | undefined, palette:
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 }, icon: 'roundRect' } : undefined,
-    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels,
       axisLine: { lineStyle: { color: tk.axisLine } },
@@ -271,7 +271,7 @@ function lineOption(rawData: AuroraChartData, title: string | undefined, palette
       valueFormatter: money ? ((v: unknown) => fmtMXN(Number(v))) as never : undefined,
     },
     legend: multi ? { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } } : undefined,
-    grid: { left: 16, right: 16, bottom: multi ? 40 : 24, top: title ? 40 : 16, containLabel: true },
+    grid: { left: 8, right: 8, bottom: multi ? 40 : 24, top: 16, containLabel: true },
     xAxis: {
       type: 'category', data: data.labels, boundaryGap: false,
       axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false },
@@ -763,44 +763,100 @@ function candlestickMAOption(rawData: CandlestickMAData, title: string | undefin
 
 // ─── Treemap ───────────────────────────────────────────────
 // data.labels = names, data.datasets[0].data = values
+// Tricromático: cian (#00c8f0) · verde (#00d97e) · ámbar (#f5a623)
+// Variaciones de opacidad por rango de valor para crear jerarquía visual.
 
-function treemapOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens): EChartsOption {
+function treemapOption(rawData: AuroraChartData, title: string | undefined, _palette: [string,string][], tk: Tokens): EChartsOption {
   const data = normalizeFlatData(rawData);
   const ds = data.datasets[0];
   const money = looksLikeMoney(data);
   const fmt = (v: number) => money ? fmtMXN(v) : v.toLocaleString('es-MX');
+
+  // Espectro azul: cian → azul eléctrico → azul → índigo → violeta
+  // 5 anclas de color para interpolación continua por rank
+  const BLUE_SPECTRUM = ['#00c8f0', '#1a8fff', '#3d5eff', '#0ea88a', '#00d97e'];
+
+  function lerpHex(a: string, b: string, t: number): string {
+    const p = (s: string, o: number) => parseInt(s.slice(o, o + 2), 16);
+    const [ar, ag, ab] = [p(a,1), p(a,3), p(a,5)];
+    const [br, bg, bb] = [p(b,1), p(b,3), p(b,5)];
+    const ch = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, '0');
+    return `#${ch(ar,br)}${ch(ag,bg)}${ch(ab,bb)}`;
+  }
+
+  // Interpola a lo largo del espectro de 5 anclas según t ∈ [0,1]
+  function spectrumColor(t: number): string {
+    const segments = BLUE_SPECTRUM.length - 1;
+    const scaled = t * segments;
+    const i = Math.min(Math.floor(scaled), segments - 1);
+    return lerpHex(BLUE_SPECTRUM[i], BLUE_SPECTRUM[i + 1], scaled - i);
+  }
+
+  // Ordenar por valor desc → t=0 (cian brillante) para el mayor, t=1 (violeta) para el menor
+  const sorted = [...data.labels.map((name, i) => ({ name, value: ds.data[i] ?? 0 }))]
+    .sort((a, b) => b.value - a.value);
+  const n = sorted.length;
+
+  const colorMap: Record<string, [string, string]> = {};
+  sorted.forEach((item, rank) => {
+    const t = n > 1 ? rank / (n - 1) : 0;
+    const top = spectrumColor(t);
+    // bot: mismo color pero desplazado +0.15 en el espectro (más oscuro/profundo)
+    const bot = spectrumColor(Math.min(1, t + 0.18));
+    colorMap[item.name] = [top, bot];
+  });
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
       formatter: ((p: unknown) => {
         const d = p as { name: string; value: number };
-        return `${d.name}: <b>${fmt(d.value)}</b>`;
+        return `<span style="font-weight:600">${d.name}</span><br/>${fmt(d.value)}`;
       }) as never,
       backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
       textStyle: { color: tk.text, fontSize: 12 },
-      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+      extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;padding:8px 12px;',
     },
     series: [{
       type: 'treemap' as const,
-      top: title ? 40 : 8, bottom: 8, left: 8, right: 16,
+      top: title ? 40 : 8, bottom: 24, left: 0, right: 0,
+      width: '100%',
+      height: title ? 'calc(100% - 64px)' : 'calc(100% - 32px)',
       roam: false,
       nodeClick: false,
       breadcrumb: { show: false },
-      label: { show: true, formatter: ((p: unknown) => {
-        const d = p as { name: string; value: number };
-        return `${d.name}\n${fmt(d.value)}`;
-      }) as never, color: '#fff', fontSize: 11, fontWeight: 600 },
-      itemStyle: { borderWidth: 1, borderColor: tk.border, gapWidth: 2 },
-      emphasis: { itemStyle: { opacity: 0.85 } },
-      data: data.labels.map((name, i) => ({
-        name,
-        value: ds.data[i],
-        itemStyle: {
-          color: vGrad(palette[i % palette.length][0], palette[i % palette.length][1]),
+      label: {
+        show: true,
+        formatter: ((p: unknown) => {
+          const d = p as { name: string; value: number };
+          return `{name|${d.name}}\n{val|${fmt(d.value)}}`;
+        }) as never,
+        rich: {
+          name: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: 700, lineHeight: 18 },
+          val:  { color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 400, lineHeight: 16 },
         },
-      })),
+      },
+      upperLabel: { show: false },
+      itemStyle: {
+        borderWidth: 0,
+        borderColor: 'transparent',
+        gapWidth: 2,
+        borderRadius: 4,
+      },
+      emphasis: {
+        itemStyle: { opacity: 0.88, borderColor: 'transparent', borderWidth: 0 },
+        label: { show: true },
+      },
+      data: data.labels.map((name, i) => {
+        const [top, bot] = colorMap[name] ?? ['#00e5ff', '#0047ff'];
+        return {
+          name,
+          value: ds.data[i],
+          itemStyle: { color: vGrad(top, bot) },
+        };
+      }),
     }],
-    animationDuration: 800,
+    animationDuration: 900,
     animationEasing: 'cubicOut' as const,
   };
 }
@@ -914,7 +970,15 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
       root[parent].children[child] = (root[parent].children[child] ?? 0) + (data.datasets[0]?.data[i] ?? 0);
     }
   });
-  const treeData = Object.entries(root).map(([name, node], i) => ({
+
+  // Degrade to doughnut when there's only 1 root node with no children (useless sunburst)
+  const rootEntries = Object.entries(root);
+  const hasHierarchy = rootEntries.length > 1 || rootEntries.some(([, node]) => Object.keys(node.children).length > 0);
+  if (!hasHierarchy) {
+    return pieOption(rawData, title, palette, tk, true);
+  }
+
+  const treeData = rootEntries.map(([name, node], i) => ({
     name,
     value: node.value,
     itemStyle: { color: palette[i % palette.length][0] },
@@ -924,6 +988,10 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
       itemStyle: { color: palette[i % palette.length][0] + (j % 2 === 0 ? 'cc' : '88') },
     })),
   }));
+
+  // Use tangential labels for shallow trees (few root nodes), radial for deep ones
+  const labelRotate = rootEntries.length <= 4 ? 'tangential' : 'radial';
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -935,10 +1003,10 @@ function sunburstOption(rawData: AuroraChartData, title: string | undefined, pal
     series: [{
       type: 'sunburst' as const,
       center: ['50%', '50%'],
-      radius: [0, '88%'],
+      radius: ['10%', '88%'],
       sort: 'desc',
       nodeClick: false,
-      label: { rotate: 'radial', color: '#fff', fontSize: 10, minAngle: 8 },
+      label: { rotate: labelRotate as 'radial' | 'tangential', color: '#fff', fontSize: 10, minAngle: 10, overflow: 'truncate', width: 80 },
       itemStyle: { borderWidth: 1, borderColor: tk.bg },
       emphasis: { focus: 'ancestor', itemStyle: { opacity: 0.85 } },
       data: treeData,
@@ -1116,9 +1184,19 @@ function stackedAreaOption(rawData: AuroraChartData, title: string | undefined, 
 
 // ─── Diverging Bar ─────────────────────────────────────────
 // props.data = [{ label, values: [{ key, value }] }], props.keys = [...ordered neg→pos]
+// props.negativeKeys = [...] — explicit negative keys; if absent → stacked 100% mode
+
+// Semantic colors for known credit/status keys
+const CREDIT_STATUS_COLORS: Record<string, string> = {
+  al_corriente: '#10d97e',
+  liquidado:    '#5bb8f5',
+  atrasado:     '#fbbf24',
+  cancelado:    '#f5455a',
+};
 
 function divergingBarOption(rawData: AuroraChartData, title: string | undefined, palette: [string,string][], tk: Tokens, extraProps?: Record<string, unknown>): EChartsOption {
   const keys = (extraProps?.keys as string[]) ?? [];
+  const negativeKeys = (extraProps?.negativeKeys as string[]) ?? null;
   const rows = (Array.isArray(rawData) ? rawData : []) as unknown as { label: string; values: { key: string; value: number }[] }[];
   const labels = rows.map(r => r.label);
 
@@ -1130,13 +1208,44 @@ function divergingBarOption(rawData: AuroraChartData, title: string | undefined,
     return map;
   });
 
-  const mid = Math.floor(keys.length / 2);
-  const negKeys = keys.slice(0, mid);
-  const posKeys = keys.slice(mid);
   const DIVERG_COLORS = ['#f5455a', '#fbbf24', '#34d399', '#5bb8f5', '#a78bfa', '#22d3ee'];
 
+  // ── Stacked 100% mode (no explicit negativeKeys) ──
+  // Used for credit health, status breakdowns, etc.
+  if (!negativeKeys) {
+    const series = keys.map((key, ki) => {
+      const color = CREDIT_STATUS_COLORS[key.toLowerCase()] ?? palette[ki % palette.length][0];
+      return {
+        name: key, type: 'bar' as const, stack: 'total',
+        data: normalized.map(row => row[key] ?? 0),
+        itemStyle: { color },
+        label: { show: false },
+        emphasis: { itemStyle: { opacity: 0.85 } },
+      };
+    });
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis', axisPointer: { type: 'shadow' as const },
+        backgroundColor: tk.tooltipBg, borderColor: tk.tooltipBorder, borderWidth: 1,
+        textStyle: { color: tk.text, fontSize: 12 }, extraCssText: 'backdrop-filter:blur(12px);border-radius:8px;',
+        formatter: ((params: unknown) => {
+          const ps = params as { seriesName: string; value: number }[];
+          return ps.filter(p => p.value > 0).map(p => `${p.seriesName}: ${p.value.toFixed(1)}%`).join('<br/>');
+        }) as never,
+      },
+      legend: { bottom: 4, textStyle: { color: tk.axisLabel, fontSize: 11 } },
+      grid: { left: 16, right: 16, bottom: 40, top: title ? 40 : 16, containLabel: true },
+      xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 10, formatter: (v: number) => `${v}%` }, splitLine: { lineStyle: { color: tk.splitLine, type: 'dashed' } } },
+      yAxis: { type: 'category', data: labels, axisLine: { lineStyle: { color: tk.axisLine } }, axisTick: { show: false }, axisLabel: { color: tk.axisLabel, fontSize: 11 } },
+      series,
+      animationDuration: 900, animationEasing: 'cubicOut' as const,
+    };
+  }
+
+  // ── True diverging mode (explicit negativeKeys provided) ──
   const series = keys.map((key, ki) => {
-    const isNeg = negKeys.includes(key);
+    const isNeg = negativeKeys.includes(key);
     const color = DIVERG_COLORS[ki % DIVERG_COLORS.length];
     return {
       name: key, type: 'bar' as const, stack: isNeg ? 'neg' : 'pos',
@@ -1267,7 +1376,7 @@ function barRaceOption(extraProps: Record<string, unknown> | undefined, title: s
       barMaxWidth: 32,
       label: { show: true, position: 'right' as const, color: tk.axisLabel, fontSize: 10, formatter: ((p: unknown) => { const v = (p as { value: number }).value; return v >= 1_000_000 ? `$${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `$${(v/1000).toFixed(0)}K` : String(v); }) as never },
     }],
-    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px Sora, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
+    graphic: lastFrame ? [{ type: 'text', right: 60, bottom: 60, style: { text: lastFrame.label, font: 'bold 28px -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif', fill: tk.textTertiary }, z: 100 }] : [],
     animationDuration: 900, animationEasing: 'cubicOut' as const,
   };
 }
@@ -1332,10 +1441,30 @@ export default function AuroraChart({
   const tk         = useThemeTokens();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const titleRef   = useRef<HTMLDivElement>(null);
+  const echartsRef = useRef<ReactECharts>(null);
 
   // quickTo refs for smooth tilt with inertia
   const rotY = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
   const rotX = useRef<ReturnType<typeof gsap.quickTo> | null>(null);
+
+  // ResizeObserver: force ECharts resize when container dimensions change
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      echartsRef.current?.getEchartsInstance()?.resize();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Force resize after mount and after option changes
+  useEffect(() => {
+    const t = setTimeout(() => {
+      echartsRef.current?.getEchartsInstance()?.resize();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [type, gradient]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -1375,6 +1504,7 @@ export default function AuroraChart({
     const ep = data as unknown as Record<string, unknown>;
     const extraProps: Record<string, unknown> = {
       keys: ep?.keys,
+      negativeKeys: ep?.negativeKeys,
       frames: ep?.frames,
       maxBars: ep?.maxBars,
     };
@@ -1448,6 +1578,7 @@ export default function AuroraChart({
       )}
       {tk && (
         <ReactECharts
+          ref={echartsRef}
           key={`${type}-${gradient}-${tk.bg}`}
           option={getOption()}
           style={{ height: bare ? '100%' : height, width: '100%' }}

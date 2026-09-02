@@ -3,11 +3,8 @@
 import React from 'react';
 
 const NEBULAS = [
-  // Azul eléctrico — arriba izquierda, gran masa de color
   { w: '110%', h: '90%', top: '-30%',  left: '-20%',  color: 'rgba(30,100,255,0.07)',  anim: 'aurora-drift-1 32s ease-in-out infinite' },
-  // Cian brillante — abajo derecha, contrapeso visual
   { w: '100%', h: '85%', bottom: '-30%', right: '-20%', color: 'rgba(0,180,255,0.05)', anim: 'aurora-drift-2 26s ease-in-out infinite reverse' },
-  // Índigo profundo — centro, capa de profundidad
   { w: '80%',  h: '70%', top: '20%',  left: '15%',    color: 'rgba(80,40,220,0.04)',   anim: 'aurora-drift-3 40s ease-in-out infinite' },
 ];
 

@@ -34,6 +34,16 @@ interface DotHalftoneProps {
   maskCenterX?: number;
   /** Centro vertical del círculo como fracción del alto (0-1). Default 0.5 (centro). */
   maskCenterY?: number;
+  /**
+   * Radio en px de la "lupa" de zoom que sigue al cursor. 0 desactiva el efecto.
+   * Los puntos dentro de este radio se agrandan según su cercanía al cursor.
+   */
+  hoverRadius?: number;
+  /**
+   * Fuerza del zoom localizado. Ej: 1.6 = los puntos justo bajo el cursor
+   * crecen hasta ~160% de su tamaño base.
+   */
+  hoverZoom?: number;
 }
 
 interface Dot {
@@ -64,6 +74,8 @@ const DotHalftone = ({
   maskScale = 1,
   maskCenterX = 0.5,
   maskCenterY = 0.5,
+  hoverRadius = 90,
+  hoverZoom = 1.8,
 }: DotHalftoneProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -83,10 +95,15 @@ const DotHalftone = ({
 
     const spacing = dotSpacing * dpr;
     const maxRadius = spacing / 2;
+    const hoverR = hoverRadius * dpr; // radio de la lupa en px del canvas
 
     let dots: Dot[] = [];
     let rafId = 0;
     let startTime = 0;
+
+    // Posición del cursor (en coords del canvas). Objetivo vs. actual (suavizado).
+    const target = { x: -9999, y: -9999, active: false };
+    const current = { x: -9999, y: -9999, strength: 0 };
 
     // Define la ruta de recorte según la máscara elegida.
     const applyMask = () => {
@@ -178,7 +195,25 @@ const DotHalftone = ({
       render();
     };
 
+    const zoomEnabled = hoverR > 0 && hoverZoom > 1;
+
     const render = () => {
+      // Suavizar el seguimiento del cursor y la intensidad del efecto (lerp)
+      if (zoomEnabled) {
+        const targetStrength = target.active ? 1 : 0;
+        current.strength += (targetStrength - current.strength) * 0.12;
+        if (target.active) {
+          // Si aún no teníamos posición, saltar directo para evitar un barrido
+          if (current.x < -9000) {
+            current.x = target.x;
+            current.y = target.y;
+          } else {
+            current.x += (target.x - current.x) * 0.2;
+            current.y += (target.y - current.y) * 0.2;
+          }
+        }
+      }
+
       ctx.clearRect(0, 0, w, h);
 
       // Guardar estado, aplicar máscara y dibujar dentro de ella
@@ -191,11 +226,28 @@ const DotHalftone = ({
 
       for (const dot of dots) {
         let radius = dot.baseRadius;
+
         if (animate) {
           // Oscilación sutil del tamaño (breathing)
           const breathe = 0.88 + 0.12 * Math.sin(omega * t + dot.phase);
           radius *= breathe;
         }
+
+        // Zoom localizado tipo lupa: los puntos cercanos al cursor crecen
+        // proporcionalmente a su propio tamaño (no se fuerza un mínimo, para
+        // no fundir puntos vecinos en una mancha).
+        if (zoomEnabled && current.strength > 0.001 && radius > 0.4) {
+          const dx = dot.x - current.x;
+          const dy = dot.y - current.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < hoverR) {
+            // Falloff suave (coseno) desde el centro hacia el borde de la lupa
+            const falloff = Math.cos((dist / hoverR) * (Math.PI / 2));
+            const boost = 1 + (hoverZoom - 1) * falloff * current.strength;
+            radius *= boost;
+          }
+        }
+
         if (radius < 0.4) continue;
 
         ctx.beginPath();
@@ -205,18 +257,56 @@ const DotHalftone = ({
 
       ctx.restore();
 
-      if (animate) {
+      // El loop corre si hay breathing O si el zoom está activo/animándose
+      if (
+        animate ||
+        (zoomEnabled && (target.active || current.strength > 0.001))
+      ) {
         rafId = requestAnimationFrame(render);
       }
+    };
+
+    // ── Eventos del cursor para el zoom localizado ──
+    const updateTarget = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      target.x = (clientX - rect.left) * dpr;
+      target.y = (clientY - rect.top) * dpr;
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      updateTarget(e.clientX, e.clientY);
+    };
+
+    const handleMouseEnter = (e: MouseEvent) => {
+      updateTarget(e.clientX, e.clientY);
+      target.active = true;
+      // Reactivar el loop si estaba detenido (cuando animate=false)
+      if (!animate) {
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(render);
+      }
+    };
+
+    const handleMouseLeave = () => {
+      target.active = false;
     };
 
     img.addEventListener('error', handleError);
     img.addEventListener('load', handleLoad);
 
+    if (zoomEnabled) {
+      canvas.addEventListener('mouseenter', handleMouseEnter);
+      canvas.addEventListener('mousemove', handleMouseMove);
+      canvas.addEventListener('mouseleave', handleMouseLeave);
+    }
+
     return () => {
       cancelAnimationFrame(rafId);
       img.removeEventListener('error', handleError);
       img.removeEventListener('load', handleLoad);
+      canvas.removeEventListener('mouseenter', handleMouseEnter);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, [
     src,
@@ -230,6 +320,8 @@ const DotHalftone = ({
     maskScale,
     maskCenterX,
     maskCenterY,
+    hoverRadius,
+    hoverZoom,
   ]);
 
   return (

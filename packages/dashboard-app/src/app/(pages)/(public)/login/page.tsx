@@ -8,13 +8,27 @@ const DotHalftone = dynamic(() => import('./DotHalftone'), {
   ssr: false,
 });
 
+// ScrambleText usa GSAP (plugin que accede a window), se carga solo en el cliente.
+const ScrambleText = dynamic(() => import('./ScrambleText'), {
+  ssr: false,
+  // Fallback: muestra el texto final mientras carga, para que no haya vacío.
+  loading: () => (
+    <h1
+      className="text-4xl md:text-5xl text-white tracking-[0.15em] font-light"
+      style={{ fontFamily: 'ui-monospace, "Courier New", monospace' }}
+    >
+      BIENVENIDO
+    </h1>
+  ),
+});
+
 export default function LoginPage() {
   const handleLogin = () => {
     signIn('azure-ad', { callbackUrl: '/' });
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
+    <div className="relative w-full h-screen overflow-hidden">
       {/* Loading intro — fondo sólido */}
       <div className="absolute inset-0 bg-[#060A13]" />
 
@@ -42,17 +56,23 @@ export default function LoginPage() {
             animate
             mask="circle"
             maskScale={1.3}
+            hoverRadius={100}
+            hoverZoom={2.2}
             className="drop-shadow-[0_0_40px_rgba(60,110,220,0.25)]"
           />
 
           {/* Texto + botón */}
           <div className="flex flex-col items-start gap-8">
-            <h1
+            <ScrambleText
+              as="h1"
+              text="BIENVENIDO"
+              duration={1.6}
+              delay={0.3}
               className="text-4xl md:text-5xl text-white tracking-[0.15em] font-light"
-              style={{ fontFamily: 'ui-monospace, "Courier New", monospace' }}
-            >
-              BIENVENIDO
-            </h1>
+              style={{
+                fontFamily: 'ui-monospace, "chivo mono", monospace',
+              }}
+            />
 
             <button
               onClick={handleLogin}
